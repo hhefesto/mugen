@@ -100,6 +100,19 @@ test with `bend bend/tests/X.bend -o run/x` (run/ is ignored by git).
   internal behaviour. Re-check it after an upgrade against a local capture
   server (`ANTHROPIC_BASE_URL`, a dummy key).
 
+## Versions
+
+`mn.version()` in `bend/Main.bend` is the one place the version lives
+(`mugen --version`). It is MAJOR.MINOR.PATCH, and it changes when surface
+behavior changes, and only then: the command line, the screen and its keys,
+the slash commands, what is printed, the tools and prompts the model sees,
+the files under `~/.mugen`, the wires to the API or Claude Code. A refactor,
+a test, a doc or a comment changes nothing. While it is 0.x: a change that
+breaks something (a file format, a removed command or flag) bumps MINOR and
+zeroes PATCH; an added or changed behavior bumps MINOR too; a fix with no
+new behavior bumps PATCH. Bump it in the commit that makes the change, and
+add a line to `CHANGELOG.md`.
+
 ## Conventions
 
 - Every def in a module is prefixed (`me.`, `hb.`, ...): a program's defs share

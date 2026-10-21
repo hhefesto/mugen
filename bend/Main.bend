@@ -66,14 +66,23 @@ def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -
     case Fail{e}:
       Bool.pick(IO(Unit), Bool.and(api, String.eq(curl, "curl")), IO.die(Unit, 1, "mugen: set ANTHROPIC_API_KEY (curl reads it from the environment), or run mugen without --api, on Claude Code"), IO.pure(Unit, Unit{}))
 
+# mugen's version, MAJOR.MINOR.PATCH: it changes when surface behavior does
+# (the command line, the screen and its keys, the slash commands, the tools
+# and prompts the model sees, the files under ~/.mugen, the wires to the
+# API or Claude Code), and only then; see AGENTS.md, Versions
+def mn.version() -> String:
+  "0.1.0"
+
 def mn.usage() -> String:
-  "usage: mugen [--api | login]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login)"
+  "usage: mugen [--api | login | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login)\n  mugen --version  says mugen's version"
 
 # what the arguments ask: 0 Claude Code, 1 the API (--api), 2 the usage
-# (anything else), 3 a sign-in (login, alone)
+# (anything else), 3 a sign-in (login, alone), 4 the version (--version or
+# -V, alone)
 def mn.flag(+v: U32, +x: String) -> U32:
-  Bool.pick(U32, String.eq(x, "--api"), Bool.pick(U32, U32.is_eq(v, 3), 2, U32.max(v, 1)),
-    Bool.pick(U32, String.eq(x, "login"), Bool.pick(U32, U32.is_eq(v, 0), 3, 2), 2))
+  Bool.pick(U32, String.eq(x, "--api"), Bool.pick(U32, U32.is_ge(v, 3), 2, U32.max(v, 1)),
+    Bool.pick(U32, String.eq(x, "login"), Bool.pick(U32, U32.is_eq(v, 0), 3, 2),
+      Bool.pick(U32, Bool.or(String.eq(x, "--version"), String.eq(x, "-V")), Bool.pick(U32, U32.is_eq(v, 0), 4, 2), 2)))
 
 def mn.flags(xs: List<String>, +v: U32) -> U32:
   match xs:
@@ -171,7 +180,8 @@ def mn.login(+prog: String) -> IO(Unit):
 
 def mn.go(+v: U32, +home: String, +wire: String, +prog: String) -> IO(Unit):
   Bool.pick(IO(Unit), U32.is_eq(v, 2), IO.print(mn.usage()),
-    Bool.pick(IO(Unit), U32.is_eq(v, 3), mn.login(prog), mn.run(home, Bool.or(U32.is_eq(v, 1), String.eq(wire, "api")))))
+    Bool.pick(IO(Unit), U32.is_eq(v, 4), IO.print("mugen " ++ mn.version()),
+    Bool.pick(IO(Unit), U32.is_eq(v, 3), mn.login(prog), mn.run(home, Bool.or(U32.is_eq(v, 1), String.eq(wire, "api"))))))
 
 def main() -> IO(Unit):
   do IO<Unit>:

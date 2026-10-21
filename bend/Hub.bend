@@ -1716,10 +1716,11 @@ def hb.mode.text(plan: Bool) -> String:
     case False{}:
       Tm.tm.esc("32", "auto")
 
-# where mugen works, the model, its effort, the context left and the mode
+# the model, its effort, the context left and the mode (the work dir is
+# always ~/.mugen/work/main, so only /status shows it)
 def hb.status.line(+s: hb.S) -> String:
   +dot = Tm.tm.esc("2", " · ")
-  Tm.tm.esc("2", hb.workdir(s)) ++ dot ++ Tm.tm.esc("36", hb.pick.model(hb.pick(s))) ++ dot ++ A.ap.pick.effort(hb.pick(s)) ++ dot
+  Tm.tm.esc("36", hb.pick.model(hb.pick(s))) ++ dot ++ A.ap.pick.effort(hb.pick(s)) ++ dot
     ++ U32.show(hb.left(s)) ++ "% left" ++ dot ++ hb.mode.text(hb.plan(s))
 
 def hb.prompt.text(+s: hb.S) -> String:

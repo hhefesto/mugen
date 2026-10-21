@@ -25,6 +25,8 @@ mugen                                # or `nix run github:hhefesto/mugen`
 # On the Messages API, with an API key
 export ANTHROPIC_API_KEY=...         # curl reads it; it never appears in argv
 mugen --api                          # or `nix run github:hhefesto/mugen -- --api`
+
+mugen --version                      # e.g. `mugen 0.1.0`
 ```
 
 mugen checks that Claude Code is signed in when it starts, and if it isn't,
@@ -72,7 +74,7 @@ agents) and the chat's last messages, so a restart shows where you were:
 ──────────────────────────────────────────────────────────────
 ⠼ mugen works · 12s · ▸ shell 9s  nix build .#mugen
 ⧗ 1 waiting: «and run the tests after» · C-s sends now
-~/.mugen/work/main · opus-5.5 · medium · 87% left · auto
+opus-5.5 · medium · 87% left · auto
 λ
 ```
 

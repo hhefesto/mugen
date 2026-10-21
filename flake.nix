@@ -178,6 +178,15 @@
                 grep -qx 'PASS: 300 / 300' result
                 touch $out
               '';
+          # `mugen --version` says a MAJOR.MINOR.PATCH, and -V the same
+          version = pkgs.runCommand "version" { } ''
+            m=${self.packages.${system}.mugen-unwrapped}/bin/mugen
+            $m --version | tee result
+            grep -qxE 'mugen [0-9]+\.[0-9]+\.[0-9]+' result
+            [ "$($m -V)" = "$(cat result)" ]
+            $m --version --api | grep -q '^usage:'
+            touch $out
+          '';
         }
       );
 
