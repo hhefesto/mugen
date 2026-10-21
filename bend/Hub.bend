@@ -683,7 +683,7 @@ def hb.ended.goal(+s: hb.S, check: Bool, g: Maybe<&2, String>) -> IO(hb.S):
 # failure noted; met its end well with a goal set and nothing waiting, the
 # goal is checked
 def hb.ended(+s: hb.S, +ok: Bool, +text: String, +left: U32) -> IO(hb.S):
-  +s1 = hb.with.sent(hb.with.wait(s, hb.requeue(hb.sent(s), left, hb.wait(s))), [])
+  +s1 = hb.with.due(hb.with.sent(hb.with.wait(s, hb.requeue(hb.sent(s), left, hb.wait(s))), []), True{})
   +on = String.is_empty(hb.halt(s))
   do IO<hb.S>:
     +s2 : hb.S <- Bool.pick(IO(hb.S), Bool.and(Bool.not(ok), on), hb.note(s1, "No reply: " ++ hb.chop(text) ++ ". Send a message to try again."), IO.pure(hb.S, s1))
@@ -1275,11 +1275,11 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
     case _:
       hb.tell.user(s, w ++ " is no command; nothing was sent. /help lists the commands.")
 
-# a line the user typed
+# a line the user typed (a prompt is due once the hub is idle again)
 def hb.line(+s: hb.S, +text: String) -> IO(hb.S):
   +t = T.tx.trim(text)
   +w = hb.word.go(t, "")
-  hb.cmd(hb.cmd.code(w), s, t, w, T.tx.trim(String.drop(t, String.length(w))))
+  hb.cmd(hb.cmd.code(w), hb.with.due(s, True{}), t, w, T.tx.trim(String.drop(t, String.length(w))))
 
 # Events ------------------------------------------------------------------------------
 
@@ -1361,6 +1361,48 @@ def hb.alive(+s: hb.S) -> Bool:
     Bool.and(U32.is_eq(M.me.nbusy(hb.mem(s)), 0), Bool.and(List.is_empty(&2, hb.W, hb.reqs(s)), List.is_empty(&2, hb.Msg, hb.wait(s)))))
   Bool.and(Bool.not(hb.quit(s)), Bool.not(Bool.and(hb.eof(s), idle)))
 
+# The prompt -------------------------------------------------------------------------
+#
+# On a terminal, once the hub is idle and a prompt is due: a line of where
+# Unii works, the model, its effort, the context left (the room the view
+# has before mugen folds its oldest lines, at 128 KB) and the mode, then a
+# lambda to type after.
+
+def hb.tilde(+home: String, +path: String) -> String:
+  Bool.pick(String, Bool.and(Bool.not(String.is_empty(home)), String.starts_with(path, home)), "~" ++ String.drop(path, String.length(home)), path)
+
+def hb.workdir(+s: hb.S) -> String:
+  hb.tilde(hb.cfg.home(hb.cfg(s)), hb.cfg.work(hb.cfg(s)) ++ "/main")
+
+# the view's room left before it folds, in percent
+def hb.left(+s: hb.S) -> U32:
+  +size = U32.min(M.me.v.size(M.me.view(hb.mem(s))), M.me.high())
+  U32.div(((M.me.high() - size : U32) * 100 : U32), M.me.high())
+
+def hb.pick.model(p: A.ap.Pick) -> String:
+  match p:
+    case A.ap.Pick{m, e, sp}:
+      m
+
+def hb.mode.text(plan: Bool) -> String:
+  match plan:
+    case True{}:
+      Tm.tm.esc("33", "plan")
+    case False{}:
+      Tm.tm.esc("32", "auto")
+
+def hb.prompt.text(+s: hb.S) -> String:
+  +dot = Tm.tm.esc("2", " · ")
+  "\n" ++ Tm.tm.esc("2", hb.workdir(s)) ++ dot ++ Tm.tm.esc("36", hb.pick.model(hb.pick(s))) ++ dot ++ A.ap.pick.effort(hb.pick(s)) ++ dot
+    ++ U32.show(hb.left(s)) ++ "% left" ++ dot ++ hb.mode.text(hb.plan(s)) ++ "\n" ++ Tm.tm.esc("1;35", "\u{3BB}") ++ " "
+
+def hb.idle(+s: hb.S) -> Bool:
+  Bool.and(Bool.and(hb.is.idle(hb.turn(s)), List.is_empty(&2, hb.Msg, hb.wait(s))), Bool.not(hb.quit(s)))
+
+def hb.prompt(+s: hb.S) -> IO(hb.S):
+  Bool.pick(IO(hb.S), Bool.and(hb.tty(s), Bool.and(hb.ui.due(hb.ui(s)), hb.idle(s))),
+    IO.bind(Unit, hb.S, IO.write(hb.prompt.text(s)), u => IO.pure(hb.S, hb.with.due(s, False{}))), IO.pure(hb.S, s))
+
 def hb.loop(n: Nat, go: Bool, +s: hb.S) -> IO(hb.S):
   match n go:
     case 1n+f True{}:
@@ -1368,7 +1410,8 @@ def hb.loop(n: Nat, go: Bool, +s: hb.S) -> IO(hb.S):
         m : Maybe<&1, E.ev.Ev> <- Chan.recv(E.ev.Ev, hb.inbox(s))
         +s1 : hb.S <- hb.on(s, m)
         +s2 : hb.S <- hb.after(s1)
-        hb.loop(f, hb.alive(s2), s2)
+        +s3 : hb.S <- hb.prompt(s2)
+        hb.loop(f, hb.alive(s3), s3)
     case _ _:
       IO.pure(hb.S, s)
 
@@ -1468,5 +1511,6 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     Unit <- Bool.pick(IO(Unit), hb.tty(s1), IO.print(Tm.tm.status(True{}, "mugen: " ++ hb.status.text(s1) ++ ". /help")), IO.pure(Unit, Unit{}))
     +s2 : hb.S <- hb.resume(s1)
     +s3 : hb.S <- hb.after(s2)
-    +s4 : hb.S <- hb.loop(U32.to_nat(4294967295), hb.alive(s3), s3)
-    hb.leave(s4)
+    +s4 : hb.S <- hb.prompt(s3)
+    +s5 : hb.S <- hb.loop(U32.to_nat(4294967295), hb.alive(s4), s4)
+    hb.leave(s5)
