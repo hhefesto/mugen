@@ -57,45 +57,85 @@ Develop). A short live chat has run on a Max plan through `claude -p`, with a
 tool call and cache reads. The `--api` backend has not yet run against the
 live API.
 
-On a terminal mugen opens with a status: the account, the plan's limits,
-the chat and its view, the models, the mode, the work dir, the goal and the
-agents. Then it waits at its prompt:
+On a terminal mugen takes the whole screen (and gives it back as it was
+when you leave). It opens with a status (the account, the plan's limits,
+the chat and its view, the models, the mode, the work dir, the goal, the
+agents) and the chat's last messages, so a restart shows where you were:
 
 ```
+▸ edit  ~/notes.txt                                       +1 −1
+  │ @@ -1,4 +1,4 @@
+  │     1   one
+  │     2 - tow
+  │     2 + two
+● Fixed: tow is now two.
+──────────────────────────────────────────────────────────────
+⠼ Unii works · 12s · ▸ shell 9s  nix build .#mugen
+⧗ 1 waiting: «and run the tests after» · C-s sends now
 ~/.mugen/work/main · opus-5.5 · medium · 87% left · auto
-λ 
+λ
 ```
 
-The line above the lambda shows where Unii works, the model, its effort,
-the context left (the room the view has before mugen folds its oldest
-lines, at 128 KB) and the mode.
+Each entry is a block: your message (`❯`), Unii's reply (`●`, with a
+little markdown), its summarized thinking (`✻`), and each tool call with
+its result: the command or path asked, how it went (`✓ 0.4 s`,
+`✗ exit 1`, `✂ cut`), its first lines of output, and for an edit or a
+write the diff, with the file's line numbers, red and green. Long blocks
+are folded: a click opens or folds one, `C-o` all of them. `PgUp`,
+`PgDn` and the wheel scroll (`M->` follows the end again). Under the chat:
+what runs and for how long (the tool too), the messages waiting for Unii,
+the status line (where Unii works, the model, its effort, the context
+left before mugen folds its oldest lines at 128 KB, the mode), and the
+input.
 
-Type a message and press Enter. The input line is readline's, through
-`rlwrap`, with emacs keys (`C-a`, `C-e`, `C-k`, `C-y`, `M-b`, `M-f`), a
-history kept in `$MUGEN_DIR/history` (`C-p`, `C-n`, `C-r`), and Tab
-completing the commands, models, efforts and file names. `MUGEN_PLAIN=1`
-goes without. A message of many lines goes between two lines of `"""`.
+Keys:
+- `Enter` sends. While Unii works, the message waits, and says so.
+- `Shift-Enter`, `Alt-Enter`, `C-j` (or a `\` at the end): a new line. A
+  paste comes whole, as one message.
+- `C-s` (`/now`): send the waiting messages now. A shell command Unii is
+  running is cut, and Unii gets its output and your messages; else its
+  turn stops and one starts with them.
+- `C-g` (`/stop`): stop Unii's turn.
+- `Esc Esc`, `C-d`, `C-c` on an empty input (`/quit`): leave. `C-c` on
+  text clears it (`C-y` brings it back).
+- Emacs keys (`C-a`, `C-e`, `C-k`, `C-u`, `C-w`, `C-y`, `M-b`, `M-f`,
+  `M-d`), the history (`↑`, `↓`, `C-p`, `C-n`, `C-r`, kept in
+  `$MUGEN_DIR/history`), `Tab` completes a command.
+- The mouse is mugen's; `Shift`-drag selects text, or `/mouse` hands the
+  mouse to the terminal (and back).
 
 Commands:
-- `/stop [name]`: stop the turn, or one agent. An empty line stops the turn.
+- `/stop [name]`: stop the turn, or one agent.
+- `/now`: as `C-s`.
 - `/goal TEXT`, `/halt`: set a goal, or drop it.
 - `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
 - `/plan`: Unii reads and proposes, changing nothing. `/auto` lets it act.
-- `/status`, `/tree`, `/export`, `/help`, `/quit`.
+- `/status`, `/mouse`, `/tree`, `/export`, `/help`, `/quit`.
 
-Whatever is running when you quit resumes at the next start.
+Whatever is running when you quit resumes at the next start. Leaving kills
+every process the tools started; if mugen dies any other way, a watchdog
+kills them within a second, and the next start kills whatever an earlier
+one left, so no command outlives it.
 
-In tmux, mugen names its window `mugen`, shows `mugen …` while Unii works,
-and rings the window's bell when a reply comes while you look at another
-window, so tmux flags it. When mugen quits, tmux goes back to naming the
-window itself.
+In tmux it all works as is (the mouse and `PgUp` reach mugen whether
+tmux's `mouse` is on or off). mugen turns tmux's `extended-keys` on as it
+starts, unless set, so `Shift-Enter` can come apart from `Enter` (if the
+terminal under tmux sends it apart: VTE terminals such as GNOME Terminal
+don't, so use `Alt-Enter` there). It names its window `mugen`, shows
+`mugen …` while Unii works, and rings the window's bell when a reply comes
+while you look at another window.
 
-From a pipe (stdin not a terminal), each line is a message, and mugen
-exits once stdin ends and nothing is running.
+A data dir is one chat, and one mugen holds it: a second one on it says
+where the first runs (its tmux pane) and stops. For a separate chat beside
+it, give it another dir: `MUGEN_DIR=~/.mugen-2 mugen`.
 
-Leave with `/quit` (or Ctrl-D): it kills every process the tools started.
-Ctrl-C kills mugen at once, and a shell job running then (in its own
-process group) can outlive it.
+`MUGEN_PLAIN=1` (or `TERM=dumb`, as in Emacs' shell) goes without the full
+screen: lines as they come, a `λ` prompt, and a message of many lines
+between two lines of `"""`. From a pipe (stdin not a terminal), each line
+is a message, and mugen exits once stdin ends and nothing is running.
+
+[docs/guide.html](docs/guide.html) is a guide to all of it, a page that
+opens in any browser.
 
 ## Settings (environment)
 
@@ -114,7 +154,7 @@ process group) can outlive it.
 | `MUGEN_CLAUDE` | `claude` | the Claude Code CLI to run |
 | `MUGEN_TRANSCRIPTS` | `chat` | which calls Claude Code saves as sessions: `chat` (turns, agents, goal checks), `all` (summaries too), `none` |
 | `MUGEN_DEBUG_DIR` | | where each chat call's Claude Code debug log goes (none if unset) |
-| `MUGEN_PLAIN` | | `1`: no readline (rlwrap) on the input line |
+| `MUGEN_PLAIN` | | `1`: not the full screen (lines as they come, a prompt) |
 
 The data dir is UniiChat's format (`users/<id>/` there), so either program
 can open the other's chat.

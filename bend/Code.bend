@@ -145,13 +145,15 @@ def cc.env() -> List<&2, String>:
 # A call's arguments to env: the model's id and effort, the system prompt's
 # file, Claude Code's own tools ("" none: WebSearch when it searches), the MCP
 # config ("" none), the session's id ("" no transcript), the debug log ("" none),
-# one turn only (a call with no tools)
+# one turn only (a call with no tools). A call with tools asks for its
+# thoughts summarized (Claude Code's hidden --thinking-display), so the
+# screen can show them; else they come empty.
 type cc.Run is Data:
   cc.Run{id: String, effort: String, sys: String, tools: String, mcp: String, sid: String, debug: String, once: Bool}
 
 def cc.args(+c: cc.Cfg, r: cc.Run) -> List<String>:
   match r:
-    case cc.Run{id, effort, sys, tools, +mcp, +sid, +debug, once}:
+    case cc.Run{id, effort, sys, tools, +mcp, +sid, +debug, +once}:
       cc.list(List.concat(&2, String, [cc.env(),
         [cc.cfg.prog(c), "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--replay-user-messages",
           "--model", id, "--effort", effort, "--system-prompt-file", sys, "--strict-mcp-config", "--disable-slash-commands", "--tools", tools],
@@ -159,7 +161,8 @@ def cc.args(+c: cc.Cfg, r: cc.Run) -> List<String>:
         cc.opt(Bool.not(String.is_empty(sid)), ["--setting-sources", "user", "--session-id", sid]),
         cc.opt(String.is_empty(sid), ["--no-session-persistence", "--setting-sources", "", "--settings", "{\"disableAllHooks\":true}"]),
         cc.opt(Bool.not(String.is_empty(debug)), ["--debug-file", debug]),
-        cc.opt(once, ["--max-turns", "1"])]))
+        cc.opt(once, ["--max-turns", "1"]),
+        cc.opt(Bool.not(once), ["--thinking-display", "summarized"])]))
 
 # Messages ------------------------------------------------------------------
 
@@ -370,13 +373,15 @@ def cc.once(+c: cc.Cfg, +id: String, +effort: String, +system: String, +blocks: 
 # come: its stdin the FIFO ctl.cc.in (we hold its other end: closed, the
 # call ends), its stdout and stderr ctl.cc.out and ctl.cc.err, its process
 # group's leader in ctl.cc.pid and run/groups (killed by a stop or a quit;
-# a watchdog in it kills the group if mugen dies). Once it is gone the
-# wrapper adds a last line (cc.gone) with its exit status.
+# a watchdog in it kills the group if mugen dies; the groups file has its
+# start time too, /proc/PID/stat's field 22, so that no other group that
+# took its number is killed). Once it is gone the wrapper adds a last line
+# (cc.gone) with its exit status.
 #
 #   $0 ctl, $1 run/groups, $2 the work dir, the rest env's arguments
 
 def cc.launch() -> String:
-  "set -m\nm=$PPID c=$0 g=$1 d=$2\nshift 2\n(\n  set +m\n  ( while kill -0 \"$m\" 2> /dev/null; do sleep 2; done; kill -TERM 0 ) &\n  w=$!\n  exec 3< \"$c.cc.in\"\n  cd \"$d\" && \"$@\" <&3 >> \"$c.cc.out\" 2> \"$c.cc.err\"\n  echo \"{\\\"type\\\":\\\"mugen_exit\\\",\\\"code\\\":$?}\" >> \"$c.cc.out\"\n  kill \"$w\" 2> /dev/null\n) < /dev/null > /dev/null 2>&1 &\necho $! > \"$c.cc.pid\"\necho $! >> \"$g\"\n"
+  "set -m\nm=$PPID c=$0 g=$1 d=$2\nshift 2\n(\n  set +m\n  ( while kill -0 \"$m\" 2> /dev/null; do sleep 2; done; kill -TERM 0 ) &\n  w=$!\n  exec 3< \"$c.cc.in\"\n  cd \"$d\" && \"$@\" <&3 >> \"$c.cc.out\" 2> \"$c.cc.err\"\n  echo \"{\\\"type\\\":\\\"mugen_exit\\\",\\\"code\\\":$?}\" >> \"$c.cc.out\"\n  kill \"$w\" 2> /dev/null\n) < /dev/null > /dev/null 2>&1 &\necho $! > \"$c.cc.pid\"\necho \"$! $(cut -d' ' -f22 /proc/$!/stat 2> /dev/null)\" >> \"$g\"\n"
 
 # Our MCP server, as Claude Code starts it: a relay of two processes, its
 # requests copied to ctl.cc.mcp.in, our answers in ctl.cc.mcp.out followed to it

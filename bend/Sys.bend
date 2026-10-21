@@ -91,6 +91,18 @@ def mu.exec(program: String, args: List<String>) -> IO(U32):
 def mu.units(path: String) -> IO(Result<&1, &1, U32 & String, Nat>):
   import "./effs/mu.c"
 
+# the terminal in raw mode (on 1) or as it was (on 0); `back` is written as
+# it is given back, at exit too and on SIGTERM, SIGHUP, SIGQUIT: 0 or the errno
+def mu.raw(on: U32, back: String) -> IO(U32):
+  import "./effs/mu.c"
+
+# the terminal's rows times 65536 plus its columns (0: no terminal)
+def mu.winsize() -> IO(U32):
+  import "./effs/mu.c"
+
+def mu.pid() -> IO(U32):
+  import "./effs/mu.c"
+
 # Results -------------------------------------------------------------------
 
 # a fallible effect's answer, or exit 1 with "mugen: <what>: <error>"

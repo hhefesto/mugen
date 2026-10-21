@@ -214,7 +214,7 @@ def tl.chomp(+s: String) -> String:
 # "exec 2>&1" and the command, and keeps its status; cat takes the output
 # till all that holds it ends
 def tl.shell.script() -> String:
-  "set -m\ncd \"$2\" || exit 125\nsh -c 'echo $$ > \"$1\"; echo $$ >> \"$5\"; \"$2\" -c \"exec 2>&1\n$3\" < /dev/null; echo $? > \"$4\"' sh \"$1\" \"$3\" \"$4\" \"$6\" \"$7\" 2>&1 | cat > \"$5\" &\nwait $!"
+  "set -m\ncd \"$2\" || exit 125\nsh -c 'echo $$ > \"$1\"; echo \"$$ $(cut -d\\  -f22 /proc/$$/stat 2> /dev/null)\" >> \"$5\"; \"$2\" -c \"exec 2>&1\n$3\" < /dev/null; echo $? > \"$4\"' sh \"$1\" \"$3\" \"$4\" \"$6\" \"$7\" 2>&1 | cat > \"$5\" &\nwait $!"
 
 def tl.text.of(r: Result<&1, &1, U32 & String, String>) -> String:
   match r:
@@ -247,9 +247,10 @@ def tl.secs(+ms: Nat) -> String:
   +t = Nat.div(Nat.add(ms, 50n), 100n)
   Nat.show(Nat.div(t, 10n)) ++ "." ++ Nat.show(Nat.mod(t, 10n)) ++ " s"
 
-# how it ended: its status kept, else stopped (the stop file) or killed
-def tl.exit(+code: String, +stopped: Bool) -> String:
-  Bool.pick(String, stopped, "stopped", Bool.pick(String, String.is_empty(code), "killed", "exit " ++ code))
+# how it ended: its status kept, else stopped (the stop file), cut by the
+# user to send a message (the cut file: Hub.bend /now), or killed
+def tl.exit(+code: String, +stopped: Bool, +cut: Bool) -> String:
+  Bool.pick(String, stopped, "stopped", Bool.pick(String, cut, "cut by the user", Bool.pick(String, String.is_empty(code), "killed", "exit " ++ code)))
 
 def tl.shell.out(+text: String, +exit: String, +ms: Nat) -> E.ev.Out:
   +body = tl.chomp(text)
@@ -272,6 +273,7 @@ def tl.shell(+env: tl.Env, +cwd: String, +command: String) -> IO(E.ev.Out):
       +code = ctl ++ ".code"
       do IO<E.ev.Out>:
         r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(code)
+        r0 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".cut")
         t0 : Nat <- IO.now()
         o : S.mu.Out <- S.mu.run("sh", ["-c", tl.shell.script(), "sh", ctl ++ ".pid", cwd, shell, command, out, code, groups], "", 65536, 4294967295)
         t1 : Nat <- IO.now()
@@ -281,7 +283,9 @@ def tl.shell(+env: tl.Env, +cwd: String, +command: String) -> IO(E.ev.Out):
         +text : String <- tl.out.read(Nat.is_le(units, U32.to_nat(tl.cap())), out, units, size)
         +status : String <- IO.bind(Result<&1, &1, U32 & String, String>, String, S.mu.read_file(code), r => IO.pure(String, T.tx.trim(tl.text.of(r))))
         stopped : Bool <- tl.exists(ctl ++ ".stop")
-        return tl.shell.out(text, tl.exit(status, stopped), Nat.sub(t1, t0))
+        cut : Bool <- tl.exists(ctl ++ ".cut")
+        r2 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".cut")
+        return tl.shell.out(text, tl.exit(status, stopped, cut), Nat.sub(t1, t0))
 
 # Read ----------------------------------------------------------------------
 

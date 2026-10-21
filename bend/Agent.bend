@@ -175,9 +175,16 @@ def ag.use.go(k: Nat, +env: ag.Env, +name: String, +input: J.Json) -> IO(E.ev.Ou
     case _:
       IO.pure(E.ev.Out, E.ev.Out{"No tool " ++ name ++ ".", True{}})
 
-# a tool call run (Agent.use): its output, "(no output)" for none
+def ag.json.show(+name: String, +input: J.Json) -> String:
+  name ++ " " ++ J.js.write(input)
+
+# a tool call run (Agent.use): its output, "(no output)" for none; its start
+# shown (as "run", the call as it will be logged: the screen's running tool)
 def ag.use(+env: ag.Env, +name: String, +input: J.Json) -> IO(E.ev.Out):
-  IO.bind(E.ev.Out, E.ev.Out, ag.use.go(ag.use.kind(name, input, ag.boss(env)), env, name, input), o => IO.pure(E.ev.Out, ag.out.fix(o)))
+  do IO<E.ev.Out>:
+    Unit <- ag.show(env, "run", ag.json.show(name, input))
+    o : E.ev.Out <- ag.use.go(ag.use.kind(name, input, ag.boss(env)), env, name, input)
+    return ag.out.fix(o)
 
 # Messages sent meanwhile ------------------------------------------------------------
 
@@ -267,9 +274,6 @@ def ag.got.texts(g: ag.Got) -> List<&2, String>:
   match g:
     case ag.Got{t, s}:
       t
-
-def ag.json.show(+name: String, +input: J.Json) -> String:
-  name ++ " " ++ J.js.write(input)
 
 def ag.err(+o: E.ev.Out) -> String:
   match o:

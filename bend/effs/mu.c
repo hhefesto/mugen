@@ -13,7 +13,9 @@
 #include <dirent.h>
 #include <signal.h>
 #include <sys/file.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <termios.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -586,6 +588,101 @@ Term mu_units_run(Env e, Term* f, IoWork* w) {
 
 static void __attribute__((constructor)) mu_units_use(void) {
   io_eff(CID(mu.units), mu_units_run);
+}
+#endif
+
+// mu.raw(on, back): the terminal on stdin in raw mode (on 1: no echo, no
+// line editing, no signals from keys, no flow control; output still turns
+// "\n" into "\r\n"), or as it was (on 0). `back` is what to write to stdout
+// as it is given back, which also happens at exit and on SIGTERM, SIGHUP and
+// SIGQUIT (each then raised again, at its default). 0, or the errno.
+#ifdef CID(mu.raw)
+static struct termios mu_tio;
+static int            mu_tio_kept = 0;
+static int            mu_tio_raw  = 0;
+static char*          mu_back     = NULL;
+static u64            mu_back_n   = 0;
+
+static void mu_tty_back(void) {
+  if (!mu_tio_raw) {
+    return;
+  }
+  mu_tio_raw = 0;
+  if (mu_back != NULL) {
+    mu_write_all(1, mu_back, mu_back_n);
+  }
+  tcsetattr(0, TCSAFLUSH, &mu_tio);
+}
+
+static void mu_tty_signal(int sig) {
+  mu_tty_back();
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
+Term mu_raw_run(Env e, Term* f, IoWork* w) {
+  u64   n    = 0;
+  char* back = io_cstr(e, f[1], &n);
+  free(mu_back);
+  mu_back   = back;
+  mu_back_n = n;
+  if ((u32)f[0] == 0) {
+    mu_tty_back();
+    return (Term)(u32)0;
+  }
+  struct termios t;
+  if (tcgetattr(0, &t) != 0) {
+    return (Term)(u32)errno;
+  }
+  if (!mu_tio_kept) {
+    mu_tio      = t;
+    mu_tio_kept = 1;
+    atexit(mu_tty_back);
+    signal(SIGTERM, mu_tty_signal);
+    signal(SIGHUP, mu_tty_signal);
+    signal(SIGQUIT, mu_tty_signal);
+  }
+  t.c_iflag &= ~(tcflag_t)(BRKINT | ICRNL | INLCR | IGNCR | INPCK | ISTRIP | IXON);
+  t.c_lflag &= ~(tcflag_t)(ECHO | ICANON | IEXTEN | ISIG);
+  t.c_cflag |= CS8;
+  t.c_cc[VMIN]  = 1;
+  t.c_cc[VTIME] = 0;
+  if (tcsetattr(0, TCSAFLUSH, &t) != 0) {
+    return (Term)(u32)errno;
+  }
+  mu_tio_raw = 1;
+  return (Term)(u32)0;
+}
+
+static void __attribute__((constructor)) mu_raw_use(void) {
+  io_eff(CID(mu.raw), mu_raw_run);
+}
+#endif
+
+// mu.winsize(): the terminal's size, its rows times 65536 plus its columns
+// (0 when stdout and stdin are no terminal).
+#ifdef CID(mu.winsize)
+Term mu_winsize_run(Env e, Term* f, IoWork* w) {
+  struct winsize ws;
+  if (ioctl(1, TIOCGWINSZ, &ws) != 0 && ioctl(0, TIOCGWINSZ, &ws) != 0) {
+    return (Term)(u32)0;
+  }
+  return (Term)(u32)((u32)ws.ws_row << 16 | (u32)ws.ws_col);
+}
+
+static void __attribute__((constructor)) mu_winsize_use(void) {
+  io_eff(CID(mu.winsize), mu_winsize_run);
+}
+#endif
+
+// mu.pid(): this process's id.
+#ifdef CID(mu.pid)
+Term mu_pid_run(Env e, Term* f, IoWork* w) {
+  return (Term)(u32)getpid();
+}
+
+static void __attribute__((constructor)) mu_pid_use(void) {
+  io_eff(CID(mu.pid), mu_pid_run);
 }
 #endif
 

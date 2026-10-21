@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How mugen Works</title>
+<meta name="description" content="mugen (無限), one chat that never ends, in the terminal: how to run it, the screen and its keys, the memory, the backends, caching, files and settings.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Shippori+Mincho:wght@500;700;800&display=swap">
+<style>
+/* Layout: a guide read top to bottom; a contents rail on wide screens, one
+   column on phones. Indigo ink (aizome) on cool paper; teal = read from the
+   cache, amber = written to it. The terminal panels stay dark in both themes. */
+:root {
+  --paper: #f1f3f7;
+  --sheet: #ffffff;
+  --ink: #151d2c;
+  --ink-2: #4b5569;
+  --line: #d3d9e3;
+  --ai: #2a4a8b;
+  --ai-soft: #e2e8f4;
+  --hit: #1f7a66;
+  --hit-soft: #d9eee8;
+  --write: #9c6210;
+  --write-soft: #f5e8d2;
+  --new: #7b8597;
+  --warn: #a8382a;
+  --term-bg: #111827;
+  --term-fg: #d5ddeb;
+  --term-dim: #8390a8;
+  --term-you: #a9bdf0;
+  --term-cache: #77c9b2;
+  --term-lambda: #e08ad8;
+  --term-model: #7fd3e6;
+  --term-auto: #8fd48a;
+
+  --f-display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", Georgia, serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --s-cap: 0.78rem;
+  --s-small: 0.875rem;
+  --s-body: 1rem;
+  --s-lead: 1.15rem;
+  --s-h3: 1.2rem;
+  --s-h2: 1.75rem;
+  --s-hero: clamp(3.2rem, 9vw, 5.5rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d1320;
+    --sheet: #141c2c;
+    --ink: #e0e6f0;
+    --ink-2: #9ba7bd;
+    --line: #263247;
+    --ai: #92abe9;
+    --ai-soft: #1a2640;
+    --hit: #5cc3a6;
+    --hit-soft: #12302a;
+    --write: #e1a64c;
+    --write-soft: #33260f;
+    --new: #8a95a9;
+    --warn: #ef8a7a;
+    --term-bg: #080d17;
+    --term-fg: #d5ddeb;
+    --term-dim: #7f8ca4;
+    --term-you: #a9bdf0;
+    --term-cache: #77c9b2;
+  --term-lambda: #e08ad8;
+  --term-model: #7fd3e6;
+  --term-auto: #8fd48a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d1320;
+  --sheet: #141c2c;
+  --ink: #e0e6f0;
+  --ink-2: #9ba7bd;
+  --line: #263247;
+  --ai: #92abe9;
+  --ai-soft: #1a2640;
+  --hit: #5cc3a6;
+  --hit-soft: #12302a;
+  --write: #e1a64c;
+  --write-soft: #33260f;
+  --new: #8a95a9;
+  --warn: #ef8a7a;
+  --term-bg: #080d17;
+  --term-fg: #d5ddeb;
+  --term-dim: #7f8ca4;
+  --term-you: #a9bdf0;
+  --term-cache: #77c9b2;
+  --term-lambda: #e08ad8;
+  --term-model: #7fd3e6;
+  --term-auto: #8fd48a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: var(--s-body);
+  line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--ai); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--ai); outline-offset: 2px; border-radius: 3px; }
+code, kbd, .mono { font-family: var(--f-mono); font-size: 0.9em; }
+:not(pre) > code { background: var(--ai-soft); padding: 0.08em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+kbd { display: inline-block; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 0.35em; background: var(--sheet); white-space: nowrap; }
+
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 56px; padding-block: 40px 96px; }
+@media (max-width: 960px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 24px 72px; } }
+
+/* contents rail */
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: var(--s-small); }
+nav.toc .label { font-size: var(--s-cap); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 10px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; counter-reset: toc; }
+nav.toc li { counter-increment: toc; }
+nav.toc a { display: flex; gap: 10px; padding: 4px 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; }
+nav.toc a::before { content: counter(toc); font-family: var(--f-mono); font-size: 0.8em; color: var(--ai); min-width: 1.2em; padding-top: 0.15em; }
+nav.toc a:hover { background: var(--ai-soft); color: var(--ink); }
+@media (max-width: 960px) {
+  nav.toc { position: static; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--sheet); }
+  nav.toc ol { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 12px; }
+}
+
+main { min-width: 0; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 24px; }
+section > p, section > ul, section > ol { max-width: 68ch; margin: 0; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 700; text-wrap: balance; margin: 0; line-height: 1.2; }
+h2 { font-size: var(--s-h2); }
+h3 { font-size: var(--s-h3); }
+.eyebrow { font-size: var(--s-cap); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ai); font-weight: 600; }
+.lead { font-size: var(--s-lead); color: var(--ink-2); max-width: 60ch; }
+ul, ol { padding-left: 1.3em; }
+li + li { margin-top: 0.35em; }
+
+/* hero */
+.hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 32px; align-items: end; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.hero .kanji { font-family: var(--f-display); font-weight: 800; font-size: var(--s-hero); line-height: 0.95; color: var(--ai); grid-row: span 2; }
+.hero h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); }
+.hero h1 span { color: var(--ink-2); font-weight: 500; }
+.hero p { margin: 0; color: var(--ink-2); max-width: 58ch; }
+@media (max-width: 560px) { .hero { grid-template-columns: minmax(0, 1fr); } .hero .kanji { grid-row: auto; } }
+
+/* code blocks */
+.code { position: relative; background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.code pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--f-mono); font-size: 0.86rem; line-height: 1.65; }
+.code pre .c { color: var(--ink-2); }
+.code .copy { position: absolute; top: 8px; right: 8px; font: 500 var(--s-cap) var(--f-body); color: var(--ink-2); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.code .copy:hover { color: var(--ink); border-color: var(--ai); }
+.code .tag { display: block; padding: 8px 16px 0; font-size: var(--s-cap); color: var(--ink-2); letter-spacing: 0.04em; }
+
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+
+/* terminal */
+.term { background: var(--term-bg); color: var(--term-fg); border-radius: 12px; overflow: hidden; min-width: 0; }
+.term .bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; font: 500 var(--s-cap) var(--f-mono); color: var(--term-dim); border-bottom: 1px solid #ffffff14; }
+.term .bar i { width: 9px; height: 9px; border-radius: 50%; background: #ffffff26; display: inline-block; }
+.term pre { margin: 0; padding: 14px 16px 16px; overflow-x: auto; font-family: var(--f-mono); font-size: 0.84rem; line-height: 1.7; }
+.term .dim { color: var(--term-dim); }
+.term .you { color: var(--term-you); }
+.term .cache { color: var(--term-cache); }
+.term .title { color: var(--term-lambda); font-weight: 700; }
+.term .lambda { color: var(--term-lambda); font-weight: 700; }
+.term .model { color: var(--term-model); }
+.term .auto { color: var(--term-auto); }
+.term .gap { display: block; height: 0.6em; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--s-small); color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend b { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* steps of a turn */
+ol.steps { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0; counter-reset: step; max-width: 74ch; }
+ol.steps > li { counter-increment: step; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); margin: 0; }
+ol.steps > li:last-child { border-bottom: 1px solid var(--line); }
+ol.steps > li::before { content: counter(step); font-family: var(--f-display); font-weight: 700; font-size: 1.5rem; color: var(--ai); line-height: 1.1; }
+ol.steps h3 { font-family: var(--f-body); font-size: var(--s-body); font-weight: 600; margin-bottom: 4px; }
+ol.steps p { margin: 0; color: var(--ink-2); }
+ol.steps p + p { margin-top: 6px; }
+
+/* the tree */
+.tree-fig { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.tree-scroll { overflow-x: auto; }
+.tree { display: grid; grid-template-columns: repeat(8, minmax(52px, 1fr)); gap: 6px; min-width: 460px; font-family: var(--f-mono); font-size: 0.78rem; }
+.tree div { border: 1px solid var(--line); border-radius: 6px; padding: 6px 4px; text-align: center; color: var(--ink-2); background: var(--paper); }
+.tree .in { background: var(--ai-soft); border-color: var(--ai); color: var(--ink); font-weight: 500; }
+.tree .lvl { grid-column: 1 / -1; display: none; }
+.tree-note { font-size: var(--s-small); color: var(--ink-2); margin: 0; max-width: 70ch; }
+.viewline { font-family: var(--f-mono); font-size: 0.8rem; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; white-space: pre; line-height: 1.7; }
+.viewline .id { color: var(--ai); }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--sheet); }
+table { border-collapse: collapse; width: 100%; font-size: var(--s-small); }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-weight: 600; color: var(--ink-2); font-size: var(--s-cap); letter-spacing: 0.06em; text-transform: uppercase; background: var(--paper); }
+td:first-child { white-space: nowrap; }
+td code { white-space: nowrap; }
+
+/* the request, block by block */
+.req { display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
+.req .blk { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 14px; border-radius: 8px; font-size: var(--s-small); border: 1px solid transparent; }
+.req .blk.hit { background: var(--hit-soft); border-color: color-mix(in srgb, var(--hit) 35%, transparent); }
+.req .blk.write { background: var(--write-soft); border-color: color-mix(in srgb, var(--write) 35%, transparent); }
+.req .blk .who { font-size: var(--s-cap); color: var(--ink-2); font-family: var(--f-mono); }
+.req .mark { display: flex; align-items: center; gap: 8px; font: 500 var(--s-cap) var(--f-mono); color: var(--hit); padding: 0 14px; }
+.req .mark.cc { color: var(--write); }
+.req .mark::before { content: ""; height: 0; border-top: 2px dashed currentColor; flex: 1; order: 2; }
+.req .mark span { order: 1; }
+
+/* the measured bar */
+.measure { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
+.measure .head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; align-items: baseline; }
+.measure .big { font-family: var(--f-display); font-size: 2.2rem; font-weight: 700; color: var(--hit); font-variant-numeric: tabular-nums; }
+.bar { display: flex; height: 20px; border-radius: 5px; overflow: hidden; background: var(--paper); }
+.bar .r { background: var(--hit); }
+.bar .w { background: var(--write); }
+.bar .n { background: var(--new); min-width: 2px; }
+.measure dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; font-variant-numeric: tabular-nums; }
+.measure dt { font-size: var(--s-cap); color: var(--ink-2); letter-spacing: 0.04em; }
+.measure dd { margin: 0; font-family: var(--f-mono); font-size: 1rem; }
+.measure dt b { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+@media (max-width: 480px) { .measure dl { grid-template-columns: minmax(0, 1fr); } }
+
+/* side-by-side cards (backends) */
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card.main { border-color: var(--ai); }
+.card h3 { font-size: 1.15rem; }
+.card .how { font-family: var(--f-mono); font-size: var(--s-small); color: var(--ai); }
+.card ul { margin: 0; font-size: var(--s-small); color: var(--ink-2); }
+.pill { align-self: flex-start; font-size: var(--s-cap); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 9px; border-radius: 99px; background: var(--ai-soft); color: var(--ai); }
+
+/* callouts and checklist */
+.note { border-left: 3px solid var(--ai); background: var(--sheet); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 70ch; font-size: var(--s-small); color: var(--ink-2); }
+.note strong { color: var(--ink); }
+.path { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: var(--s-small); }
+.path span { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.path i { color: var(--ink-2); font-style: normal; }
+.checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; max-width: 74ch; }
+.checks li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; align-items: start; margin: 0; }
+.checks .st { font-size: var(--s-cap); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; text-align: center; }
+.checks .st.done { background: var(--hit-soft); color: var(--hit); }
+.checks .st.todo { background: var(--write-soft); color: var(--write); }
+.checks p { margin: 0; }
+.checks .sub { color: var(--ink-2); font-size: var(--s-small); }
+
+dl.faq { margin: 0; display: flex; flex-direction: column; gap: 14px; max-width: 74ch; }
+dl.faq dt { font-weight: 600; }
+dl.faq dd { margin: 2px 0 0; color: var(--ink-2); }
+
+.files { font-family: var(--f-mono); font-size: 0.84rem; line-height: 1.75; background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; white-space: pre; margin: 0; }
+.files .c { color: var(--ink-2); }
+footer { color: var(--ink-2); font-size: var(--s-small); border-top: 1px solid var(--line); padding-top: 20px; max-width: 74ch; }
+/* the screen's own colors, in the terminal panels */
+.term .ok, .term .add { color: #8fd48a; }
+.term .bad, .term .del { color: #ef8a7a; }
+.term .run { color: #e6c27a; }
+.term .hunk { color: #7fd3e6; }
+.term .think { color: var(--term-dim); font-style: italic; }
+.term .rule { color: #3a4658; }
+.term b { color: #eef2f8; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="toc" aria-label="Contents">
+    <div class="label">Contents</div>
+    <ol>
+      <li><a href="#start">Start it</a></li>
+      <li><a href="#screen">The screen</a></li>
+      <li><a href="#keys">Keys and commands</a></li>
+      <li><a href="#turn">One message</a></li>
+      <li><a href="#memory">The memory</a></li>
+      <li><a href="#backends">Two backends</a></li>
+      <li><a href="#cache">Caching</a></li>
+      <li><a href="#transcripts">Transcripts</a></li>
+      <li><a href="#files">Files on disk</a></li>
+      <li><a href="#settings">Settings</a></li>
+      <li><a href="#phone">From the iPhone</a></li>
+      <li><a href="#trouble">When it goes wrong</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="kanji" aria-hidden="true">無限</div>
+      <h1>How mugen works <span>on olimpo</span></h1>
+      <p>mugen is one chat with Unii that never ends. It is UniiChat written in Bend 2. It runs in your terminal, full screen, and remembers everything. By default it runs on your Claude Max plan through the official <code>claude</code> command.</p>
+    </header>
+
+    <section id="start">
+      <div class="eyebrow">Start it</div>
+      <h2>Starting mugen</h2>
+      <p>mugen is installed on olimpo, so <code>mugen</code> works in any shell. Sign Claude Code in once with <code>mugen login</code>; mugen checks the sign-in every time it starts. In a shell that was open before you switched NixOS, run <code>. /etc/set-environment</code> first, since tmux keeps those shells' old environment.</p>
+      <div class="pair">
+        <div class="code">
+          <span class="tag">On your Max plan (the default)</span>
+          <pre data-copy><span class="c"># once: signs Claude Code in (claude auth login)</span>
+mugen login
+mugen</pre>
+        </div>
+        <div class="code">
+          <span class="tag">On the Messages API, with a key</span>
+          <pre data-copy>export ANTHROPIC_API_KEY=...
+mugen --api</pre>
+        </div>
+      </div>
+      <p>mugen takes the whole terminal, as an editor would, and gives it back as it was when you leave: <kbd>Esc</kbd> <kbd>Esc</kbd>, <kbd>C-d</kbd>, <kbd>C-c</kbd> on an empty input, or <code>/quit</code>. Anything still running when you quit carries on at the next start. It opens with a status and the last messages of the chat, so after a restart you see where you were.</p>
+      <div class="term" role="img" aria-label="The mugen screen: the chat with a folded tool call, a diff, a reply, then the lines under it">
+        <div class="bar"><i></i><i></i><i></i> tmux · mugen</div>
+        <pre><span class="title">無限 mugen</span><span class="dim">  one chat that never ends</span>
+<span class="dim">  account   </span>(your Claude email) · Max plan, on Claude Code
+<span class="dim">  limits    </span>5-hour 0% (resets 16:20) · weekly 11% (resets 2026-10-27) · as of 12:25
+<span class="gap"></span><span class="lambda">❯</span> <b>fix the typo in notes.txt</b>
+<span class="gap"></span><span class="think">✻ The user wants the typo fixed. I will read the file, then edit the one line.</span>
+<span class="gap"></span><span class="ok">▸</span> <b>read</b>  ~/notes.txt                                    <span class="dim">[lines 1-4 of 4]</span>
+<span class="dim">  │ </span>one
+<span class="dim">  │ </span>tow
+<span class="dim">  │ … +2 lines (click to open)</span>
+<span class="ok">▸</span> <b>edit</b>  ~/notes.txt                                         <span class="add">+1</span> <span class="del">−1</span>
+<span class="dim">  │ </span><span class="hunk">@@ -1,4 +1,4 @@</span>
+<span class="dim">  │     1   </span>one
+<span class="dim">  │     2 </span><span class="del">- tow</span>
+<span class="dim">  │     2 </span><span class="add">+ two</span>
+<span class="dim">  │     3   </span>three
+<span class="gap"></span><b>●</b> Fixed: <span class="model">tow</span> is now <span class="model">two</span>.
+<span class="dim">  · cache: 3.9k read, 595 written, 2 new in, 30 out</span>
+<span class="rule">──────────────────────────────────────────────────────────────</span>
+<span class="run">⠼</span> Unii works · 12s · <span class="run">▸ shell</span> 9s  <span class="dim">nix build .#mugen</span>
+<span class="run">⧗ 1 waiting:</span> «and run the tests after» <span class="dim">· C-s sends now</span>
+<span class="dim">~/.mugen/work/main · </span><span class="model">opus-5.5</span><span class="dim"> · </span>medium<span class="dim"> · </span>87% left<span class="dim"> · </span><span class="auto">auto</span>
+<span class="lambda">λ</span> <span class="you">█</span></pre>
+      </div>
+      <div class="legend">
+        <span><b style="background: var(--term-you)"></b>your input, after the lambda</span>
+        <span><b style="background: #e6c27a"></b>what runs and what waits</span>
+        <span><b style="background: #8fd48a"></b>a call that went well, lines added</span>
+        <span><b style="background: #ef8a7a"></b>a call that failed, lines taken out</span>
+      </div>
+    </section>
+
+    <section id="screen">
+      <div class="eyebrow">The screen</div>
+      <h2>What you see</h2>
+      <p>The chat fills the top. Each entry is a block: your message after <code>❯</code>, Unii's reply after <code>●</code> (with its code blocks, headings, bullets and <code>code</code> set apart), its summarized thinking after <code>✻</code>, notes after <code>※</code>, an agent's report after <code>◆</code>.</p>
+      <ul>
+        <li><strong>A tool call is one block.</strong> Its header says the tool, what it was asked (a shell's command, a file's path) and how it went on the right: <code>✓ 0.4 s</code>, <code>✗ exit 1 · 0.2 s</code>, <code>✂ cut</code>, <code>■ stopped</code>, or <code>running…</code>. Under it, the first lines of its output.</li>
+        <li><strong>An edit or a write shows its diff,</strong> with the line numbers of the file, taken-out lines in red and added ones in green, long lines wrapped under their own text.</li>
+        <li><strong>Long blocks are folded.</strong> Click a block to open it whole, click again to fold it; its header stays where it is. <kbd>C-o</kbd> opens or folds all of them.</li>
+        <li><strong>Scroll</strong> with <kbd>PgUp</kbd>, <kbd>PgDn</kbd> and the mouse wheel. While you are scrolled up, new entries don't move what you read; the rule says how far below the end is, and <kbd>M-&gt;</kbd> (or <kbd>End</kbd> on an empty input) follows it again.</li>
+      </ul>
+      <p>Under the chat, a rule, then what runs: a spinner, what Unii does and for how long, the tool it is running and for how long (a stuck command shows here at once), and the agents at work. Then the messages waiting for Unii, or handed to its running call, then the status line: where Unii works, the model, its effort, the context left before mugen folds the oldest lines of the view, and the mode. Last, the input.</p>
+      <div class="note"><strong>Selecting text.</strong> The mouse goes to mugen, for clicks and the wheel. To select text with the mouse, hold <kbd>Shift</kbd> while you drag (most terminals), or type <code>/mouse</code> to hand the mouse back to the terminal, and <code>/mouse</code> again to take it back.</div>
+      <h3>In tmux</h3>
+      <p>mugen works in tmux as it does outside it, with nothing to set up: the mouse and <kbd>PgUp</kbd>/<kbd>PgDn</kbd> reach it whether tmux's <code>mouse</code> option is on or off. As it starts in tmux, mugen turns tmux's <code>extended-keys</code> on (unless it is set), so that <kbd>Shift-Enter</kbd> can reach it as a key of its own; that is a server option and lasts while the tmux server does. It names its window <code>mugen</code>, shows <code>mugen …</code> while Unii works, and rings the window's bell when a reply comes while you look at another window.</p>
+      <p>Whether <kbd>Shift-Enter</kbd> comes through also depends on the terminal under tmux: kitty, foot, WezTerm, Ghostty and iTerm2 send it; GNOME Terminal and other VTE terminals don't. <kbd>Alt-Enter</kbd> and <kbd>C-j</kbd> make a new line everywhere, and so does a <code>\</code> typed at the end before <kbd>Enter</kbd>.</p>
+    </section>
+
+    <section id="keys">
+      <div class="eyebrow">Keys and commands</div>
+      <h2>Talking to it</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Keys</th><th>What they do</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Enter</kbd></td><td>Sends the message. While Unii works it waits, and the line under the chat says so.</td></tr>
+            <tr><td><kbd>Shift-Enter</kbd> <kbd>Alt-Enter</kbd> <kbd>C-j</kbd></td><td>A new line in the message. A paste comes whole, its new lines kept, as one message.</td></tr>
+            <tr><td><kbd>C-s</kbd></td><td>Sends the waiting messages now (<code>/now</code>). If Unii is running a shell command, the command is cut: Unii gets its output so far, then your messages. Otherwise its turn stops, and a new one starts with them.</td></tr>
+            <tr><td><kbd>C-g</kbd></td><td>Stops Unii's turn (<code>/stop</code>).</td></tr>
+            <tr><td><kbd>Esc</kbd> <kbd>Esc</kbd></td><td>Leaves mugen. So do <kbd>C-d</kbd> and <kbd>C-c</kbd> on an empty input; <kbd>C-c</kbd> on text clears it (<kbd>C-y</kbd> brings it back).</td></tr>
+            <tr><td><kbd>PgUp</kbd> <kbd>PgDn</kbd>, the wheel</td><td>Scroll the chat. <kbd>M-&lt;</kbd> goes to its start, <kbd>M-&gt;</kbd> back to its end.</td></tr>
+            <tr><td>a click, <kbd>C-o</kbd></td><td>Opens or folds a block; all of them.</td></tr>
+            <tr><td><kbd>C-a</kbd> <kbd>C-e</kbd> <kbd>C-b</kbd> <kbd>C-f</kbd> <kbd>M-b</kbd> <kbd>M-f</kbd></td><td>Start and end of the line; back and forward a character, a word.</td></tr>
+            <tr><td><kbd>C-k</kbd> <kbd>C-u</kbd> <kbd>C-w</kbd> <kbd>M-d</kbd> <kbd>C-y</kbd></td><td>Cut to the line's end, to its start, the word before, the word after; paste what was cut.</td></tr>
+            <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>C-p</kbd> <kbd>C-n</kbd></td><td>Move between the lines of a message; past its first or last line, the history (kept in <code>~/.mugen/history</code>).</td></tr>
+            <tr><td><kbd>C-r</kbd></td><td>Searches the history as you type; <kbd>C-r</kbd> again finds an older match, <kbd>C-g</kbd> goes back.</td></tr>
+            <tr><td><kbd>Tab</kbd></td><td>Completes a command, a model, an effort.</td></tr>
+            <tr><td><kbd>C-l</kbd></td><td>Draws the screen anew.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>/stop [name]</code></td><td>Stops Unii's turn and the agents, or the one agent named.</td></tr>
+            <tr><td><code>/now</code></td><td>As <kbd>C-s</kbd>: the waiting messages, sent at once.</td></tr>
+            <tr><td><code>/goal TEXT</code></td><td>A goal Unii keeps working toward. After each turn a check asks whether it is met; until it is, Unii is told to keep working. <code>/halt</code> drops it.</td></tr>
+            <tr><td><code>/model LABEL</code></td><td><code>opus-5.5</code> (default), <code>sonnet-5.5</code>, <code>haiku-5.5</code>, or a model id.</td></tr>
+            <tr><td><code>/effort LEVEL</code></td><td><code>low</code>, <code>medium</code> (default), <code>high</code>, <code>xhigh</code>, <code>max</code>.</td></tr>
+            <tr><td><code>/plan</code>, <code>/auto</code></td><td>Plan mode: Unii reads and proposes a plan, and runs no shell, writes and edits nothing, starts no agents. Auto mode (the default) lets it act. The mode shows on the status line.</td></tr>
+            <tr><td><code>/status</code></td><td>The opening status again: account, limits, chat and view, models, mode, work dir, goal, agents.</td></tr>
+            <tr><td><code>/mouse</code></td><td>The mouse to the terminal (to select text), or back to mugen.</td></tr>
+            <tr><td><code>/tree</code>, <code>/export</code></td><td>The whole memory tree as a page, <code>~/.mugen/tree.html</code>; the memory as <code>./mugen-memory.json</code>.</td></tr>
+            <tr><td><code>/help</code>, <code>/quit</code></td><td>The commands and keys; leave, killing every process the tools started.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Subagents</h3>
+      <p>Unii can <code>spawn</code> subagents, one per task, which run in parallel. Each one is its own <code>claude -p</code> call. It sees the view as it was at the spawn, plus its own log, and works in <code>~/.mugen/work/&lt;Name&gt;</code>. Its tool calls show in the chat, marked <code>[Name]</code>. When it finishes, its report arrives as a <code>◆</code> block, and that starts a turn. Unii can <code>tell</code> an agent more, and <code>zoom("Name")</code> opens an agent's whole chat.</p>
+    </section>
+
+    <section id="turn">
+      <div class="eyebrow">One message</div>
+      <h2>What happens when you send a message</h2>
+      <p>One computation owns the chat: the hub. Another owns the terminal: the screen. Everything else (the call to the model, the summaries, each subagent) is a worker that reports back to the hub. Here is one turn, in order.</p>
+      <ol class="steps">
+        <li><div><h3>Your message is logged</h3><p>It goes into <code>~/.mugen/main/2026-10-21.jsonl</code> word for word, with its number and date. Nothing in the log is ever changed.</p></div></li>
+        <li><div><h3>mugen waits for the summaries to catch up</h3><p>Every message before yours needs its one-line summary first. This is usually instant; the line under the chat says when it isn't.</p></div></li>
+        <li><div><h3>It builds the request</h3><p>Unii's prompt, plus your <code>rules.md</code> if you have one. Then the view of the chat: the whole conversation as one-line summaries. Then which devices are open (olimpo) and which agents are at work. Last, your message: <code>Turn: the user's new message:</code> and your text.</p></div></li>
+        <li><div><h3>It starts <code>claude -p</code> in the background</h3><p>One process per turn, in its own process group, signed in with your Max login. The request goes in on its stdin and its events come out as JSON, one per line, thoughts summarized. mugen reads them as they arrive.</p></div></li>
+        <li><div><h3>Claude Code runs the model and calls mugen's tools</h3><p>The tools <code>zoom</code>, <code>date</code>, <code>spawn</code>, <code>tell</code>, <code>shell</code>, <code>read</code>, <code>write</code> and <code>edit</code> come from mugen over MCP. When the model calls one, the screen shows it running; mugen runs it on olimpo in <code>~/.mugen/work/main</code>, logs the call and its result, and hands the result back. Web search is Claude Code's own tool.</p></div></li>
+        <li><div><h3>Messages you type meanwhile wait their turn</h3><p>The line under the chat shows them. mugen hands them to the running call, which reads them with the next tool result; if no tool call comes, they start the next turn in the same process, so the history is still cached. <kbd>C-s</kbd> doesn't wait: it cuts a running shell command so its result comes at once, or stops the turn and starts one with your messages.</p></div></li>
+        <li><div><h3>The answer ends the turn</h3><p>Unii's reply is logged and shown with the cache line, and <code>claude</code> exits. The reply is now part of the chat, and the summaries pick it up.</p></div></li>
+      </ol>
+      <div class="note"><strong>Stopping and leaving.</strong> <kbd>C-g</kbd> (or <code>/stop</code>) kills the turn's whole process group, including a shell job it started, and the chat logs "Stopped by the user". Leaving kills every group the tools started. If mugen itself dies any other way (killed, crashed, its terminal closed), a watchdog kills those groups within a second, a watchdog in each call ends <code>claude</code>, and the next start kills whatever an earlier one still left: no command outlives mugen.</div>
+    </section>
+
+    <section id="memory">
+      <div class="eyebrow">The memory</div>
+      <h2>Log, tree and view</h2>
+      <p>The chat never ends, so it can't all fit into one request. mugen keeps three things:</p>
+      <ul>
+        <li><strong>The log.</strong> Every message as it was, forever. The kinds are <code>user</code>, <code>unii</code> (Unii's replies), <code>tool</code> and <code>echo</code> (a tool call and its result), <code>work</code> (a subagent's report) and <code>note</code>.</li>
+        <li><strong>The tree.</strong> A binary tree of lines of at most 512 bytes. Each message has a leaf: a short message is its own line, and a longer one gets a summary from Haiku. Above that, every pair of neighbors is merged into one line, and so on up.</li>
+        <li><strong>The view.</strong> What each turn sees: 64 to 128 KB of lines from the tree that cover the whole chat. Recent messages appear one line each. Older stretches appear as one line for many messages.</li>
+      </ul>
+      <div class="tree-fig">
+        <div class="tree-scroll">
+          <div class="tree" aria-label="A tree over eight messages; the view takes 0+4, 4+2, 6+1 and 7+1">
+            <div style="grid-column: 1 / span 8">0+8</div>
+            <div class="in" style="grid-column: 1 / span 4">0+4</div>
+            <div style="grid-column: 5 / span 4">4+4</div>
+            <div style="grid-column: 1 / span 2">0+2</div>
+            <div style="grid-column: 3 / span 2">2+2</div>
+            <div class="in" style="grid-column: 5 / span 2">4+2</div>
+            <div style="grid-column: 7 / span 2">6+2</div>
+            <div>0+1</div><div>1+1</div><div>2+1</div><div>3+1</div><div>4+1</div><div>5+1</div><div class="in">6+1</div><div class="in">7+1</div>
+          </div>
+        </div>
+        <p class="tree-note">Eight messages and their tree. <code>id+n</code> means the n messages starting at message id. The highlighted lines form a view: one line for the oldest four messages, one for the next two, and the last two on their own. Together they cover every message once.</p>
+        <div class="viewline"><span class="id">0+4</span>|user asked how mugen caches; unii explained the view and the marks …
+<span class="id">4+2</span>|user ran echo mugen-live; unii reported the output …
+<span class="id">6+1</span>|user: what did I ask you to run, and what did it print?
+<span class="id">7+1</span>|unii: You asked me to run `echo mugen-live`, and it printed `mugen-live`.</div>
+      </div>
+      <p>When Unii needs detail, it calls <code>zoom</code> on a line. <code>zoom({"id": 0, "n": 4})</code> opens <code>0+4</code> into its two halves, and <code>n = 1</code> gives one message whole. That's how an old conversation comes back without sitting in every request.</p>
+      <p>The view grows only at its end. Once it passes 128 KB, a batch merges its oldest lines until it is back near 64 KB. Between batches, everything already in the view stays exactly the same, and that is what makes caching work.</p>
+    </section>
+
+    <section id="backends">
+      <div class="eyebrow">Two backends</div>
+      <h2>Claude Code or the API</h2>
+      <p>The memory, the tools and the request layout are the same on both. They differ in who runs the tool loop and whose account pays.</p>
+      <div class="cards">
+        <div class="card main">
+          <span class="pill">Default</span>
+          <h3>Claude Code</h3>
+          <div class="how">mugen</div>
+          <ul>
+            <li>Runs the official <code>claude -p</code>, signed in with your Max plan. Anthropic allows plan logins only in its own apps, which is why mugen calls <code>claude</code> instead of using the login itself.</li>
+            <li>Claude Code runs each turn's tool loop and calls mugen's tools over MCP.</li>
+            <li>Each summary is one Haiku call through <code>claude</code>, at most 8 at a time.</li>
+            <li>Usage counts against your plan's limits, summaries included.</li>
+            <li>Cache marks last an hour.</li>
+            <li>Turns, agents and goal checks are saved as Claude Code transcripts.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <span class="pill">Flag</span>
+          <h3>Messages API</h3>
+          <div class="how">mugen --api</div>
+          <ul>
+            <li>Calls the API with curl. <code>ANTHROPIC_API_KEY</code> is read from the environment and never appears in a command line.</li>
+            <li>mugen runs the tool loop itself, exactly as UniiChat does.</li>
+            <li>Up to 48 summaries at a time.</li>
+            <li>Billed per token to your API account.</li>
+            <li>Cache marks last five minutes, the API's default.</li>
+            <li>Not yet tried against the live API.</li>
+          </ul>
+        </div>
+      </div>
+      <p><code>MUGEN_WIRE=api</code> does the same as <code>--api</code>.</p>
+    </section>
+
+    <section id="cache">
+      <div class="eyebrow">Caching</div>
+      <h2>Why most of each request is cached</h2>
+      <p>Anthropic caches the start of a request. If the next request starts with exactly the same text, that part is read back from the cache instead of being processed again. On the API a cache read costs about a tenth of fresh input. Each request mugen sends looks like this, top to bottom:</p>
+      <div class="req" aria-label="The blocks of a request, in order, and where the cache marks fall">
+        <div class="blk hit"><span>Tool definitions (mugen's tools, web search)</span><span class="who">same every turn</span></div>
+        <div class="blk hit"><span>Claude Code's identity line</span><span class="who">Claude Code</span></div>
+        <div class="mark cc"><span>mark · Claude Code</span></div>
+        <div class="blk hit"><span>Unii's prompt and your rules</span><span class="who">same every turn</span></div>
+        <div class="mark cc"><span>mark · Claude Code</span></div>
+        <div class="blk hit"><span>The view, up to its last full block of 4 lines</span><span class="who">grows only at its end</span></div>
+        <div class="mark"><span>mark · mugen</span></div>
+        <div class="blk write"><span>The view's last lines, devices, agents at work</span><span class="who">new this turn</span></div>
+        <div class="blk write"><span>Your message, then Claude Code's environment note</span><span class="who">new this turn</span></div>
+        <div class="mark cc"><span>mark · Claude Code</span></div>
+      </div>
+      <div class="legend">
+        <span><b style="background: var(--hit)"></b>read from the cache</span>
+        <span><b style="background: var(--write)"></b>new, and written to the cache for next time</span>
+      </div>
+      <p>The API allows four cache marks per request. Claude Code places three. mugen places one: on the view's last full block of four lines. On the next turn, everything up to that block is still the same, because the view only grows at its end. That whole stretch is read from the cache.</p>
+      <div class="measure">
+        <div class="head"><strong>Measured: turn 2 of the live test on your Max plan</strong><span class="big">87%</span></div>
+        <div class="bar" role="img" aria-label="3,911 tokens read from the cache, 595 written, 2 new, out of 4,508">
+          <div class="r" style="width: 86.76%"></div><div class="w" style="width: 13.20%"></div><div class="n" style="width: 0.04%"></div>
+        </div>
+        <dl>
+          <div><dt><b style="background: var(--hit)"></b>Read from the cache</dt><dd>3,911 tokens</dd></div>
+          <div><dt><b style="background: var(--write)"></b>Written to the cache</dt><dd>595 tokens</dd></div>
+          <div><dt><b style="background: var(--new)"></b>Uncached input</dt><dd>2 tokens</dd></div>
+        </dl>
+      </div>
+      <p>That chat was tiny. As the view fills toward 64 to 128 KB, the cached part grows with it, while the new part stays about one message long. Within a turn, each step of the tool loop also reads everything before it from the cache.</p>
+      <h3>What starts the cache over</h3>
+      <ul>
+        <li><strong>More than an hour without a turn.</strong> On your plan, the marks last an hour, and every read renews them.</li>
+        <li><strong>A batch.</strong> When the view passes 128 KB and is merged back down, the next turn writes the new view once.</li>
+        <li><strong>A different model.</strong> <code>/model</code> starts a new cache, since each model has its own.</li>
+      </ul>
+      <p>mugen also keeps Claude Code's own context out of the prompt: your CLAUDE.md files, its memory, git status, attachments and tool search. These would change from call to call and break the cached prefix.</p>
+    </section>
+
+    <section id="transcripts">
+      <div class="eyebrow">Transcripts</div>
+      <h2>Where the record goes</h2>
+      <p>mugen's own log is the complete record. On the Claude Code backend there are two more, because mugen does what your <code>claude</code> wrapper does:</p>
+      <ul>
+        <li><strong>Claude Code sessions.</strong> Each turn, agent call and goal check is saved as a Claude Code session in <code>~/.claude/projects/-home-hhefesto--mugen-work-main/</code>, or a folder per agent. Your user settings are loaded for these calls, so your <code>llm-transcript render</code> hooks run on them like on any other session.</li>
+        <li><strong>Debug logs.</strong> NixOS sets <code>MUGEN_DEBUG_DIR</code> to <code>~/src/llm-transcript</code>. Each of those calls writes a debug log there, named the way the wrapper names them: <code>2026-10-21_1122-mugen-main-0261e97f.debug.log</code>.</li>
+      </ul>
+      <p>Summaries leave no transcript, since there can be hundreds a day. <code>MUGEN_TRANSCRIPTS=all</code> keeps them too, and <code>none</code> turns transcripts off. mugen runs your claude-code package directly rather than the wrapper, so it doesn't write a second debug log per summary.</p>
+    </section>
+
+    <section id="files">
+      <div class="eyebrow">Files on disk</div>
+      <h2>What lives in ~/.mugen</h2>
+      <pre class="files">~/.mugen/
+  main/2026-10-21.jsonl     <span class="c">the log: one message per line, by day</span>
+  tree/2026-10-21.jsonl     <span class="c">the summaries</span>
+  main.idx  tree.idx        <span class="c">indexes into both</span>
+  view.json                 <span class="c">the view, the model, the goal, what is running</span>
+  docs/agent/&lt;Name&gt;.jsonl   <span class="c">each subagent's log</span>
+  work/main  work/&lt;Name&gt;    <span class="c">where the tools run</span>
+  rules.md                  <span class="c">your standing instructions (optional)</span>
+  history                   <span class="c">what you sent, for ↑, C-p and C-r</span>
+  run/                      <span class="c">the running calls' files</span>
+    limits.json             <span class="c">the plan's limits, as the last call reported them</span>
+    main.cc.out             <span class="c">the current turn's events from claude</span>
+    main.cc.mcp.in / .out   <span class="c">tool requests and answers</span>
+    main.cc.in              <span class="c">claude's stdin (a pipe)</span>
+    main.pid  main.cc.pid   <span class="c">the running shell command's group, claude's</span>
+    groups                  <span class="c">every group the calls started: pid and start time</span>
+  lock                      <span class="c">one mugen per data dir: its pid and tmux pane</span></pre>
+      <p>The log and tree use UniiChat's own format, so UniiChat can open mugen's chat and the other way around.</p>
+    </section>
+
+    <section id="settings">
+      <div class="eyebrow">Settings</div>
+      <h2>Environment variables</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variable</th><th>Default</th><th>What it sets</th></tr></thead>
+          <tbody>
+            <tr><td><code>MUGEN_CLAUDE</code></td><td>set by NixOS</td><td>The <code>claude</code> to run; on olimpo, your claude-code 2.1.304.</td></tr>
+            <tr><td><code>MUGEN_DEBUG_DIR</code></td><td>set by NixOS</td><td>Where chat calls write their debug logs: <code>~/src/llm-transcript</code>.</td></tr>
+            <tr><td><code>MUGEN_TRANSCRIPTS</code></td><td><code>chat</code></td><td>Which calls are saved as sessions: <code>chat</code>, <code>all</code>, <code>none</code>.</td></tr>
+            <tr><td><code>MUGEN_WIRE</code></td><td></td><td><code>api</code> does the same as <code>--api</code>.</td></tr>
+            <tr><td><code>MUGEN_PLAIN</code></td><td></td><td><code>1</code>: no full screen; lines as they come and a <code>λ</code> prompt (also when <code>TERM=dumb</code>, as in Emacs' shell).</td></tr>
+            <tr><td><code>MUGEN_DIR</code></td><td><code>~/.mugen</code></td><td>The chat's data dir. Another dir is another chat, which another mugen can hold at the same time.</td></tr>
+            <tr><td><code>MUGEN_WORK</code></td><td><code>~/.mugen/work</code></td><td>Where the tools run, a dir per agent.</td></tr>
+            <tr><td><code>MUGEN_PICK</code></td><td><code>opus-5.5:medium:slow</code></td><td>The chat's model, effort and speed, until <code>/model</code> or <code>/effort</code>.</td></tr>
+            <tr><td><code>MUGEN_COMPACTOR</code></td><td><code>haiku-5.5:high:slow</code></td><td>The summaries' model and effort.</td></tr>
+            <tr><td><code>MUGEN_JOBS</code></td><td><code>8</code> / <code>48</code></td><td>Summaries at once: 8 on Claude Code, 48 with <code>--api</code>.</td></tr>
+            <tr><td><code>MUGEN_RULES</code></td><td><code>~/.mugen/rules.md</code></td><td>Your instructions, added to Unii's prompt.</td></tr>
+            <tr><td><code>MUGEN_SYNC</code></td><td><code>1</code></td><td>Flush each log write to disk.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="phone">
+      <div class="eyebrow">From the iPhone</div>
+      <h2>Using mugen from your phone</h2>
+      <p>mugen needs no web page. The phone connects to the same terminal you use on olimpo:</p>
+      <div class="path" aria-label="Blink on the iPhone, over Tailscale, mosh to olimpo, tmux main, mugen">
+        <span>Blink on the iPhone</span><i>→</i><span>Tailscale</span><i>→</i><span>mosh olimpo</span><i>→</i><span>tmux "main"</span><i>→</i><span>mugen</span>
+      </div>
+      <p>mosh keeps the session alive through sleep and network changes. Every SSH or mosh login on olimpo attaches to tmux "main", so you pick up exactly where you left off. On the phone, <kbd>Alt-Enter</kbd> (or a <code>\</code> before <kbd>Enter</kbd>) makes a new line.</p>
+      <ul class="checks">
+        <li><span class="st done">Done</span><div><p>olimpo runs Tailscale and mosh</p><p class="sub">Switched on 2026-10-21. mosh's ports are open on the tailnet only.</p></div></li>
+        <li><span class="st todo">To do</span><div><p>Sign olimpo and the phone in to the same tailnet</p><p class="sub">The rdataa.com tailnet is waiting for an admin who isn't there. A personal tailnet works now: run <code>tailscale logout</code> then <code>tailscale up</code> on olimpo, sign in with GitHub in a private window, and use the same account in the iPhone app.</p></div></li>
+        <li><span class="st todo">To do</span><div><p>Give olimpo Blink's key</p><p class="sub">Create a key in Blink and send Claude its public key, to add to your authorized keys. Then run <code>mosh olimpo</code> from Blink.</p></div></li>
+      </ul>
+    </section>
+
+    <section id="trouble">
+      <div class="eyebrow">When it goes wrong</div>
+      <h2>Common problems</h2>
+      <dl class="faq">
+        <dt>"mugen: ~/.mugen is open already, by mugen 1234 in tmux pane %3"</dt>
+        <dd>A data dir is one chat, and one mugen holds it. Go to that one (<code>tmux switch-client -t %3</code>, as the message says), quit it, or run a second, separate chat beside it with <code>MUGEN_DIR=~/.mugen-2 mugen</code>.</dd>
+        <dt>Unii seems stuck</dt>
+        <dd>The line under the chat says what runs and for how long: a shell command that never ends shows its time growing. <kbd>C-s</kbd> cuts it and sends what you typed; <kbd>C-g</kbd> stops the turn.</dd>
+        <dt><kbd>Shift-Enter</kbd> sends instead of making a new line</dt>
+        <dd>The terminal sends it as a plain Enter (GNOME Terminal and other VTE terminals do). Use <kbd>Alt-Enter</kbd> or <kbd>C-j</kbd>, or end the line with <code>\</code>.</dd>
+        <dt>"mugen: cannot run claude (MUGEN_CLAUDE)"</dt>
+        <dd>The shell doesn't have the new variables. Run <code>. /etc/set-environment</code>, or check that <code>claude --version</code> works.</dd>
+        <dt>"Claude Code is not signed in"</dt>
+        <dd>Run <code>mugen login</code>. At startup, mugen stops and tells you to. During a chat, run it in another window; the chat goes on with your next message.</dd>
+        <dt>"The AI service is busy: asking again in N s."</dt>
+        <dd>The API is overloaded or your plan has hit a limit. A turn is retried a few times and then reports that the service is busy. Summaries keep retrying every minute, so they only get delayed.</dd>
+        <dt>"No reply: stopped: refusal. Send a message to try again."</dt>
+        <dd>The model declined that turn. Messages you sent during it wait for the next turn.</dd>
+        <dt>The terminal looks wrong after mugen was killed</dt>
+        <dd>mugen gives the terminal back on every way out but <code>kill -9</code>. After one, type <code>reset</code> and Enter.</dd>
+      </dl>
+    </section>
+
+    <footer>mugen lives at <code>~/src/mugen</code> and <a href="https://github.com/hhefesto/mugen">github.com/hhefesto/mugen</a>; this page is <code>docs/guide.html</code> there. Its README covers the same ground in brief, and AGENTS.md describes the code.</footer>
+  </main>
+</div>
+<script>
+document.querySelectorAll('pre[data-copy]').forEach(function (pre) {
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'copy';
+  btn.textContent = 'Copy';
+  btn.addEventListener('click', function () {
+    var text = Array.prototype.map.call(pre.childNodes, function (n) {
+      return n.nodeType === 1 && n.classList.contains('c') ? '' : n.textContent;
+    }).join('').split('\n').filter(function (l) { return l.trim() !== ''; }).join('\n');
+    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); };
+    var pick = function () {
+      var r = document.createRange(); r.selectNodeContents(pre);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      btn.textContent = 'Selected';
+    };
+    try {
+      navigator.clipboard.writeText(text).then(done, pick);
+    } catch (e) { pick(); }
+  });
+  pre.parentNode.appendChild(btn);
+});
+</script>
+</body>
+</html>

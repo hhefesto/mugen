@@ -58,28 +58,12 @@
           bend = bendFor pkgs;
           mugen-unwrapped = bendBinary pkgs "mugen" "Main.bend";
           # the app: curl (>= 8.3, for --variable) and coreutils on its PATH.
-          # On a terminal its input line is readline's (rlwrap), with emacs
-          # keys, a history in $MUGEN_DIR/history (C-r searches it), and Tab
-          # completing the commands, models, efforts and file names; a pipe,
-          # `mugen login` and MUGEN_PLAIN=1 go without.
-          mugen =
-            let
-              words = pkgs.writeText "mugen-words" ''
-                /help /quit /stop /goal /halt /model /effort /status /tree /export /plan /auto
-                opus-5.5 sonnet-5.5 haiku-5.5 low medium high xhigh max
-              '';
-            in
-            pkgs.writeShellScriptBin "mugen" ''
-              export PATH=${lib.makeBinPath [ pkgs.curl pkgs.coreutils ]}:$PATH
-              m=${self.packages.${system}.mugen-unwrapped}/bin/mugen
-              if [ -t 0 ] && [ -t 1 ] && [ "''${1-}" != login ] && [ -z "''${MUGEN_PLAIN-}" ]; then
-                d=''${MUGEN_DIR:-$HOME/.mugen}
-                mkdir -p "$d"
-                exec ${pkgs.rlwrap}/bin/rlwrap -A -c -C mugen -H "$d/history" -s 10000 \
-                  -b '(){}[],+=&^%$#@";|\' -f ${words} "$m" "$@"
-              fi
-              exec "$m" "$@"
-            '';
+          # The terminal is all mugen's own (bend/Screen.bend: the input, its
+          # keys and history, the screen), so the wrapper only sets PATH.
+          mugen = pkgs.runCommand "mugen" { nativeBuildInputs = [ pkgs.makeWrapper ]; } ''
+            makeWrapper ${self.packages.${system}.mugen-unwrapped}/bin/mugen $out/bin/mugen \
+              --prefix PATH : ${lib.makeBinPath [ pkgs.curl pkgs.coreutils ]}
+          '';
           default = self.packages.${system}.mugen;
           # the Bend sides of the differential tests (tools/memdiff)
           memdrive = bendBinary pkgs "memdrive" "tests/MemDrive.bend";

@@ -30,6 +30,8 @@ import ./Code.bend as C
 #   MUGEN_JOBS         summaries at once (8 on Claude Code, 48 with --api)
 #   MUGEN_SYNC         1 (default): each log write is fsynced; 0: not
 #   MUGEN_MAX_TOKENS   a reply's most tokens (16000)
+#   MUGEN_PLAIN        1: on a terminal, lines as they come and a prompt,
+#                         not the full screen (Screen.bend); so for TERM=dumb
 #   MUGEN_WEB_SEARCH   the web search tool's type (web_search_20260209)
 #   MUGEN_CURL, MUGEN_API_URL, MUGEN_UNIT   for tests: the curl to
 #                         run, the endpoint, the ms a second of waiting takes
@@ -147,12 +149,16 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     url : String <- S.mu.env("MUGEN_API_URL", "https://api.anthropic.com/v1/messages")
     unit : String <- S.mu.env("MUGEN_UNIT", "1000")
     shell : String <- S.mu.env("SHELL", "/bin/sh")
+    plain : String <- S.mu.env("MUGEN_PLAIN", "")
+    term : String <- S.mu.env("TERM", "")
     host : String <- S.mu.host()
     i : U32 <- S.mu.isatty(0)
     o : U32 <- S.mu.isatty(1)
     +cc : C.cc.Cfg = C.cc.Cfg{Bool.pick(U32, api, 0, 1), claude, debug, mn.trans(trans), dir ++ "/run", work}
     +wire : A.ap.Cfg = A.ap.Cfg{curl, url, mn.nat(max, 16000), web, mn.nat(unit, 1000), cc}
-    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), Bool.and(U32.is_eq(i, 1), U32.is_eq(o, 1)), mn.nat(jobs, 48), mn.nat(sync, 1), home, acct}
+    +tty : Bool = Bool.and(U32.is_eq(i, 1), U32.is_eq(o, 1))
+    +screen : Bool = Bool.and(tty, Bool.not(Bool.or(String.eq(plain, "1"), String.eq(term, "dumb"))))
+    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), tty, mn.nat(jobs, 48), mn.nat(sync, 1), home, acct, screen}
     H.hb.start(cfg, mn.pick(pick))
 
 # `mugen login`: this process becomes Claude Code's sign-in, on the
