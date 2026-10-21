@@ -1,0 +1,5 @@
+[the chat now runs on sonnet-5.5:medium:slow]
+[the chat now runs on sonnet-5.5:high:slow]
+user: hi
+[/effort takes one of low, medium, high, xhigh, max]
+unii: Hello from Sonnet.

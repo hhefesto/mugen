@@ -1,0 +1,109 @@
+[
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "tool_use",
+     "id": "a",
+     "name": "write",
+     "input": {
+      "device": "@HOST@",
+      "path": "notes/a.txt",
+      "content": "one\ntwo\nthree\n"
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "b",
+     "name": "edit",
+     "input": {
+      "device": "@HOST@",
+      "edits": [
+       {
+        "path": "notes/a.txt",
+        "old": "two",
+        "new": "2"
+       }
+      ]
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "c",
+     "name": "read",
+     "input": {
+      "device": "@HOST@",
+      "path": "notes/a.txt",
+      "offset": 2
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "d",
+     "name": "edit",
+     "input": {
+      "device": "@HOST@",
+      "edits": [
+       {
+        "path": "notes/a.txt",
+        "old": "zzz",
+        "new": "y"
+       }
+      ]
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "e",
+     "name": "shell",
+     "input": {
+      "device": "elsewhere",
+      "command": "ls"
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "f",
+     "name": "fly",
+     "input": {
+      "to": "moon"
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "g",
+     "name": "shell",
+     "input": "not an object"
+    }
+   ],
+   "stop_reason": "tool_use",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "Done."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]

@@ -1,0 +1,3 @@
+#!/bin/sh
+# an agent stopped as it works: its report is logged, and starts no turn
+( echo "start a helper"; sleep 2; echo "/stop"; sleep 1 ) | timeout 60 "$MUGEN"

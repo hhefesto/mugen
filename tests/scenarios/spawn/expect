@@ -1,0 +1,12 @@
+user: ask a helper
+[@AGENT1@] note: subagent
+[@AGENT1@] user: count to three
+tool: spawn {"tasks":["count to three"]}
+echo: Started @AGENT1@. Each one's report will reach you as a message when it finishes.
+[@AGENT1@] unii: one, two, three
+work: [@AGENT1@]
+one, two, three
+
+Full chat: zoom("@AGENT1@")
+unii: A helper is on it.
+unii: The helper counted.

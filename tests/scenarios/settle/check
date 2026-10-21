@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+# the second turn's view has the first message summarized, not waiting
+last=$(grep -l '"tools"' log/*.json | tail -1)
+jq -e '.body.messages[0].content[1].text | startswith("0+1|S: user: AAAA")' "$last" > /dev/null

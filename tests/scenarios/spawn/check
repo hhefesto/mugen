@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+d="$1"
+name=$(ls "$d/docs/agent" | head -1 | sed "s/.jsonl$//")
+test -n "$name"
+# its log: what it is, its task, its reply
+jq -s -e 'map(.kind) == ["note","user","unii"] and .[0].text == "subagent" and .[1].text == "count to three"' "$d/docs/agent/$name.jsonl" > /dev/null
+# its report in the chat, then the turn it started
+grep -q "\"kind\":\"work\",\"text\":\"\[$name\]\\\\none, two, three" "$d/main/"*.jsonl
+grep -q "The helper counted." "$d/main/"*.jsonl
+# the agent's call saw the view and its log
+a=$(grep -l "You are a subagent of Unii" log/*.json | head -1)
+jq -e '.body.messages[0].content[-1].text | startswith("0|note: subagent")' "$a" > /dev/null

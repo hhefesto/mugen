@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+jq -e '(.messages | map(.text)) == ["hello", "bye", "Hi.", "Bye."] and (.summaries | length) == 7 and (.summaries[0] == {id: 0, n: 1, text: "user: hello"}) and .agents == {}' mugen-memory.json > /dev/null
+grep -q '<section id="LVL2">' "$1/tree.html"
+grep -q "ROOT #3" "$1/tree.html"

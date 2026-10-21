@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+# what runs is kept, and cleared once it ended
+jq -e '.work == []' "$1/view.json" > /dev/null

@@ -1,0 +1,3 @@
+#!/bin/sh
+# a long shell call stopped by the user as it runs: its whole group killed
+( echo "run a long job"; sleep 2; echo "/stop"; sleep 1 ) | timeout 60 "$MUGEN"

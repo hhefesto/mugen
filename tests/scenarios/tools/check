@@ -1,0 +1,6 @@
+#!/bin/sh
+# the second request sends the first output back verbatim, thinking signed
+set -e
+last=$(ls log/*.json | tail -1)
+jq -e '.body.messages[1].content[0] == {"type":"thinking","thinking":"let me run it","signature":"sig-1"}' "$last" > /dev/null
+jq -e '.body.messages[2].content[0].type == "tool_result" and .body.messages[2].content[0].tool_use_id == "t1" and .body.messages[2].content[0].is_error == false' "$last" > /dev/null

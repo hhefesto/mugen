@@ -1,0 +1,11 @@
+user: start a helper
+[@AGENT1@] note: subagent
+[@AGENT1@] user: think long
+tool: spawn {"tasks":["think long"]}
+echo: Started @AGENT1@. Each one's report will reach you as a message when it finishes.
+unii: It runs.
+note: Stopped by the user: @AGENT1@.
+work: [@AGENT1@]
+failed: stopped
+
+Full chat: zoom("@AGENT1@")

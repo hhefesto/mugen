@@ -1,0 +1,6 @@
+#!/bin/sh
+# a log line a crash cut short is skipped, the chat goes on
+echo "first" | timeout 60 "$MUGEN"
+day=$(ls d/main | tail -1)
+printf '{"kind":"user","text":"cut sh' >> "d/main/$day"
+echo "second" | timeout 60 "$MUGEN"

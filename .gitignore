@@ -1,0 +1,6 @@
+.direnv/
+result
+result-*
+/run/
+*.tmp
+mugen-memory.json

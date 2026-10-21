@@ -1,0 +1,8 @@
+#!/bin/sh
+# no process of the job is left (whole command lines matched, nothing else)
+left=$(ps -eo args= | grep -xE "sleep 3[01]" || true)
+if [ -n "$left" ]; then
+  echo "left running: $left"
+  pkill -x -f "sleep 30"; pkill -x -f "sleep 31"
+  exit 1
+fi

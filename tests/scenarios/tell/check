@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+f=$(ls "$1"/docs/agent/*.jsonl)
+jq -s -e 'map(.kind) == ["note","user","unii","user","unii"]' "$f" > /dev/null

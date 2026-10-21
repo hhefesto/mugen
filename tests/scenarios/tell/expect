@@ -1,0 +1,23 @@
+user: ask a helper twice
+[@AGENT1@] note: subagent
+[@AGENT1@] user: count to two
+tool: spawn {"tasks":["count to two"]}
+echo: Started @AGENT1@. Each one's report will reach you as a message when it finishes.
+[@AGENT1@] unii: one, two
+work: [@AGENT1@]
+one, two
+
+Full chat: zoom("@AGENT1@")
+unii: Waiting.
+[@AGENT1@] user: now backwards
+tool: tell {"name":"@AGENT1@","message":"now backwards"}
+echo: Sent. @AGENT1@'s reply will reach you as a message.
+tool: tell {"name":"Nobody","message":"hi"}
+echo: No agent Nobody to tell.
+[@AGENT1@] unii: two, one
+work: [@AGENT1@]
+two, one
+
+Full chat: zoom("@AGENT1@")
+unii: Told it.
+unii: All done.

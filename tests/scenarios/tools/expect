@@ -1,0 +1,7 @@
+user: run echo hi
+mind: let me run it
+unii: Running it.
+tool: shell {"device":"@HOST@","command":"echo hi"}
+echo: hi
+(exit 0 in T s)
+unii: It said hi.

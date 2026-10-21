@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+jq -e '.goal == null' "$1/view.json" > /dev/null
+# the check asks with its own system prompt and the goal after the chat
+q=$(grep -l "You check a goal" log/*.json | head -1)
+jq -e '.body.messages[0].content[-1].text | endswith("\nThe goal:\n\nsay done")' "$q" > /dev/null

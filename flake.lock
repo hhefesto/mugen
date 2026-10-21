@@ -1,0 +1,66 @@
+{
+  "nodes": {
+    "bend2": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792099862,
+        "narHash": "sha256-bs+jOGPJoV3HimR62oT1yoLmw3D+4WpqFDp+qLIX0/U=",
+        "owner": "hhefesto",
+        "repo": "bend2",
+        "rev": "977a2d982bd54ac2752f7bb356081d943ab6c405",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hhefesto",
+        "ref": "ft-kernels",
+        "repo": "bend2",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1783522502,
+        "narHash": "sha256-iffAls3iaNTyJC2faYcUXSI+Gp02cDjYl+MygxKl2GI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "0bb7ec54c8483066ec9d7720e780a5caa71f8612",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "bend2": "bend2",
+        "nixpkgs": "nixpkgs",
+        "uniichat": "uniichat"
+      }
+    },
+    "uniichat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792428305,
+        "narHash": "sha256-soP/LpgPWKbf1aXdNxYYW15q3lRztL4mx/GnxmGe89A=",
+        "owner": "VictorTaelin",
+        "repo": "uniichat",
+        "rev": "0500bf6a8ea4bf0ce047488562022b1b6532cc30",
+        "type": "github"
+      },
+      "original": {
+        "owner": "VictorTaelin",
+        "repo": "uniichat",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

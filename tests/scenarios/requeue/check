@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+# the second call's message is the one left: its turn text ends with it
+last=$(grep -l '"tools"' log/*.json | tail -1)
+jq -e '.body.messages[0].content[-1].text == "Turn: the user'"'"'s new message:\n\nsecond"' "$last" > /dev/null

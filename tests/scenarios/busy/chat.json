@@ -1,0 +1,42 @@
+[
+ {
+  "code": 529,
+  "body": {
+   "type": "error",
+   "error": {
+    "type": "overloaded_error",
+    "message": "Overloaded"
+   }
+  }
+ },
+ {
+  "code": 429,
+  "after": "3",
+  "body": {
+   "type": "error",
+   "error": {
+    "type": "rate_limit_error",
+    "message": "slow down"
+   }
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "Hello."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]

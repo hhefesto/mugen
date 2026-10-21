@@ -1,0 +1,8 @@
+#!/bin/sh
+# a turn cut by a crash goes on at the next start, told so
+( echo "run a long job"; sleep 3 ) | "$MUGEN" &
+sleep 1.5
+pkill -9 -x -f "$MUGEN" || true
+wait
+pkill -x -f "sleep 7" || true
+: | timeout 60 "$MUGEN"

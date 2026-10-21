@@ -1,0 +1,62 @@
+[
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "tool_use",
+     "id": "z",
+     "name": "zoom",
+     "input": {
+      "id": 0,
+      "n": 1
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "w",
+     "name": "zoom",
+     "input": {
+      "id": 3,
+      "n": 2
+     }
+    },
+    {
+     "type": "tool_use",
+     "id": "n",
+     "name": "zoom",
+     "input": {
+      "id": "NoSuchAgent"
+     }
+    }
+   ],
+   "stop_reason": "tool_use",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "You asked what you said first."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]

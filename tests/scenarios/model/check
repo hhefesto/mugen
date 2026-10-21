@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+last=$(grep -l '"tools"' log/*.json | tail -1)
+jq -e '.body.model == "claude-sonnet-5-5" and .body.output_config.effort == "high" and .body.fallbacks == "default"' "$last" > /dev/null
+jq -e '.pick == {vendor: "claude-api", model: "sonnet-5.5", effort: "high", speed: "slow"}' "$1/view.json" > /dev/null

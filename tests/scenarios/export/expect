@@ -1,0 +1,6 @@
+user: hello
+user: bye
+unii: Hi.
+unii: Bye.
+[the memory is in ./mugen-memory.json]
+[the memory tree: file://@DIR@/tree.html]

@@ -1,0 +1,8 @@
+user: what did I say first?
+tool: zoom {"id":0,"n":1}
+echo: 0+0|user: what did I say first?
+tool: zoom {"id":3,"n":2}
+echo: No line 3+2: n is a power of 2, id a multiple of n. The tree's roots: 0+2, 2+1.
+tool: zoom {"id":"NoSuchAgent"}
+echo: No agent NoSuchAgent.
+unii: You asked what you said first.

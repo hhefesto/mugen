@@ -1,0 +1,54 @@
+[
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "thinking",
+     "thinking": "let me run it",
+     "signature": "sig-1"
+    },
+    {
+     "type": "text",
+     "text": "Running it."
+    },
+    {
+     "type": "tool_use",
+     "id": "t1",
+     "name": "shell",
+     "input": {
+      "device": "@HOST@",
+      "command": "echo hi"
+     }
+    }
+   ],
+   "stop_reason": "tool_use",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "It said hi."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]
