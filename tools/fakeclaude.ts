@@ -195,8 +195,11 @@ const turn = async () => {
     const results: any[] = [];
     for (const u of uses) {
       const r = await rpc("tools/call", { name: u.name, arguments: u.input });
-      const text = (r.result?.content ?? []).map((c: any) => c.text).join("");
-      results.push({ type: "tool_result", tool_use_id: u.id, content: text === "" ? [] : [{ type: "text", text }], is_error: r.result?.isError === true });
+      const parts: any[] = r.result?.content ?? [];
+      const text = parts.filter((c: any) => c.type !== "image").map((c: any) => c.text).join("");
+      // images pass on as Claude Code passes an MCP image: an image block
+      const pics = parts.filter((c: any) => c.type === "image").map((c: any) => ({ type: "image", source: { type: "base64", media_type: c.mimeType, data: c.data } }));
+      results.push({ type: "tool_result", tool_use_id: u.id, content: [...(text === "" ? [] : [{ type: "text", text }]), ...pics], is_error: r.result?.isError === true });
     }
     out({ type: "user", message: { role: "user", content: results }, uuid: crypto.randomUUID() });
     messages.push({ role: "user", content: [...results, ...take()] });

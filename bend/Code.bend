@@ -5,6 +5,7 @@ import ./Text.bend as T
 import ./Json.bend as J
 import ./Clock.bend as K
 import ./View.bend as V
+import ./Pic.bend as Pc
 
 # Code: the calls on Claude Code's CLI (`claude -p`), the default wire: a
 # Claude plan's login runs it, where the Messages API wants a key (Api.bend,
@@ -183,6 +184,8 @@ def cc.parts(bs: List<&2, V.vw.B>, +seen: Bool) -> List<&2, J.Json>:
       []
     case V.vw.B{SNil{}, mark} <> t:
       cc.parts(t, seen)
+    case V.vw.B{SCon{Chr{1}, p}, mark} <> t:
+      Pc.pc.json(p) <> cc.parts(t, seen)
     case V.vw.B{text, +mark} <> t:
       cc.text(text, Bool.and(mark, Bool.not(seen))) <> cc.parts(t, Bool.or(seen, mark))
 

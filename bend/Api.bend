@@ -4,6 +4,7 @@ import ./Sys.bend as S
 import ./Text.bend as T
 import ./Json.bend as J
 import ./View.bend as V
+import ./Pic.bend as Pc
 import ./Code.bend as C
 
 # Api: the Messages API by curl, as UniiChat's Anthropic.ts and Agent.ts
@@ -125,6 +126,8 @@ def ap.parts(bs: List<&2, V.vw.B>) -> List<&2, J.Json>:
       []
     case V.vw.B{SNil{}, mark} <> t:
       ap.parts(t)
+    case V.vw.B{SCon{Chr{1}, p}, mark} <> t:
+      Pc.pc.json(p) <> ap.parts(t)
     case V.vw.B{text, mark} <> t:
       ap.text(text, mark) <> ap.parts(t)
 
@@ -136,7 +139,7 @@ def ap.backs(bs: List<&2, ap.Bk>) -> List<&2, J.Json>:
     case []:
       []
     case ap.Bk{id, +text, fail} <> t:
-      J.JObj{[J.JKv{"type", J.JStr{"tool_result"}}, J.JKv{"tool_use_id", J.JStr{id}}, J.JKv{"content", J.JArr{ap.content(text)}}, J.JKv{"is_error", J.JBool{fail}}]} <> ap.backs(t)
+      J.JObj{[J.JKv{"type", J.JStr{"tool_result"}}, J.JKv{"tool_use_id", J.JStr{id}}, J.JKv{"content", J.JArr{List.append(&2, J.Json, ap.content(Pc.pc.text(text)), Pc.pc.jsons(Pc.pc.pics(text)))}}, J.JKv{"is_error", J.JBool{fail}}]} <> ap.backs(t)
 
 # an item's role (true: the user's) and content
 def ap.role(+it: ap.Item) -> Bool:

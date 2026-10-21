@@ -9,6 +9,7 @@ import ./Ev.bend as E
 import ./Tools.bend as L
 import ./Code.bend as C
 import ./Mcp.bend as Q
+import ./Pic.bend as Pc
 
 # Agent: a call in mugen's own loop (UniiChat's Agent.ts), for mugen's turn or
 # an agent: each step sends every item and reads one output; its tool calls
@@ -277,8 +278,9 @@ def ag.got.texts(g: ag.Got) -> List<&2, String>:
 
 def ag.err(+o: E.ev.Out) -> String:
   match o:
-    case E.ev.Out{+t, f}:
-      Bool.pick(String, f, "error: " ++ t, t)
+    case E.ev.Out{t, f}:
+      +v = Pc.pc.text(t)
+      Bool.pick(String, f, "error: " ++ v, v)
 
 def ag.bk(+id: String, o: E.ev.Out) -> A.ap.Bk:
   match o:

@@ -18,6 +18,7 @@ import ./Prompts.bend as Pr
 import ./Term.bend as Tm
 import ./Export.bend as X
 import ./Code.bend as Cc
+import ./Pic.bend as Pc
 import ./Screen.bend as Sc
 
 # Hub: the chat (UniiChat's Server.ts Chat, for one user in one process). One
@@ -685,21 +686,23 @@ def hb.says(ms: List<&2, hb.Msg>, +s: hb.S, +from: U32) -> IO(List<&2, String>):
 def hb.plan.note() -> String:
   "Plan mode: the user wants a plan, not changes. Read what you need (zoom, read, date, web search), then answer with a plan. shell, write, edit, spawn and tell are off until the user switches back to auto mode.\n\n"
 
-def hb.turn.ask(+s: hb.S, +from: U32, +text: String) -> A.ap.Ask:
+# (the images the new messages name after them, Pic.bend)
+def hb.turn.ask(+s: hb.S, +from: U32, +text: String, pics: List<&2, String>) -> A.ap.Ask:
   +plan = hb.plan(s)
   A.ap.Ask{hb.pick(s), hb.system(s, hb.master()),
     List.concat(&2, V.vw.B, [hb.view(s, from), [V.vw.B{hb.devices(s), False{}}, V.vw.B{hb.at.work(s), False{}}],
-      Bool.pick(List<&2, V.vw.B>, plan, [V.vw.B{hb.plan.note(), False{}}], []), [V.vw.B{Pr.pr.head() ++ text, True{}}]]),
+      Bool.pick(List<&2, V.vw.B>, plan, [V.vw.B{hb.plan.note(), False{}}], []), [V.vw.B{Pr.pr.head() ++ text, True{}}], Pc.pc.blocks(pics)]),
     Bool.pick(List<&2, J.Json>, plan, L.tl.plan(), L.tl.main()), hb.searches(), False{}}
 
 # the turn's call started on the messages waiting, from message `from`
 def hb.call(+s: hb.S, +from: U32) -> IO(hb.S):
   +msgs = hb.wait(s)
   do IO<hb.S>:
-    texts : List<&2, String> <- hb.says(msgs, s, from)
+    +texts : List<&2, String> <- hb.says(msgs, s, from)
+    pics : List<&2, String> <- Pc.pc.named(hb.dir(s), T.tx.join(texts, "\n"))
     +says : Chan(E.ev.Say) <- Chan.new(E.ev.Say, 256)
     Unit <- hb.fresh(hb.ctl(s, ""))
-    Unit <- IO.spawn(Unit, G.ag.run(hb.env(s, ""), hb.turn.ask(s, from, T.tx.join(texts, "\n\n")), says))
+    Unit <- IO.spawn(Unit, G.ag.run(hb.env(s, ""), hb.turn.ask(s, from, T.tx.join(texts, "\n\n"), pics), says))
     return hb.with.lead(hb.with.shown(hb.with.halt(hb.with.sent(hb.with.wait(hb.with.turn(s, hb.Call{says}), []), msgs), ""), ""), U32.from_nat(List.length(&2, hb.Msg, msgs)))
 
 def hb.wait.first(ws: List<&2, hb.Msg>, +d: U32) -> U32:
@@ -1147,6 +1150,10 @@ def hb.is.letter(+s: String) -> Bool:
     case _:
       False{}
 
+# a message whole (n 1) with the images it names (Pic.bend)
+def hb.zoom.pics(+s: hb.S, whole: Bool, +t: String) -> IO(E.ev.Out):
+  IO.bind(List<&2, String>, E.ev.Out, Bool.pick(IO(List<&2, String>), whole, Pc.pc.named(hb.dir(s), t), IO.pure(List<&2, String>, [])), ps => IO.pure(E.ev.Out, E.ev.Out{Pc.pc.with(t, ps), False{}}))
+
 # zoom (Tools.call): an agent's chat by its name, a page from `at`; else the
 # view's line id+n
 def hb.zoom(+s: hb.S, +input: J.Json) -> IO(E.ev.Out):
@@ -1154,7 +1161,7 @@ def hb.zoom(+s: hb.S, +input: J.Json) -> IO(E.ev.Out):
   +at = hb.num(input, "at", 0)
   Bool.pick(IO(E.ev.Out), hb.is.letter(id),
     IO.bind(String, E.ev.Out, M.me.agent.show(hb.dir(s), Bool.pick(String, hb.name.ok(id, False{}), id, "-")), t => IO.pure(E.ev.Out, E.ev.Out{T.tx.page.at(Bool.pick(String, hb.name.ok(id, False{}), t, "No agent " ++ id ++ "."), at), False{}})),
-    IO.bind(String, E.ev.Out, M.me.zoom(hb.mem(s), U32.from_nat(Maybe.default(&2, Nat, Nat.read(id), 4294967295n)), hb.num(input, "n", 1), at), t => IO.pure(E.ev.Out, E.ev.Out{t, False{}})))
+    IO.bind(String, E.ev.Out, M.me.zoom(hb.mem(s), U32.from_nat(Maybe.default(&2, Nat, Nat.read(id), 4294967295n)), hb.num(input, "n", 1), at), t => hb.zoom.pics(s, U32.is_eq(hb.num(input, "n", 1), 1), t)))
 
 def hb.date(+s: hb.S, +input: J.Json) -> IO(E.ev.Out):
   IO.bind(String, E.ev.Out, M.me.date(hb.mem(s), hb.num(input, "id", 4294967295)), t => IO.pure(E.ev.Out, E.ev.Out{t, False{}}))

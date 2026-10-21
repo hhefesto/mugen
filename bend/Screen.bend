@@ -6,13 +6,14 @@ import ./Ev.bend as E
 import ./Keys.bend as K
 import ./Edit.bend as D
 import ./Pretty.bend as P
+import ./Pic.bend as Pc
 
 # Screen: mugen on a terminal, full screen. One computation owns the
 # terminal: it reads the keys (raw mode), draws the chat, and sends the
 # hub (Hub.bend) the lines typed; the hub tells it what to show (sc.Put, as
 # it logs) and how it is (sc.State: mugen's work, the messages waiting, the
 # status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel,
-# each tool call one block (a click opens or folds it, C-o all of them; a
+# each tool call one block, open (a click folds or opens it, C-o all; a
 # drag selects text and copies it, see Selecting);
 # then a rule, what runs (with a spinner and its time), the messages waiting
 # for mugen, the status line, and the input (Edit.bend) after the lambda.
@@ -456,7 +457,7 @@ def sc.blk.fresh(+b: sc.Blk, +w: U32, +home: String) -> sc.Blk:
   sc.blk.redraw(U32.is_eq(sc.blk.w(b), w), b, w, home)
 
 def sc.blk.new(+id: U32, +who: String, +kind: String, +text: String, +run: Bool, +now: Nat, +w: U32, +home: String) -> sc.Blk:
-  sc.blk.draw(sc.Blk{id, who, kind, text, "", False{}, run, now, 0, [], 0}, w, home)
+  sc.blk.draw(sc.Blk{id, who, kind, text, "", True{}, run, now, 0, [], 0}, w, home)
 
 def sc.blk.toggle(b: sc.Blk, +w: U32, +home: String) -> sc.Blk:
   match b:
@@ -1122,13 +1123,40 @@ def sc.sent(+s: sc.S, +t: String) -> IO(sc.S):
     a : Result<&1, &1, U32 & String, Nat> <- S.mu.append(sc.cf.hfile(sc.cf(s)), sc.hist.enc(t) ++ "\n", 0)
     return Bool.pick(sc.S, cmd, sc.add(s1, "", "say", "\u{203a} " ++ String.trim(t), False{}), sc.add(s1, "", "user", t, False{}))
 
+# /image [path] on the draft's last line: the image (or the clipboard's)
+# kept in the mugen dir (Pic.bend), a line naming it in its place, for the
+# message being written to take; the rest of the draft kept
+def sc.mugen(+s: sc.S) -> String:
+  String.reverse(String.drop(String.reverse(sc.cf.hfile(sc.cf(s))), 8n))
+
+def sc.last.line(+t: String) -> String:
+  Maybe.default(&2, String, List.get(&2, String, List.reverse(&2, String, String.lines(t)), 0n), "")
+
+def sc.before.last(+t: String) -> String:
+  +ls = String.lines(t)
+  String.join(List.take(&2, String, ls, Nat.sub(List.length(&2, String, ls), 1n)), "\n")
+
+def sc.img.is(+t: String) -> Bool:
+  +l = String.trim(sc.last.line(t))
+  Bool.or(String.eq(l, "/image"), String.starts_with(l, "/image "))
+
+def sc.img.got(+s: sc.S, +t: String, +g: Pc.pc.Got) -> sc.S:
+  +n = Pc.pc.got.name(g)
+  +b = sc.before.last(t)
+  +d = Bool.pick(String, String.is_empty(n), t, b ++ Bool.pick(String, String.is_empty(b), "", "\n") ++ Pc.pc.line(n) ++ "\n")
+  sc.dirty(sc.with.hint(sc.with.ed(s, D.ed.set(sc.ed(s), d)), Pc.pc.got.note(g)), 1)
+
+def sc.img.attach(+s: sc.S) -> IO(sc.S):
+  +t = D.ed.text(sc.ed(s))
+  IO.bind(Pc.pc.Got, sc.S, Pc.pc.attach(sc.mugen(s), sc.cf.home(sc.cf(s)), String.drop(String.trim(sc.last.line(t)), 6n)), g => IO.pure(sc.S, sc.img.got(s, t, g)))
+
 # Enter: a "\" before the cursor at the text's end is a new line; an empty
-# text, nothing; /mouse is the screen's; else sent
+# text, nothing; /mouse and /image are the screen's; else sent
 def sc.enter.k(+s: sc.S) -> Nat:
   +e = sc.ed(s)
   +t = D.ed.text(e)
   Bool.pick(Nat, Bool.and(String.is_empty(D.ed.post(e)), String.starts_with(D.ed.pre(e), "\\")), 0n,
-    Bool.pick(Nat, String.is_empty(String.trim(t)), 1n, Bool.pick(Nat, String.eq(String.trim(t), "/mouse"), 2n, 3n)))
+    Bool.pick(Nat, String.is_empty(String.trim(t)), 1n, Bool.pick(Nat, String.eq(String.trim(t), "/mouse"), 2n, Bool.pick(Nat, sc.img.is(t), 4n, 3n))))
 
 def sc.enter(k: Nat, +s: sc.S) -> IO(sc.S):
   match k:
@@ -1139,6 +1167,8 @@ def sc.enter(k: Nat, +s: sc.S) -> IO(sc.S):
       IO.pure(sc.S, s)
     case 2n:
       sc.mouse(sc.with.ed(s, D.ed.sent(sc.ed(s))))
+    case 4n:
+      sc.img.attach(s)
     case _:
       sc.sent(s, D.ed.text(sc.ed(s)))
 

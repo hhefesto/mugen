@@ -5,6 +5,7 @@ import ./Text.bend as T
 import ./Json.bend as J
 import ./Diff.bend as D
 import ./Ev.bend as E
+import ./Pic.bend as Pc
 
 # Tools: what mugen's calls may run, as UniiChat's Tools.ts and Machine.ts
 # define them, word for word, but all on this computer: the device the
@@ -79,7 +80,7 @@ def tl.kit(+who: String) -> List<&2, J.Json>:
   +cap = U32.show(tl.cap())
   [tl.spec("shell", "Run a command with the device's shell ($SHELL -c), stdout and stderr together, and return its output, then its exit code and time, as (exit 0 in 0.4 s); output past " ++ cap ++ " characters keeps its head and tail. Each call is a new shell. The call waits until the command and everything holding its output end, so give background jobs their own output file. Background jobs live only while mugen is open on the device: closing it kills every process the calls started." ++ on,
       [tl.device(), J.JKv{"command", tl.ty("string")}], ["device", "command"]),
-    tl.spec("read", "Read a text file. offset: the first line to show (from 1); limit: how many lines; at: the character of the first line to start from. It ends saying the lines shown, as [lines 4-7 of 15]; output past " ++ cap ++ " characters comes in pages, saying where to go on." ++ on,
+    tl.spec("read", "Read a text file, or see an image (png, jpeg, gif or webp: given whole). offset: the first line to show (from 1); limit: how many lines; at: the character of the first line to start from. It ends saying the lines shown, as [lines 4-7 of 15]; output past " ++ cap ++ " characters comes in pages, saying where to go on." ++ on,
       [tl.device(), J.JKv{"path", tl.ty("string")}, J.JKv{"offset", tl.ty("integer")}, J.JKv{"limit", tl.ty("integer")}, J.JKv{"at", tl.ty("integer")}], ["device", "path"]),
     tl.spec("write", "Write a whole file, making its directories. Answers a unified diff of what changed (a new file: all its lines added)." ++ on,
       [tl.device(), J.JKv{"path", tl.ty("string")}, J.JKv{"content", tl.ty("string")}], ["device", "path", "content"]),
@@ -354,11 +355,25 @@ def tl.read.got(+file: String, +size: Nat, r: Result<&1, &1, U32 & String, Strin
     case Fail{(code, why)}:
       tl.fail("ENOENT: no such file or directory, open '" ++ file ++ "'")
 
+def tl.read.pic(+size: Nat, +b: String) -> E.ev.Out:
+  +why = Pc.pc.why(b)
+  Bool.pick(E.ev.Out, String.is_empty(why), tl.ok(Pc.pc.with("An image (" ++ Pc.pc.kind(b) ++ ", " ++ Nat.show(size) ++ " bytes), given whole.", [Pc.pc.of(b)])),
+    tl.fail("A binary file of " ++ Nat.show(size) ++ " bytes" ++ Bool.pick(String, String.is_empty(Pc.pc.kind(b)), ".", ", an image not given: " ++ why ++ ".")))
+
+# a binary file read: an image is given (Pic.bend), else said to be binary
+def tl.read.go(+file: String, +size: Nat, r: Result<&1, &1, U32 & String, String>, +from: U32, +limit: U32, +at: U32) -> IO(E.ev.Out):
+  match r:
+    case Done{+data}:
+      Bool.pick(IO(E.ev.Out), T.tx.has(data, 0), IO.bind(String, E.ev.Out, Pc.pc.b64(file), b => IO.pure(E.ev.Out, tl.read.pic(size, b))),
+        IO.pure(E.ev.Out, tl.read.got(file, size, Done{data}, from, limit, at)))
+    case Fail{e}:
+      IO.pure(E.ev.Out, tl.read.got(file, size, Fail{e}, from, limit, at))
+
 def tl.read(+file: String, +from: U32, +limit: U32, +at: U32) -> IO(E.ev.Out):
   do IO<E.ev.Out>:
     +size : Nat <- IO.bind(Result<&1, &1, U32 & String, Nat>, Nat, S.mu.size(file), r => IO.pure(Nat, tl.nat.of(r)))
     r : Result<&1, &1, U32 & String, String> <- S.mu.read_file(file)
-    return tl.read.got(file, size, r, from, limit, at)
+    tl.read.go(file, size, r, from, limit, at)
 
 # Write and edit --------------------------------------------------------------
 

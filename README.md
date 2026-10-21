@@ -82,8 +82,8 @@ Each entry is a block: your message (`❯`), mugen's reply (`●`, with a
 little markdown), its summarized thinking (`✻`), and each tool call with
 its result: the command or path asked, how it went (`✓ 0.4 s`,
 `✗ exit 1`, `✂ cut`), its first lines of output, and for an edit or a
-write the diff, with the file's line numbers, red and green. Long blocks
-are folded: a click opens or folds one, `C-o` all of them. `PgUp`,
+write the diff, with the file's line numbers, red and green. Blocks come
+open, whole: a click folds or opens one, `C-o` all of them. `PgUp`,
 `PgDn` and the wheel scroll (`M->` follows the end again). Under the chat:
 what runs and for how long (the tool too), the messages waiting for mugen,
 the status line (where mugen works, the model, its effort, the context
@@ -114,6 +114,12 @@ Commands:
 - `/goal TEXT`, `/halt`: set a goal, or drop it.
 - `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
 - `/plan`: mugen reads and proposes, changing nothing. `/auto` lets it act.
+- `/image PATH` (or `/image` alone, for the clipboard's image, by xclip): the
+  image goes with the message being written, as a line `[image
+  docs/images/NAME]` in it (kept in `~/.mugen/docs/images/`). The turn's
+  call sends the images its new messages name; `zoom(id, 1)` gives a
+  message's images again, and `read` gives an image file whole (png, jpeg,
+  gif, webp; 5 MB at most).
 - `/status`, `/mouse`, `/tree`, `/export`, `/help`, `/quit`.
 
 Whatever is running when you quit resumes at the next start. Leaving kills

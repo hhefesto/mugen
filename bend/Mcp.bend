@@ -1,6 +1,7 @@
 
 import Base
 import ./Json.bend as J
+import ./Pic.bend as Pc
 
 # Mcp: our tools as an MCP server, for Claude Code's calls (UniiChat's
 # Tools.answer): JSON-RPC, a message a line, read and answered by the call
@@ -54,8 +55,9 @@ def mc.init(+params: J.Json) -> J.Json:
 def mc.listed(ds: List<&2, J.Json>) -> J.Json:
   J.JObj{[J.JKv{"tools", J.JArr{mc.tools(ds)}}]}
 
+# a tool's result: its text, then its images (Pic.bend)
 def mc.out(+text: String, fail: Bool) -> J.Json:
-  J.JObj{[J.JKv{"content", J.JArr{[J.JObj{[J.JKv{"type", J.JStr{"text"}}, J.JKv{"text", J.JStr{text}}]}]}}, J.JKv{"isError", J.JBool{fail}}]}
+  J.JObj{[J.JKv{"content", J.JArr{J.JObj{[J.JKv{"type", J.JStr{"text"}}, J.JKv{"text", J.JStr{Pc.pc.text(text)}}]} <> Pc.pc.mcps(Pc.pc.pics(text))}}, J.JKv{"isError", J.JBool{fail}}]}
 
 # a tools/call's tool and input
 def mc.name(+m: J.Json) -> String:
