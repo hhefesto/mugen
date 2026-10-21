@@ -109,8 +109,9 @@
                   bash ${./tools}/apicheck.sh
                 touch $out
               '';
-          # the app in pipe mode against a stand-in for curl, its output and
-          # store checked (tests/scenarios)
+          # the app in pipe mode on both wires, against a stand-in for each
+          # (Claude Code's CLI, curl), its output and store checked
+          # (tests/scenarios)
           scenarios =
             pkgs.runCommand "scenarios"
               {
@@ -123,8 +124,10 @@
               }
               ''
                 export HOME=$TMPDIR
-                MUGEN=${self.packages.${system}.mugen-unwrapped}/bin/mugen SCENARIOS_DIR=$TMPDIR/scenarios \
-                  CASES=${./tests/scenarios} bash ${./tools}/scenarios.sh
+                for wire in claude api; do
+                  WIRE=$wire MUGEN=${self.packages.${system}.mugen-unwrapped}/bin/mugen SCENARIOS_DIR=$TMPDIR/scenarios-$wire \
+                    CASES=${./tests/scenarios} bash ${./tools}/scenarios.sh
+                done
                 touch $out
               '';
           # Tools.bend (shell, read, write, edit) against UniiChat's own Machine.ts;

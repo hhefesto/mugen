@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # mugen's scenarios: each tests/scenarios/NAME is a run in pipe mode
-# against tools/fakeapi.ts (a stand-in for curl), its stdout compared with
-# NAME/expect. A scenario has `input` (stdin: a line a message) or `run` (a
+# against a stand-in for its wire, its stdout compared with NAME/expect
+# (NAME/expect.claude instead, if a scenario has one for that wire). WIRE
+# picks the wire: claude (the default: tools/fakeclaude.ts stands in for
+# Claude Code's CLI) or api (tools/fakeapi.ts for curl); both play the same
+# scripts. A scenario has `input` (stdin: a line a message) or `run` (a
 # script feeding stdin, for what needs time between lines); `chat.json`,
 # `agent.json`, `goal.json` (the fake's scripts for a turn's, an agent's, a
 # goal check's calls; @HOST@ is this device's name); and may have `check`
@@ -24,8 +27,10 @@ CASES=${CASES:-$ROOT/tests/scenarios}
 HOST=$(uname -n)
 rm -rf "$WORK"
 mkdir -p "$WORK"
+WIRE=${WIRE:-claude}
 printf '#!%s\nexec %s %s "$@"\n' "$(command -v sh)" "$(command -v "$BUN")" "$HERE/fakeapi.ts" > "$WORK/curl"
-chmod +x "$WORK/curl"
+printf '#!%s\nexec %s %s "$@"\n' "$(command -v sh)" "$(command -v "$BUN")" "$HERE/fakeclaude.ts" > "$WORK/claude"
+chmod +x "$WORK/curl" "$WORK/claude"
 
 pass=0
 fail=0
@@ -45,7 +50,7 @@ for name in "${names[@]}"; do
       unset MUGEN_FAKE_$(echo $f | tr a-z A-Z)
     fi
   done
-  export MUGEN_DIR="$w/d" MUGEN_CURL="$WORK/curl" MUGEN_FAKE_LOG="$w/log" MUGEN_SYNC=0 MUGEN_UNIT=1 MUGEN=$MUGEN
+  export MUGEN_DIR="$w/d" MUGEN_CURL="$WORK/curl" MUGEN_CLAUDE="$WORK/claude" MUGEN_WIRE="$WIRE" MUGEN_FAKE_LOG="$w/log" MUGEN_SYNC=0 MUGEN_UNIT=1 MUGEN=$MUGEN
   if [ -x "$src/run" ]; then
     (cd "$w" && "$src/run") > "$w/raw" 2> "$w/err" || true
   else
@@ -60,7 +65,11 @@ for name in "${names[@]}"; do
   done
   sed -e "s#$w/d/work#@WORK@#g" -e "s#$w/d#@DIR@#g" -e "s/$HOST/@HOST@/g" -e 's/ in [0-9]*\.[0-9] s)/ in T s)/g' "${masks[@]}" "$w/raw" > "$w/out"
   ok=1
-  if ! diff -u "$src/expect" "$w/out" > "$w/diff"; then
+  expect="$src/expect"
+  if [ -f "$src/expect.$WIRE" ]; then
+    expect="$src/expect.$WIRE"
+  fi
+  if ! diff -u "$expect" "$w/out" > "$w/diff"; then
     ok=0
   fi
   if [ $ok -eq 1 ] && [ -x "$src/check" ] && ! (cd "$w" && "$src/check" "$w/d") > "$w/check.out" 2>&1; then
@@ -75,5 +84,5 @@ for name in "${names[@]}"; do
     head -40 "$w/diff" >&2
   fi
 done
-echo "scenarios: $pass passed, $fail failed"
+echo "scenarios ($WIRE): $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

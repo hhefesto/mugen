@@ -7,6 +7,8 @@ import ./View.bend as V
 import ./Api.bend as A
 import ./Ev.bend as E
 import ./Tools.bend as L
+import ./Code.bend as C
+import ./Mcp.bend as Q
 
 # Agent: a call in Unii's own loop (UniiChat's Agent.ts), for Unii's turn or
 # an agent: each step sends every item and reads one output; its tool calls
@@ -328,11 +330,625 @@ def ag.end(+env: ag.Env, +says: Chan(E.ev.Say), +notes: Chan(String), next: ag.N
     case _:
       E.ev.send(ag.hub(env), E.ev.End{ag.who(env), False{}, "the call ended early", 1, 0})
 
-# a call run to its end, told to the hub; `says` closed as it ends (a message
-# sent after that is the hub's to keep)
-def ag.run(+env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
+# a call run to its end on the API, told to the hub; `says` closed as it ends
+# (a message sent after that is the hub's to keep)
+def ag.api.run(+env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
   do IO<Unit>:
     +notes : Chan(String) <- Chan.new(String, 64)
     Unit <- IO.spawn(Unit, IO.bind(Maybe<&1, String>, Unit, Chan.recv(String, notes), m => ag.forward(U32.to_nat(4294967295), m, env, notes)))
     next : ag.Next <- ag.loop(U32.to_nat(4294967295), ag.Step{}, env, ask, says, notes, [A.ap.User{A.ap.ask.blocks(ask)}], [])
     ag.end(env, says, notes, next)
+
+# Claude Code's call ---------------------------------------------------------------
+#
+# The call on Claude Code (Code.bend): it runs the loop itself. We serve it
+# our tools (MCP: its requests read from ctl.cc.mcp.in, our answers appended
+# to ctl.cc.mcp.out), read its events as they come (ctl.cc.out), and hand it
+# the hub's messages on its stdin (the FIFO ctl.cc.in), each with an id it
+# says back as it takes it. A message is held till it can follow tool
+# results (written as a tool call is answered, it comes with the results)
+# or, the turn answered, starts the next turn of the same process; a turn
+# that failed ends the call, and what it held is left for the next. A tool
+# call is logged as it is served, its result after it; Claude Code's own
+# tools' (web search) from its events. The events are read before MCP's
+# requests, so what an output says comes before its calls. The call ends
+# once a result came and nothing is held or untaken: its stdin closed,
+# Claude Code exits, and its wrapper's last line ends the reading.
+
+# what the call hears: a line of its events (k 0) or of MCP's (1); a message
+# from the hub; a reader's end (0 the files', 2 the hub's)
+type ag.Cv is Data:
+  ag.CLine{k: U32, line: String}
+  ag.CSay{say: E.ev.Say}
+  ag.CEnd{k: Nat}
+
+def ag.cv.send(+c: Chan(ag.Cv), e: ag.Cv) -> IO(Unit):
+  IO.bind(Result<&1, &1, ag.Cv, Unit>, Unit, Chan.send(ag.Cv, c, e), r => IO.pure(Unit, Unit{}))
+
+# lines sent on as they are; true when the wrapper's last line came
+def ag.tail.lines(ls: List<&2, String>, +k: U32, +ch: Chan(ag.Cv)) -> IO(Bool):
+  match ls:
+    case []:
+      IO.pure(Bool, False{})
+    case +l <> t:
+      Bool.pick(IO(Bool), C.cc.is.gone(l), IO.bind(Unit, Bool, ag.cv.send(ch, ag.CLine{k, l}), u => IO.pure(Bool, True{})),
+        IO.bind(Unit, Bool, ag.cv.send(ch, ag.CLine{k, l}), u => ag.tail.lines(t, k, ch)))
+
+def ag.shut(q: Poll<&1, &1, Maybe<&1, Unit>, Unit>) -> Bool:
+  match q:
+    case Ready{None{}}:
+      True{}
+    case _:
+      False{}
+
+# The events' file and MCP's followed from their start, polled at their end,
+# their lines to ch (k 0, 1): the events' read first, MCP's only once they
+# are caught up. mcp: r is MCP's read (else the events'), `other` the other
+# file; c0, c1 their lines cut short; stop: the wrapper's last line came, or
+# quit closed.
+def ag.tail(fuel: Nat, mcp: Bool, stop: Bool, +ch: Chan(ag.Cv), +quit: Chan(Unit), +c0: String, +c1: String, other: File, r: File & Result<&1, &1, U32 & String, String>) -> IO(Unit):
+  match fuel mcp stop r:
+    case 1n+f False{} False{} Tuple{file, Done{SCon{h, t}}}:
+      +fed = C.cc.feed(SCon{h, t}, c0, [])
+      do IO<Unit>:
+        last : Bool <- ag.tail.lines(C.cc.fed.lines(fed), 0, ch)
+        r2 : File & Result<&1, &1, U32 & String, String> <- File.read(file, 65536)
+        ag.tail(f, False{}, last, ch, quit, C.cc.fed.cur(fed), c1, other, r2)
+    case 1n+f False{} False{} Tuple{file, Done{SNil{}}}:
+      IO.bind(File & Result<&1, &1, U32 & String, String>, Unit, File.read(other, 65536), r2 => ag.tail(f, True{}, False{}, ch, quit, c0, c1, file, r2))
+    case 1n+f True{} False{} Tuple{file, Done{SCon{h, t}}}:
+      +fed = C.cc.feed(SCon{h, t}, c1, [])
+      do IO<Unit>:
+        x : Bool <- ag.tail.lines(C.cc.fed.lines(fed), 1, ch)
+        r2 : File & Result<&1, &1, U32 & String, String> <- File.read(other, 65536)
+        ag.tail(f, False{}, False{}, ch, quit, c0, C.cc.fed.cur(fed), file, r2)
+    case 1n+f True{} False{} Tuple{file, Done{SNil{}}}:
+      do IO<Unit>:
+        q : Poll<&1, &1, Maybe<&1, Unit>, Unit> <- Chan.try_recv(Unit, quit, 0)
+        Unit <- IO.sleep(40)
+        r2 : File & Result<&1, &1, U32 & String, String> <- File.read(other, 65536)
+        ag.tail(f, False{}, ag.shut(q), ch, quit, c0, c1, file, r2)
+    case _ _ _ Tuple{file, _}:
+      do IO<Unit>:
+        Unit <- File.close(file)
+        Unit <- File.close(other)
+        ag.cv.send(ch, ag.CEnd{0n})
+
+def ag.tail.open(+ch: Chan(ag.Cv), +quit: Chan(Unit), a: Result<&1, &1, U32 & String, File>, b: Result<&1, &1, U32 & String, File>) -> IO(Unit):
+  match a b:
+    case Done{fo} Done{fm}:
+      IO.bind(File & Result<&1, &1, U32 & String, String>, Unit, File.read(fo, 65536), r => ag.tail(U32.to_nat(4294967295), False{}, False{}, ch, quit, "", "", fm, r))
+    case Done{fo} Fail{e}:
+      IO.bind(Unit, Unit, File.close(fo), u => ag.cv.send(ch, ag.CEnd{0n}))
+    case Fail{e} Done{fm}:
+      IO.bind(Unit, Unit, File.close(fm), u => ag.cv.send(ch, ag.CEnd{0n}))
+    case _ _:
+      ag.cv.send(ch, ag.CEnd{0n})
+
+def ag.tail.start(+ch: Chan(ag.Cv), +quit: Chan(Unit), +ctl: String) -> IO(Unit):
+  do IO<Unit>:
+    a : Result<&1, &1, U32 & String, File> <- File.open(ctl ++ ".cc.out", "r")
+    b : Result<&1, &1, U32 & String, File> <- File.open(ctl ++ ".cc.mcp.in", "r")
+    ag.tail.open(ch, quit, a, b)
+
+# Claude Code's stdin, held: each text written, the FIFO closed once texts
+# closes (its end of file for Claude Code)
+def ag.hold(fuel: Nat, m: Maybe<&1, String>, +texts: Chan(String), r: File & Result<&1, &1, U32 & String, Unit>) -> IO(Unit):
+  match fuel m r:
+    case 1n+f Some{t} Tuple{file, w}:
+      do IO<Unit>:
+        r2 : File & Result<&1, &1, U32 & String, Unit> <- File.write(file, t)
+        m2 : Maybe<&1, String> <- Chan.recv(String, texts)
+        ag.hold(f, m2, texts, r2)
+    case _ _ Tuple{file, w}:
+      File.close(file)
+
+def ag.hold.open(+texts: Chan(String), r: Result<&1, &1, U32 & String, File>) -> IO(Unit):
+  match r:
+    case Done{file}:
+      do IO<Unit>:
+        r2 : File & Result<&1, &1, U32 & String, Unit> <- File.write(file, "")
+        m : Maybe<&1, String> <- Chan.recv(String, texts)
+        ag.hold(U32.to_nat(4294967295), m, texts, r2)
+    case Fail{e}:
+      IO.pure(Unit, Unit{})
+
+# the hub's messages, passed on, till it is closed
+def ag.fwd(fuel: Nat, m: Maybe<&1, E.ev.Say>, +says: Chan(E.ev.Say), +ch: Chan(ag.Cv)) -> IO(Unit):
+  match fuel m:
+    case 1n+f Some{x}:
+      do IO<Unit>:
+        Unit <- ag.cv.send(ch, ag.CSay{x})
+        m2 : Maybe<&1, E.ev.Say> <- Chan.recv(E.ev.Say, says)
+        ag.fwd(f, m2, says, ch)
+    case _ _:
+      ag.cv.send(ch, ag.CEnd{2n})
+
+# What the call knows: its own message's id, and whether it was taken; the
+# ids of the hub's messages sent and not taken yet; those held; the replies
+# of the latest output, and its message's id; Claude Code's own tools' calls
+# waiting on results; the last result; whether stdin is open; whether a stop
+# came; the hub's messages that came after stdin closed.
+type ag.Cs is Data:
+  ag.Cs{id: String, first: Bool, sent: List<&2, String>, held: List<&2, String>, last: List<&2, String>, msg: String, ps: List<&2, ag.Pend>, res: Maybe<&2, C.cc.Res>, open: Bool, stop: Bool, left: U32}
+
+def ag.cs.sent(s: ag.Cs) -> List<&2, String>:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      se
+
+def ag.cs.held(s: ag.Cs) -> List<&2, String>:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      h
+
+def ag.cs.last(s: ag.Cs) -> List<&2, String>:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      l
+
+def ag.cs.ps(s: ag.Cs) -> List<&2, ag.Pend>:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      p
+
+def ag.cs.res(s: ag.Cs) -> Maybe<&2, C.cc.Res>:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      r
+
+def ag.cs.open(s: ag.Cs) -> Bool:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      o
+
+def ag.cs.stop(s: ag.Cs) -> Bool:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      st
+
+def ag.cs.left(s: ag.Cs) -> U32:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      le
+
+def ag.strs.del(xs: List<&2, String>, +x: String) -> List<&2, String>:
+  match xs:
+    case []:
+      []
+    case +y <> t:
+      List.append(&2, String, Bool.pick(List<&2, String>, String.eq(x, y), [], [y]), ag.strs.del(t, x))
+
+# every message taken: its own and the hub's sent
+def ag.cc.taken(s: ag.Cs) -> Bool:
+  match s:
+    case ag.Cs{i, f, +se, h, l, m, p, r, o, st, le}:
+      Bool.and(f, List.is_empty(&2, String, se))
+
+# Events --------------------------------------------------------------------------
+
+# an output's messages (Api.bend ap.entries) as the API path logs them, but
+# our MCP tools' calls, logged as they are served
+def ag.cc.mine(es: List<&2, A.ap.Entry>) -> List<&2, A.ap.Entry>:
+  match es:
+    case []:
+      []
+    case A.ap.Entry{+k, +t, +o} <> rest:
+      List.append(&2, A.ap.Entry, Bool.pick(List<&2, A.ap.Entry>, Bool.and(String.eq(k, "tool"), String.starts_with(t, "mcp__mugen__")), [], [A.ap.Entry{k, t, o}]), ag.cc.mine(rest))
+
+def ag.cc.texts(xs: List<&2, J.Json>) -> List<&2, String>:
+  match xs:
+    case []:
+      []
+    case +x <> t:
+      List.append(&2, String, Bool.pick(List<&2, String>, String.eq(C.cc.ty(x), "text"), [C.cc.s(x, "text")], []), ag.cc.texts(t))
+
+# a tool result's text: its content as text, or its text blocks joined
+def ag.cc.result.text(+c: Maybe<&2, J.Json>) -> String:
+  match c:
+    case Some{J.JStr{s}}:
+      s
+    case Some{J.JArr{xs}}:
+      T.tx.join(ag.cc.texts(xs), "\n")
+    case _:
+      ""
+
+# the results of Claude Code's own tools' calls (those waiting), as echoes
+def ag.cc.echoes(bs: List<&2, J.Json>, +ps: List<&2, ag.Pend>) -> List<&2, A.ap.Entry>:
+  match bs:
+    case []:
+      []
+    case +b <> t:
+      +id = C.cc.s(b, "tool_use_id")
+      +mine = Bool.and(String.eq(C.cc.ty(b), "tool_result"), Maybe.is_some(&2, String, ag.pend.find(ps, id)))
+      +fail = Maybe.default(&2, Bool, J.js.bool(b, "is_error"), False{})
+      +text = A.ap.or.none(L.tl.clip(T.tx.trim(ag.cc.result.text(J.js.field(b, "content")))))
+      List.append(&2, A.ap.Entry, Bool.pick(List<&2, A.ap.Entry>, mine, [A.ap.Entry{"echo", Bool.pick(String, fail, "error: " ++ text, text), id}], []), ag.cc.echoes(t, ps))
+
+def ag.cc.with.out(s: ag.Cs, +msg: String, +replies: List<&2, String>, +ps: List<&2, ag.Pend>) -> ag.Cs:
+  match s:
+    case ag.Cs{i, f, se, h, +l, +m, p, r, o, st, le}:
+      ag.Cs{i, f, se, h, List.append(&2, String, Bool.pick(List<&2, String>, String.eq(m, msg), l, []), replies), msg, ps, r, o, st, le}
+
+# an output of Claude Code's: its messages logged and shown, its replies kept
+def ag.cc.assistant(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+  +es = ag.cc.mine(A.ap.entries(A.ap.out(C.cc.blocks(j))))
+  do IO<ag.Cs>:
+    +ps : List<&2, ag.Pend> <- ag.entries(es, env, ag.cs.ps(s))
+    return ag.cc.with.out(s, C.cc.s(C.cc.message(j), "id"), ag.replies(es), ps)
+
+def ag.cc.with.taken(s: ag.Cs, +uuid: String, +ps: List<&2, ag.Pend>) -> ag.Cs:
+  match s:
+    case ag.Cs{+i, +f, +se, h, l, m, p, r, o, st, le}:
+      ag.Cs{i, Bool.or(f, String.eq(i, uuid)), ag.strs.del(se, uuid), h, l, m, ps, r, o, st, le}
+
+# a user event: one of ours taken (its id said back), or tool results
+def ag.cc.user(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+  do IO<ag.Cs>:
+    +ps : List<&2, ag.Pend> <- ag.entries(ag.cc.echoes(C.cc.blocks(j), ag.cs.ps(s)), env, ag.cs.ps(s))
+    return ag.cc.with.taken(s, C.cc.s(j, "uuid"), ps)
+
+# the held messages onto stdin, each with an id of its own: sent
+def ag.cc.flush.go(hs: List<&2, String>, +texts: Chan(String), +sent: List<&2, String>) -> IO(List<&2, String>):
+  match hs:
+    case []:
+      IO.pure(List<&2, String>, sent)
+    case t <> rest:
+      do IO<List<&2, String>>:
+        +u : String <- C.cc.uuid()
+        r : Result<&1, &1, String, Unit> <- Chan.send(String, texts, C.cc.say(t, u))
+        ag.cc.flush.go(rest, texts, List.append(&2, String, sent, [u]))
+
+def ag.cc.flush(+texts: Chan(String), s: ag.Cs) -> IO(ag.Cs):
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      IO.bind(List<&2, String>, ag.Cs, ag.cc.flush.go(h, texts, se), se2 => IO.pure(ag.Cs, ag.Cs{i, f, se2, [], l, m, p, r, o, st, le}))
+
+def ag.cc.flush.if(b: Bool, +texts: Chan(String), +s: ag.Cs) -> IO(ag.Cs):
+  match b:
+    case True{}:
+      ag.cc.flush(texts, s)
+    case False{}:
+      IO.pure(ag.Cs, s)
+
+def ag.cc.close.if(b: Bool, +texts: Chan(String)) -> IO(Unit):
+  match b:
+    case True{}:
+      Chan.close(String, texts)
+    case False{}:
+      IO.pure(Unit, Unit{})
+
+def ag.cc.pid(r: Result<&1, &1, U32 & String, String>) -> U32:
+  match r:
+    case Done{t}:
+      U32.from_nat(Maybe.default(&2, Nat, Nat.read(T.tx.trim(t)), 0n))
+    case Fail{e}:
+      0
+
+# Claude Code's group killed, its stdin closed, and (the wrapper killed with
+# it) the last line ours
+def ag.cc.halt(+env: ag.Env, +texts: Chan(String)) -> IO(Unit):
+  +ctl = ag.ctl(env)
+  do IO<Unit>:
+    r : Result<&1, &1, U32 & String, String> <- S.mu.read_file(ctl ++ ".cc.pid")
+    +pid : U32 = ag.cc.pid(r)
+    k : U32 <- Bool.pick(IO(U32), U32.is_eq(pid, 0), IO.pure(U32, 0), S.mu.kill(pid, 1, 15))
+    Unit <- Chan.close(String, texts)
+    a : Result<&1, &1, U32 & String, Nat> <- S.mu.append(ctl ++ ".cc.out", C.cc.gone("-1"), 0)
+    return Unit{}
+
+def ag.cc.halt.if(b: Bool, +env: ag.Env, +texts: Chan(String)) -> IO(Unit):
+  match b:
+    case True{}:
+      ag.cc.halt(env, texts)
+    case False{}:
+      IO.pure(Unit, Unit{})
+
+def ag.cc.with.res(s: ag.Cs, +res: C.cc.Res, +open: Bool) -> ag.Cs:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      ag.Cs{i, f, se, h, l, m, p, Some{res}, open, st, le}
+
+# a result: its tokens shown. Answered, the messages held go on as the next
+# turn; else, every message taken, stdin is closed. A turn that failed (a
+# refusal, an error) ends the call, at once if a message sent was not taken.
+def ag.cc.result(+env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+  +res = C.cc.res.of(j)
+  +fine = C.cc.res.fine(res)
+  +held = Bool.not(List.is_empty(&2, String, ag.cs.held(s)))
+  +taken = ag.cc.taken(s)
+  do IO<ag.Cs>:
+    Unit <- ag.show(env, "usage", C.cc.usage(Maybe.default(&2, J.Json, J.js.field(j, "usage"), J.JObj{[]})))
+    +s2 : ag.Cs <- ag.cc.flush.if(Bool.and(fine, held), texts, s)
+    Unit <- ag.cc.close.if(Bool.or(Bool.not(fine), Bool.and(taken, Bool.not(held))), texts)
+    Unit <- ag.cc.halt.if(Bool.and(Bool.not(fine), Bool.not(taken)), env, texts)
+    return ag.cc.with.res(s2, res, Bool.and(ag.cs.open(s), Bool.and(fine, Bool.or(held, Bool.not(taken)))))
+
+# a retry Claude Code waits on, told as a busy note
+def ag.cc.retry(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+  +secs = Nat.div(C.cc.n(j, "retry_delay_ms"), 1000n)
+  IO.bind(Unit, ag.Cs, ag.show(env, "mind", "The AI service is busy: asking again in " ++ Nat.show(secs) ++ " s."), u => IO.pure(ag.Cs, s))
+
+# 0 an output, 1 a user event, 2 a result, 3 a retry, 4 else
+def ag.cc.kind(+j: J.Json) -> Nat:
+  +ty = C.cc.ty(j)
+  Bool.pick(Nat, String.eq(ty, "assistant"), 0n, Bool.pick(Nat, String.eq(ty, "user"), 1n, Bool.pick(Nat, String.eq(ty, "result"), 2n,
+    Bool.pick(Nat, Bool.and(String.eq(ty, "system"), String.eq(C.cc.s(j, "subtype"), "api_retry")), 3n, 4n))))
+
+def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+  match k:
+    case 0n:
+      ag.cc.assistant(env, s, j)
+    case 1n:
+      ag.cc.user(env, s, j)
+    case 2n:
+      ag.cc.result(env, texts, s, j)
+    case 3n:
+      ag.cc.retry(env, s, j)
+    case _:
+      IO.pure(ag.Cs, s)
+
+def ag.cc.event(+env: ag.Env, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
+  +j = Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]})
+  ag.cc.event.go(ag.cc.kind(j), env, texts, s, j)
+
+# MCP ---------------------------------------------------------------------------------
+
+# an answer appended to ctl.cc.mcp.out, the relay's to pass on
+def ag.cc.answer(+env: ag.Env, +text: String) -> IO(Unit):
+  Bool.pick(IO(Unit), String.is_empty(text), IO.pure(Unit, Unit{}),
+    IO.bind(Result<&1, &1, U32 & String, Nat>, Unit, S.mu.append(ag.ctl(env) ++ ".cc.mcp.out", text, 0), r => IO.pure(Unit, Unit{})))
+
+def ag.cc.out(o: E.ev.Out) -> J.Json:
+  match o:
+    case E.ev.Out{t, f}:
+      Q.mc.out(t, f)
+
+# a tool call run as the API path runs one, logged as it is served
+def ag.cc.call(+env: ag.Env, +m: J.Json) -> IO(String):
+  +name = Q.mc.bare(Q.mc.name(m))
+  +input = Q.mc.input(m)
+  do IO<String>:
+    +st : Bool <- A.ap.stopped(ag.ctl(env))
+    +o : E.ev.Out <- Bool.pick(IO(E.ev.Out), st, IO.pure(E.ev.Out, E.ev.Out{"(stopped)", True{}}), ag.use(env, name, input))
+    Unit <- ag.result(env, Some{ag.json.show(name, input)}, ag.err(o))
+    return Q.mc.answer(Q.mc.id(m), ag.cc.out(o))
+
+def ag.ask.tools(a: A.ap.Ask) -> List<&2, J.Json>:
+  match a:
+    case A.ap.Ask{p, sy, b, t, se, pa}:
+      t
+
+def ag.ask.searches(a: A.ap.Ask) -> U32:
+  match a:
+    case A.ap.Ask{p, sy, b, t, se, pa}:
+      se
+
+# a request's answer (not a tool call's): "" for a notification
+def ag.cc.mcp.go(k: Nat, +ask: A.ap.Ask, +m: J.Json) -> String:
+  match k:
+    case 0n:
+      ""
+    case 1n:
+      Q.mc.answer(Q.mc.id(m), Q.mc.init(Q.mc.params(m)))
+    case 2n:
+      Q.mc.answer(Q.mc.id(m), Q.mc.listed(ag.ask.tools(ask)))
+    case 4n:
+      Q.mc.answer(Q.mc.id(m), J.JObj{[]})
+    case _:
+      Q.mc.none(Q.mc.id(m), Q.mc.s(m, "method"))
+
+# a tool call run, then what is held sent (so it comes with the results),
+# then the answer; any other request answered at once
+def ag.cc.mcp.on(call: Bool, k: Nat, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(String), +s: ag.Cs, +m: J.Json) -> IO(ag.Cs):
+  match call:
+    case True{}:
+      do IO<ag.Cs>:
+        +a : String <- ag.cc.call(env, m)
+        +s2 : ag.Cs <- ag.cc.flush(texts, s)
+        Unit <- ag.cc.answer(env, a)
+        return s2
+    case False{}:
+      IO.bind(Unit, ag.Cs, ag.cc.answer(env, ag.cc.mcp.go(k, ask, m)), u => IO.pure(ag.Cs, s))
+
+def ag.cc.mcp(+env: ag.Env, +ask: A.ap.Ask, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
+  +m = Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]})
+  +k = Q.mc.kind(m)
+  ag.cc.mcp.on(Nat.is_eq(k, 3n), k, env, ask, texts, s, m)
+
+# The hub's messages ----------------------------------------------------------------
+
+# a message held (or, stdin closed, left)
+def ag.cc.text.on(open: Bool, s: ag.Cs, +t: String) -> ag.Cs:
+  match open s:
+    case True{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      ag.Cs{i, f, se, List.append(&2, String, h, [t]), l, m, p, r, o, st, le}
+    case False{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      ag.Cs{i, f, se, h, l, m, p, r, o, st, (le + 1 : U32)}
+
+def ag.cc.text(+s: ag.Cs, +t: String) -> IO(ag.Cs):
+  IO.pure(ag.Cs, ag.cc.text.on(ag.cs.open(s), s, t))
+
+def ag.cc.with.stop(s: ag.Cs) -> ag.Cs:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+      ag.Cs{i, f, se, h, l, m, p, r, False{}, True{}, le}
+
+# a stop: the call halted
+def ag.cc.stop(+env: ag.Env, +texts: Chan(String), +s: ag.Cs) -> IO(ag.Cs):
+  IO.bind(Unit, ag.Cs, ag.cc.halt(env, texts), u => IO.pure(ag.Cs, ag.cc.with.stop(s)))
+
+# The loop ----------------------------------------------------------------------------
+
+def ag.cc.line.go(k: Nat, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
+  match k:
+    case 0n:
+      ag.cc.event(env, texts, s, line)
+    case _:
+      ag.cc.mcp(env, ask, texts, s, line)
+
+def ag.cc.on(x: ag.Cv, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(String), +s: ag.Cs) -> IO(ag.Cs):
+  match x:
+    case ag.CLine{k, line}:
+      ag.cc.line.go(U32.to_nat(k), env, ask, texts, s, line)
+    case ag.CSay{E.ev.Text{t}}:
+      ag.cc.text(s, t)
+    case ag.CSay{E.ev.Stop{}}:
+      ag.cc.stop(env, texts, s)
+    case _:
+      IO.pure(ag.Cs, s)
+
+# the call's events, one at a time, till the files' end
+def ag.cc.loop(n: Nat, m: Maybe<&1, ag.Cv>, +env: ag.Env, +ask: A.ap.Ask, +ch: Chan(ag.Cv), +texts: Chan(String), +s: ag.Cs) -> IO(ag.Cs):
+  match n m:
+    case 1n+f Some{ag.CEnd{0n}}:
+      IO.pure(ag.Cs, s)
+    case 1n+f Some{x}:
+      do IO<ag.Cs>:
+        +s2 : ag.Cs <- ag.cc.on(x, env, ask, texts, s)
+        m2 : Maybe<&1, ag.Cv> <- Chan.recv(ag.Cv, ch)
+        ag.cc.loop(f, m2, env, ask, ch, texts, s2)
+    case _ _:
+      IO.pure(ag.Cs, s)
+
+# after the files' end: the hub's messages still coming counted (left), till
+# the hub's reader ends (need: how many readers have yet to)
+def ag.cc.drain(n: Nat, need: Nat, m: Maybe<&1, ag.Cv>, +ch: Chan(ag.Cv), +left: U32) -> IO(U32):
+  match n need m:
+    case 1n+f 1n Some{ag.CEnd{e}}:
+      IO.pure(U32, left)
+    case 1n+f 1n+k Some{ag.CEnd{e}}:
+      IO.bind(Maybe<&1, ag.Cv>, U32, Chan.recv(ag.Cv, ch), m2 => ag.cc.drain(f, k, m2, ch, left))
+    case 1n+f 1n+k Some{ag.CSay{E.ev.Text{t}}}:
+      IO.bind(Maybe<&1, ag.Cv>, U32, Chan.recv(ag.Cv, ch), m2 => ag.cc.drain(f, 1n+k, m2, ch, (left + 1 : U32)))
+    case 1n+f 1n+k Some{x}:
+      IO.bind(Maybe<&1, ag.Cv>, U32, Chan.recv(ag.Cv, ch), m2 => ag.cc.drain(f, 1n+k, m2, ch, left))
+    case _ _ _:
+      IO.pure(U32, left)
+
+# how the call ended: stopped; answered (its last output's replies), or
+# stopped by the model (a refusal, a stop reason); else the AI service's
+# doing (no result: busy)
+def ag.cc.done.of(r: Maybe<&2, C.cc.Res>, +replies: String) -> ag.Next:
+  match r:
+    case Some{C.cc.Res{g, +ok, +status, +stop, +why}}:
+      Bool.pick(ag.Next, Bool.and(ok, C.cc.fine(stop)), ag.Done{True{}, replies, 0},
+        Bool.pick(ag.Next, ok, ag.Done{False{}, "stopped: " ++ stop, 1},
+          Bool.pick(ag.Next, A.ap.passing(status, ""), ag.Done{False{}, ag.busy(), 3}, ag.Done{False{}, A.ap.cc.why(status, why), 3})))
+    case None{}:
+      ag.Done{False{}, ag.busy(), 3}
+
+def ag.cc.done(+s: ag.Cs) -> ag.Next:
+  Bool.pick(ag.Next, ag.cs.stop(s), ag.Done{False{}, "stopped", 2}, ag.cc.done.of(ag.cs.res(s), T.tx.join(ag.cs.last(s), "\n\n")))
+
+# Claude Code's complaint, shown when it ended with no result
+def ag.cc.said(+env: ag.Env, +err: String) -> IO(Unit):
+  Bool.pick(IO(Unit), String.is_empty(err), IO.pure(Unit, Unit{}), ag.show(env, "mind", "claude: " ++ String.take(err, 2000n)))
+
+def ag.cc.err(+env: ag.Env, +s: ag.Cs) -> IO(Unit):
+  Bool.pick(IO(Unit), Bool.or(Maybe.is_some(&2, C.cc.Res, ag.cs.res(s)), ag.cs.stop(s)), IO.pure(Unit, Unit{}),
+    IO.bind(Result<&1, &1, U32 & String, String>, Unit, S.mu.read_file(ag.ctl(env) ++ ".cc.err"), r => ag.cc.said(env, T.tx.trim(L.tl.text.of(r)))))
+
+def ag.end.cc(+env: ag.Env, next: ag.Next, +left: U32) -> IO(Unit):
+  match next:
+    case ag.Done{ok, text, stop}:
+      E.ev.send(ag.hub(env), E.ev.End{ag.who(env), ok, text, stop, left})
+    case _:
+      E.ev.send(ag.hub(env), E.ev.End{ag.who(env), False{}, "the call ended early", 1, 0})
+
+# the end: stdin, the readers and `says` closed; left, what the call never
+# took (sent and not taken, held, and what came once stdin closed)
+def ag.cc.end(+env: ag.Env, +says: Chan(E.ev.Say), +ch: Chan(ag.Cv), +texts: Chan(String), +quit: Chan(Unit), +s: ag.Cs) -> IO(Unit):
+  +next = ag.cc.done(s)
+  do IO<Unit>:
+    Unit <- Chan.close(String, texts)
+    Unit <- Chan.close(Unit, quit)
+    Unit <- Chan.close(E.ev.Say, says)
+    m : Maybe<&1, ag.Cv> <- Chan.recv(ag.Cv, ch)
+    +more : U32 <- ag.cc.drain(U32.to_nat(4294967295), 1n, m, ch, 0)
+    Unit <- ag.unanswered(ag.cs.ps(s), env)
+    Unit <- ag.cc.err(env, s)
+    +n : U32 = (U32.from_nat(List.length(&2, String, ag.cs.sent(s))) + U32.from_nat(List.length(&2, String, ag.cs.held(s))) : U32)
+    ag.end.cc(env, next, (n + (ag.cs.left(s) + more : U32) : U32))
+
+# Starting ----------------------------------------------------------------------------
+
+# the call's files made fresh: its system prompt, its events', its errors',
+# its MCP files empty, its stdin a new FIFO
+def ag.cc.files(+ctl: String, +system: String) -> IO(Unit):
+  do IO<Unit>:
+    a : Result<&1, &1, U32 & String, Unit> <- S.mu.save(ctl ++ ".cc.system", system, 0)
+    b : Result<&1, &1, U32 & String, Unit> <- S.mu.save(ctl ++ ".cc.out", "", 0)
+    c : Result<&1, &1, U32 & String, Unit> <- S.mu.save(ctl ++ ".cc.err", "", 0)
+    d : Result<&1, &1, U32 & String, Unit> <- S.mu.save(ctl ++ ".cc.mcp.in", "", 0)
+    e : Result<&1, &1, U32 & String, Unit> <- S.mu.save(ctl ++ ".cc.mcp.out", "", 0)
+    g : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".cc.in")
+    o : S.mu.Out <- S.mu.run("mkfifo", [ctl ++ ".cc.in"], "", 4096, 10000)
+    return Unit{}
+
+def ag.cc.name(+who: String) -> String:
+  Bool.pick(String, String.is_empty(who), "main", who)
+
+def ag.out.status(o: S.mu.Out) -> U32:
+  match o:
+    case S.mu.Out{st, out, err}:
+      st
+
+def ag.cc.let.go(r: Result<&1, &1, U32 & String, File>) -> IO(Unit):
+  match r:
+    case Done{file}:
+      File.close(file)
+    case Fail{e}:
+      IO.pure(Unit, Unit{})
+
+# a start that failed: our own last line, and Claude Code's stdin let go
+def ag.cc.failed(bad: Bool, +ctl: String) -> IO(Unit):
+  match bad:
+    case True{}:
+      do IO<Unit>:
+        a : Result<&1, &1, U32 & String, Nat> <- S.mu.append(ctl ++ ".cc.out", C.cc.gone("127"), 0)
+        r : Result<&1, &1, U32 & String, File> <- File.open(ctl ++ ".cc.in", "r")
+        ag.cc.let.go(r)
+    case False{}:
+      IO.pure(Unit, Unit{})
+
+# A call run on Claude Code to its end, told to the hub, as ag.api.run's
+def ag.cc.run(+env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
+  +cc = A.ap.cfg.cc(ag.cfg(env))
+  +ctl = ag.ctl(env)
+  +cwd = L.tl.env.cwd(ag.tools(env))
+  +keep = C.cc.keeps(cc, True{})
+  +p = A.ap.ask.pick(ask)
+  do IO<Unit>:
+    Unit <- ag.cc.files(ctl, A.ap.ask.system(ask))
+    mk : Result<&1, &1, U32 & String, Unit> <- S.mu.mkdirs(cwd)
+    +u : String <- C.cc.uuid()
+    +sid : String = Bool.pick(String, keep, u, "")
+    +debug : String <- Bool.pick(IO(String), keep, C.cc.debug.file(cc, ag.cc.name(ag.who(env)), u), IO.pure(String, ""))
+    +tools : String = Bool.pick(String, U32.is_eq(ag.ask.searches(ask), 0), "", "WebSearch")
+    +run : C.cc.Run = C.cc.Run{A.ap.pick.id(p), A.ap.pick.effort(p), ctl ++ ".cc.system", tools, C.cc.mcp(ctl), sid, debug, False{}}
+    o : S.mu.Out <- C.cc.start(cc, ctl, cwd, C.cc.args(cc, run))
+    Unit <- ag.cc.failed(Bool.not(U32.is_eq(ag.out.status(o), 0)), ctl)
+    +ch : Chan(ag.Cv) <- Chan.new(ag.Cv, 4096)
+    +texts : Chan(String) <- Chan.new(String, 256)
+    +quit : Chan(Unit) <- Chan.new(Unit, 1)
+    Unit <- IO.spawn(Unit, ag.tail.start(ch, quit, ctl))
+    Unit <- IO.spawn(Unit, IO.bind(Result<&1, &1, U32 & String, File>, Unit, File.open(ctl ++ ".cc.in", "w"), r => ag.hold.open(texts, r)))
+    Unit <- IO.spawn(Unit, IO.bind(Maybe<&1, E.ev.Say>, Unit, Chan.recv(E.ev.Say, says), m => ag.fwd(U32.to_nat(4294967295), m, says, ch)))
+    +first : String <- C.cc.uuid()
+    r : Result<&1, &1, String, Unit> <- Chan.send(String, texts, C.cc.user(C.cc.parts(A.ap.ask.blocks(ask), False{}), first))
+    +s0 : ag.Cs = ag.Cs{first, False{}, [], [], [], "", [], None{}, True{}, False{}, 0}
+    m : Maybe<&1, ag.Cv> <- Chan.recv(ag.Cv, ch)
+    +s : ag.Cs <- ag.cc.loop(U32.to_nat(4294967295), m, env, ask, ch, texts, s0)
+    ag.cc.end(env, says, ch, texts, quit, s)
+
+def ag.wire(on: Bool, +env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
+  match on:
+    case True{}:
+      ag.cc.run(env, ask, says)
+    case False{}:
+      ag.api.run(env, ask, says)
+
+# a call run to its end, told to the hub, on its wire
+def ag.run(+env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
+  ag.wire(C.cc.on(A.ap.cfg.cc(ag.cfg(env))), env, ask, says)

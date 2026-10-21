@@ -273,7 +273,8 @@ def hb.when() -> IO(hb.When):
 
 def hb.print(+s: hb.S, +who: String, +kind: String, +text: String) -> IO(Unit):
   Bool.pick(IO(Unit), Bool.and(hb.tty(s), Bool.and(String.eq(kind, "user"), String.is_empty(who))), IO.pure(Unit, Unit{}),
-    IO.print(Tm.tm.render(hb.tty(s), who, kind, text)))
+    Bool.pick(IO(Unit), String.eq(kind, "usage"), Bool.pick(IO(Unit), hb.tty(s), IO.print(Tm.tm.status(True{}, Tm.tm.who(who) ++ text)), IO.pure(Unit, Unit{})),
+      IO.print(Tm.tm.render(hb.tty(s), who, kind, text))))
 
 # Compactions -----------------------------------------------------------------------
 
@@ -461,6 +462,7 @@ def hb.fresh(+ctl: String) -> IO(Unit):
   do IO<Unit>:
     r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".stop")
     r2 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".pid")
+    r3 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".cc.pid")
     return Unit{}
 
 # the view to message `end`, in blocks (Memory.view)
@@ -1024,12 +1026,16 @@ def hb.kill.pid(none: Bool, +pid: U32) -> IO(Unit):
         b : U32 <- S.mu.kill(pid, 0, 15)
         return Unit{}
 
-# a call's process killed, its stop asked (the call sees it at once)
+# a call's process killed, its stop asked (the call sees it at once); on
+# Claude Code, its process group too
 def hb.kill(+ctl: String) -> IO(Unit):
   do IO<Unit>:
     r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(ctl ++ ".stop", "", 0)
     +pid : U32 <- IO.bind(Result<&1, &1, U32 & String, String>, U32, S.mu.read_file(ctl ++ ".pid"), r2 => IO.pure(U32, hb.pid.of(r2)))
-    hb.kill.pid(U32.is_eq(pid, 0), pid)
+    Unit <- hb.kill.pid(U32.is_eq(pid, 0), pid)
+    +cc : U32 <- IO.bind(Result<&1, &1, U32 & String, String>, U32, S.mu.read_file(ctl ++ ".cc.pid"), r2 => IO.pure(U32, hb.pid.of(r2)))
+    k : U32 <- Bool.pick(IO(U32), U32.is_eq(cc, 0), IO.pure(U32, 0), S.mu.kill(cc, 1, 15))
+    return Unit{}
 
 def hb.ag.says.of(m: Maybe<&2, hb.Ag>) -> Maybe<&2, Chan(E.ev.Say)>:
   match m:

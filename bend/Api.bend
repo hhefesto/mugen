@@ -4,11 +4,13 @@ import ./Sys.bend as S
 import ./Text.bend as T
 import ./Json.bend as J
 import ./View.bend as V
+import ./Code.bend as C
 
 # Api: the Messages API by curl, as UniiChat's Anthropic.ts and Agent.ts
 # shape and read it, but not streamed (v1): a request is one Process.run of
 # curl, its body on stdin, the key read by curl from the environment (never
-# in argv). A step sends every item and reads one message; an error is
+# in argv); or (the default wire) one call of Claude Code's CLI, a turn
+# with no tools (Code.bend cc.once), read into the same step. A step sends every item and reads one message; an error is
 # `busy` (no connection, a retry status) and asked again, TRIES times at
 # most, after its retry-after or a doubling wait, else `down`; a refusal or
 # a stop reason is `fail` (the input's doing: asked again, it fails alike).
@@ -20,35 +22,41 @@ import ./View.bend as V
 # Settings ------------------------------------------------------------------
 
 # the curl to run (MUGEN_CURL: a stand-in for tests), the endpoint, the
-# most tokens a reply writes, the web search tool's type, and how many ms a
-# second of waiting takes (1000; tests make waits short)
+# most tokens a reply writes, the web search tool's type, how many ms a
+# second of waiting takes (1000; tests make waits short), Claude Code's
+# settings (its wire, when on, the calls')
 type ap.Cfg is Data:
-  ap.Cfg{curl: String, url: String, max: U32, web: String, unit: U32}
+  ap.Cfg{curl: String, url: String, max: U32, web: String, unit: U32, cc: C.cc.Cfg}
 
 def ap.cfg.curl(c: ap.Cfg) -> String:
   match c:
-    case ap.Cfg{curl, url, max, web, unit}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       curl
 
 def ap.cfg.url(c: ap.Cfg) -> String:
   match c:
-    case ap.Cfg{curl, url, max, web, unit}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       url
 
 def ap.cfg.max(c: ap.Cfg) -> U32:
   match c:
-    case ap.Cfg{curl, url, max, web, unit}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       max
 
 def ap.cfg.web(c: ap.Cfg) -> String:
   match c:
-    case ap.Cfg{curl, url, max, web, unit}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       web
 
 def ap.cfg.unit(c: ap.Cfg) -> U32:
   match c:
-    case ap.Cfg{curl, url, max, web, unit}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       unit
+
+def ap.cfg.cc(c: ap.Cfg) -> C.cc.Cfg:
+  match c:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
+      cc
 
 def ap.tries() -> U32:
   8
@@ -492,6 +500,26 @@ def ap.read(r: ap.Res) -> ap.Step:
         Bool.pick(ap.Step, U32.is_eq(code, 200), ap.ok.body(J.js.read(body)),
           ap.fail("HTTP " ++ U32.show(code) ++ ": " ++ ap.reason(body), Bool.pick(U32, ap.passing(code, should), 3, 4), after)))
 
+# Claude Code's run read into a step: no result (it could not run, or died):
+# busy; a result's error: busy for a retry status, else down; an answer: its
+# blocks' step, as a message of them would be
+def ap.cc.why(+status: U32, +why: String) -> String:
+  Bool.pick(String, Bool.or(U32.is_eq(status, 401), String.contains(why, "/login")), "Claude Code is not signed in (run `claude auth login`): " ++ why,
+    "Claude Code: " ++ why)
+
+def ap.cc.res(+exit: U32, +err: String, o: C.cc.Once) -> ap.Step:
+  match o:
+    case C.cc.Once{+out, C.cc.Res{got, ok, +status, +stop, +why}}:
+      +said = String.take(T.tx.trim(err), 2000n)
+      Bool.pick(ap.Step, Bool.not(got), ap.fail(Bool.pick(String, String.is_empty(said), "claude exited " ++ U32.show(exit), said), 3, 0),
+        Bool.pick(ap.Step, ok, ap.step.of(J.JObj{[J.JKv{"content", J.JArr{out}}, J.JKv{"stop_reason", J.JStr{Bool.pick(String, String.is_empty(stop), "end_turn", stop)}}]}),
+          ap.fail(ap.cc.why(status, why), Bool.pick(U32, ap.passing(status, ""), 3, 4), 0)))
+
+def ap.cc.read(o: S.mu.Out) -> ap.Step:
+  match o:
+    case S.mu.Out{+status, out, +err}:
+      ap.cc.res(status, err, C.cc.once.read(out))
+
 def ap.step.stop(s: ap.Step) -> U32:
   match s:
     case ap.Step{o, u, e, stop, w, a}:
@@ -522,36 +550,15 @@ def ap.wait.of(s: ap.Step, +k: U32) -> U32:
 def ap.note(+notes: Chan(String), +text: String) -> IO(Unit):
   IO.bind(Poll<&1, &1, Result<&1, &1, String, Unit>, String>, Unit, Chan.try_send(String, notes, text, 0), r => IO.pure(Unit, Unit{}))
 
-# One step: the request sent, asked again while busy, TRIES in all, each
-# wait told as a thought on `notes` (Agent.step); a stop (ctl) ends it at the
-# next try or within a wait. v: what comes next (this loop's previous verdict
-# as a parameter: no mutual recursion): 0 a try, if no stop came; 4 the try;
-# 1 the end (the last step `s`, try k); 2 a wait; 3 stopped.
-def ap.step.go(n: Nat, v: Nat, +cfg: ap.Cfg, +id: String, +fast: Bool, +body: String, +notes: Chan(String), +ctl: String, +k: U32, +s: ap.Step) -> IO(ap.Step):
-  match n v:
-    case 0n _:
-      IO.pure(ap.Step, ap.down(s))
-    case 1n+f 0n:
-      do IO<ap.Step>:
-        st : Bool <- ap.stopped(ctl)
-        ap.step.go(f, Bool.pick(Nat, st, 3n, 4n), cfg, id, fast, body, notes, ctl, k, s)
-    case 1n+f 4n:
-      do IO<ap.Step>:
-        r : ap.Res <- ap.send(cfg, id, fast, ctl, body)
-        +s2 : ap.Step = ap.read(r)
-        st : Bool <- ap.stopped(ctl)
-        ap.step.go(f, Bool.pick(Nat, st, 3n, Bool.pick(Nat, ap.final(s2, k), 1n, 2n)), cfg, id, fast, body, notes, ctl, k, s2)
-    case 1n+f 1n:
-      IO.pure(ap.Step, ap.down(s))
-    case 1n+f 3n:
-      IO.pure(ap.Step, ap.fail("stopped", 5, 0))
-    case 1n+f _:
-      +w = ap.wait.of(s, k)
-      +ms = (w * ap.cfg.unit(cfg) : U32)
-      do IO<ap.Step>:
-        Unit <- ap.note(notes, "The AI service is busy: asking again in " ++ U32.show(w) ++ " s.")
-        Unit <- ap.nap(U32.to_nat((U32.div(ms, 250) + 2 : U32)), True{}, ms, ctl)
-        ap.step.go(f, 0n, cfg, id, fast, body, notes, ctl, (k + 1 : U32), s)
+def ap.ask.system(a: ap.Ask) -> String:
+  match a:
+    case ap.Ask{p, sy, b, t, se, pa}:
+      sy
+
+def ap.pick.effort(p: ap.Pick) -> String:
+  match p:
+    case ap.Pick{m, e, s}:
+      e
 
 def ap.ask.pick(a: ap.Ask) -> ap.Pick:
   match a:
@@ -563,12 +570,58 @@ def ap.ask.blocks(a: ap.Ask) -> List<&2, V.vw.B>:
     case ap.Ask{p, sy, b, t, se, pa}:
       b
 
+# one try: the body by curl, or the ask (its one message) by Claude Code
+def ap.try.on(on: Bool, +cfg: ap.Cfg, +a: ap.Ask, +id: String, +fast: Bool, +ctl: String, +body: String) -> IO(ap.Step):
+  match on:
+    case True{}:
+      IO.bind(S.mu.Out, ap.Step, C.cc.once(ap.cfg.cc(cfg), id, ap.pick.effort(ap.ask.pick(a)), ap.ask.system(a), ap.ask.blocks(a), ctl), o => IO.pure(ap.Step, ap.cc.read(o)))
+    case False{}:
+      IO.bind(ap.Res, ap.Step, ap.send(cfg, id, fast, ctl, body), r => IO.pure(ap.Step, ap.read(r)))
+
+# One step: the request sent, asked again while busy, TRIES in all, each
+# wait told as a thought on `notes` (Agent.step); a stop (ctl) ends it at the
+# next try or within a wait. v: what comes next (this loop's previous verdict
+# as a parameter: no mutual recursion): 0 a try, if no stop came; 4 the try;
+# 1 the end (the last step `s`, try k); 2 a wait; 3 stopped.
+def ap.step.go(n: Nat, v: Nat, +cfg: ap.Cfg, +a: ap.Ask, +id: String, +fast: Bool, +body: String, +notes: Chan(String), +ctl: String, +k: U32, +s: ap.Step) -> IO(ap.Step):
+  match n v:
+    case 0n _:
+      IO.pure(ap.Step, ap.down(s))
+    case 1n+f 0n:
+      do IO<ap.Step>:
+        st : Bool <- ap.stopped(ctl)
+        ap.step.go(f, Bool.pick(Nat, st, 3n, 4n), cfg, a, id, fast, body, notes, ctl, k, s)
+    case 1n+f 4n:
+      do IO<ap.Step>:
+        +s2 : ap.Step <- ap.try.on(C.cc.on(ap.cfg.cc(cfg)), cfg, a, id, fast, ctl, body)
+        st : Bool <- ap.stopped(ctl)
+        ap.step.go(f, Bool.pick(Nat, st, 3n, Bool.pick(Nat, ap.final(s2, k), 1n, 2n)), cfg, a, id, fast, body, notes, ctl, k, s2)
+    case 1n+f 1n:
+      IO.pure(ap.Step, ap.down(s))
+    case 1n+f 3n:
+      IO.pure(ap.Step, ap.fail("stopped", 5, 0))
+    case 1n+f _:
+      +w = ap.wait.of(s, k)
+      +ms = (w * ap.cfg.unit(cfg) : U32)
+      do IO<ap.Step>:
+        Unit <- ap.note(notes, "The AI service is busy: asking again in " ++ U32.show(w) ++ " s.")
+        Unit <- ap.nap(U32.to_nat((U32.div(ms, 250) + 2 : U32)), True{}, ms, ctl)
+        ap.step.go(f, 0n, cfg, a, id, fast, body, notes, ctl, (k + 1 : U32), s)
+
 def ap.pick.id(p: ap.Pick) -> String:
   match p:
     case ap.Pick{m, e, s}:
       ap.id(m)
 
+# the body, for curl only
+def ap.body.if(on: Bool, +cfg: ap.Cfg, +a: ap.Ask, its: List<&2, ap.Item>) -> String:
+  match on:
+    case True{}:
+      ""
+    case False{}:
+      ap.body(cfg, a, its)
+
 # a step of a call: its body sent, as often as busy calls for
 def ap.step(+cfg: ap.Cfg, +a: ap.Ask, its: List<&2, ap.Item>, +notes: Chan(String), +ctl: String) -> IO(ap.Step):
   +p = ap.ask.pick(a)
-  ap.step.go(Nat.add(Nat.mul(U32.to_nat(ap.tries()), 4n), 4n), 0n, cfg, ap.pick.id(p), ap.fast(p), ap.body(cfg, a, its), notes, ctl, 1, ap.fail(ap.busy.text(), 3, 0))
+  ap.step.go(Nat.add(Nat.mul(U32.to_nat(ap.tries()), 4n), 4n), 0n, cfg, a, ap.pick.id(p), ap.fast(p), ap.body.if(C.cc.on(ap.cfg.cc(cfg)), cfg, a, its), notes, ctl, 1, ap.fail(ap.busy.text(), 3, 0))
