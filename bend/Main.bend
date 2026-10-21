@@ -2,6 +2,7 @@
 import Base
 import ./Sys.bend as S
 import ./Text.bend as T
+import ./Json.bend as J
 import ./Api.bend as A
 import ./Hub.bend as H
 import ./Tools.bend as L
@@ -9,8 +10,9 @@ import ./Code.bend as C
 
 # mugen: one chat with an AI that never ends, in the terminal (UniiChat, in
 # Bend). It runs on Claude Code's CLI (`claude -p`, the login of a Claude
-# plan), or with --api on the Messages API (an API key). Its settings come
-# from the environment:
+# plan), or with --api on the Messages API (an API key); `mugen login` signs
+# Claude Code in (claude auth login). Its settings come from the
+# environment:
 #
 #   ANTHROPIC_API_KEY     with --api, the API key (curl reads it; it is never
 #                         in argv); Claude Code's calls never see it
@@ -63,16 +65,20 @@ def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -
       Bool.pick(IO(Unit), Bool.and(api, String.eq(curl, "curl")), IO.die(Unit, 1, "mugen: set ANTHROPIC_API_KEY (curl reads it from the environment), or run mugen without --api, on Claude Code"), IO.pure(Unit, Unit{}))
 
 def mn.usage() -> String:
-  "usage: mugen [--api]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY"
+  "usage: mugen [--api | login]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login)"
 
 # what the arguments ask: 0 Claude Code, 1 the API (--api), 2 the usage
-# (anything else)
+# (anything else), 3 a sign-in (login, alone)
+def mn.flag(+v: U32, +x: String) -> U32:
+  Bool.pick(U32, String.eq(x, "--api"), Bool.pick(U32, U32.is_eq(v, 3), 2, U32.max(v, 1)),
+    Bool.pick(U32, String.eq(x, "login"), Bool.pick(U32, U32.is_eq(v, 0), 3, 2), 2))
+
 def mn.flags(xs: List<String>, +v: U32) -> U32:
   match xs:
     case []:
       v
     case +x <> t:
-      mn.flags(t, U32.max(v, Bool.pick(U32, String.eq(x, "--api"), 1, 2)))
+      mn.flags(t, mn.flag(v, x))
 
 def mn.argv(xs: List<String>) -> U32:
   match xs:
@@ -81,17 +87,31 @@ def mn.argv(xs: List<String>) -> U32:
     case x <> t:
       mn.flags(t, 0)
 
-# Claude Code there to run, else said at once
+# Claude Code there to run and signed in (its auth status, without an API
+# key, as mugen runs it), else said at once
+def mn.signed(+out: String) -> Nat:
+  +j = J.js.read(out)
+  Bool.pick(Nat, Maybe.is_none(&2, J.Json, j), 0n,
+    Bool.pick(Nat, Maybe.default(&2, Bool, J.js.bool(Maybe.default(&2, J.Json, j, J.JObj{[]}), "loggedIn"), False{}), 2n, 1n))
+
+def mn.claude.say(k: Nat, +prog: String, +err: String) -> IO(Unit):
+  match k:
+    case 2n:
+      IO.pure(Unit, Unit{})
+    case 1n:
+      IO.die(Unit, 1, "mugen: Claude Code is not signed in. Run `mugen login`, then `mugen` again (or `mugen --api` with ANTHROPIC_API_KEY).")
+    case _:
+      IO.die(Unit, 1, "mugen: cannot run " ++ prog ++ " (MUGEN_CLAUDE): " ++ err ++ "\nInstall Claude Code and run `mugen login`, or run `mugen --api` with ANTHROPIC_API_KEY.")
+
 def mn.claude.got(+prog: String, o: S.mu.Out) -> IO(Unit):
   match o:
-    case S.mu.Out{+status, out, +err}:
-      Bool.pick(IO(Unit), U32.is_eq(status, 0), IO.pure(Unit, Unit{}),
-        IO.die(Unit, 1, "mugen: cannot run " ++ prog ++ " (MUGEN_CLAUDE): " ++ T.tx.trim(err) ++ "\nInstall Claude Code and sign in (claude auth login), or run mugen --api with ANTHROPIC_API_KEY"))
+    case S.mu.Out{status, +out, +err}:
+      mn.claude.say(mn.signed(out), prog, T.tx.trim(err))
 
 def mn.claude(on: Bool, +prog: String) -> IO(Unit):
   match on:
     case True{}:
-      IO.bind(S.mu.Out, Unit, S.mu.run(prog, ["--version"], "", 65536, 60000), o => mn.claude.got(prog, o))
+      IO.bind(S.mu.Out, Unit, S.mu.run("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "status", "--json"], "", 65536, 60000), o => mn.claude.got(prog, o))
     case False{}:
       IO.pure(Unit, Unit{})
 
@@ -128,12 +148,22 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), Bool.and(U32.is_eq(i, 1), U32.is_eq(o, 1)), mn.nat(jobs, 48), mn.nat(sync, 1)}
     H.hb.start(cfg, mn.pick(pick))
 
-def mn.go(+v: U32, +home: String, +wire: String) -> IO(Unit):
-  Bool.pick(IO(Unit), U32.is_eq(v, 2), IO.print(mn.usage()), mn.run(home, Bool.or(U32.is_eq(v, 1), String.eq(wire, "api"))))
+# `mugen login`: this process becomes Claude Code's sign-in, on the
+# terminal (no API key, which would take its place)
+def mn.login(+prog: String) -> IO(Unit):
+  do IO<Unit>:
+    Unit <- IO.print("mugen: signing Claude Code in to your Claude plan (" ++ prog ++ " auth login). Run `mugen` once it says you are in.")
+    e : U32 <- S.mu.exec("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "login"])
+    IO.die(Unit, 1, "mugen: cannot run " ++ prog ++ " (MUGEN_CLAUDE), error " ++ U32.show(e))
+
+def mn.go(+v: U32, +home: String, +wire: String, +prog: String) -> IO(Unit):
+  Bool.pick(IO(Unit), U32.is_eq(v, 2), IO.print(mn.usage()),
+    Bool.pick(IO(Unit), U32.is_eq(v, 3), mn.login(prog), mn.run(home, Bool.or(U32.is_eq(v, 1), String.eq(wire, "api")))))
 
 def main() -> IO(Unit):
   do IO<Unit>:
     home : String <- S.mu.env("HOME", "/tmp")
     wire : String <- S.mu.env("MUGEN_WIRE", "")
+    prog : String <- S.mu.env("MUGEN_CLAUDE", "claude")
     args : List<String> <- IO.args()
-    mn.go(mn.argv(args), home, wire)
+    mn.go(mn.argv(args), home, wire, prog)

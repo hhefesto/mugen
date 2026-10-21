@@ -19,13 +19,17 @@ mugen runs on one of two backends:
 
 ```sh
 # On Claude Code's CLI (the default), signed in with a Claude plan
-claude auth login                    # once
-nix run github:hhefesto/mugen        # or `nix run .` in a checkout
+mugen login                          # once: runs `claude auth login`
+mugen                                # or `nix run github:hhefesto/mugen`
 
 # On the Messages API, with an API key
 export ANTHROPIC_API_KEY=...         # curl reads it; it never appears in argv
-nix run github:hhefesto/mugen -- --api
+mugen --api                          # or `nix run github:hhefesto/mugen -- --api`
 ```
+
+mugen checks that Claude Code is signed in when it starts, and if it isn't,
+says to run `mugen login`. If the sign-in lapses during a chat, run
+`mugen login` in another window; the chat goes on with the next message.
 
 - **Claude Code (default).** mugen drives the official `claude` CLI in
   headless mode (`claude -p`), so it runs on a Pro or Max plan's login.

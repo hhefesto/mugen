@@ -82,6 +82,11 @@ def mu.put(path: String, text: String) -> IO(Result<&1, &1, U32 & String, Unit>)
 def mu.unlink(path: String) -> IO(Result<&1, &1, U32 & String, Unit>):
   import "./effs/mu.c"
 
+# this process replaced by program (looked up on PATH) with args, keeping
+# the terminal: answers only if that failed, the errno
+def mu.exec(program: String, args: List<String>) -> IO(U32):
+  import "./effs/mu.c"
+
 # the file's length in UTF-16 units, its bytes read as UTF-8
 def mu.units(path: String) -> IO(Result<&1, &1, U32 & String, Nat>):
   import "./effs/mu.c"

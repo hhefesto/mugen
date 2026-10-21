@@ -1,0 +1,45 @@
+[
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "thinking",
+     "thinking": "hm",
+     "signature": "s1"
+    },
+    {
+     "type": "text",
+     "text": "Hi!"
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "4."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]

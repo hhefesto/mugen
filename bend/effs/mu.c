@@ -15,6 +15,7 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 static Term mu_unit(void) {
   return term_pak(CID(Unit), 0);
@@ -585,5 +586,45 @@ Term mu_units_run(Env e, Term* f, IoWork* w) {
 
 static void __attribute__((constructor)) mu_units_use(void) {
   io_eff(CID(mu.units), mu_units_run);
+}
+#endif
+
+// mu.exec(program, args): this process becomes program (looked up on PATH)
+// with args, its terminal and environment kept, SIGPIPE back to its default
+// (the runtime ignores it); answers only if that failed: the errno.
+#ifdef CID(mu.exec)
+Term mu_exec_run(Env e, Term* f, IoWork* w) {
+  u64    len  = 0;
+  u32    cap  = 8;
+  u32    argc = 0;
+  char** argv = calloc(cap, sizeof(char*));
+  argv[argc++] = io_cstr(e, f[0], &len);
+  Term xs = f[1];
+  while (term_aux(xs) == CID(Con)) {
+    Term pair[2];
+    spare_free(e, cls_fit(2), ctr_take(e, xs, 2, pair));
+    if (argc + 1 >= cap) {
+      cap *= 2;
+      argv = realloc(argv, cap * sizeof(char*));
+    }
+    argv[argc++] = io_cstr(e, pair[0], &len);
+    xs = pair[1];
+  }
+  argv[argc] = NULL;
+  fflush(stdout);
+  fflush(stderr);
+  signal(SIGPIPE, SIG_DFL);
+  execvp(argv[0], argv);
+  int code = errno;
+  signal(SIGPIPE, SIG_IGN);
+  for (u32 i = 0; i < argc; i++) {
+    free(argv[i]);
+  }
+  free(argv);
+  return (Term)(u32)code;
+}
+
+static void __attribute__((constructor)) mu_exec_use(void) {
+  io_eff(CID(mu.exec), mu_exec_run);
 }
 #endif

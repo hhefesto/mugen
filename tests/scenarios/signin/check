@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+[ "$MUGEN_WIRE" = api ] && exit 0
+grep -q "Claude Code is not signed in. Run \`mugen login\`" err
+test ! -d "$1/main"

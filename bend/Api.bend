@@ -504,7 +504,7 @@ def ap.read(r: ap.Res) -> ap.Step:
 # busy; a result's error: busy for a retry status, else down; an answer: its
 # blocks' step, as a message of them would be
 def ap.cc.why(+status: U32, +why: String) -> String:
-  Bool.pick(String, Bool.or(U32.is_eq(status, 401), String.contains(why, "/login")), "Claude Code is not signed in (run `claude auth login`): " ++ why,
+  Bool.pick(String, Bool.or(U32.is_eq(status, 401), String.contains(why, "/login")), "Claude Code is not signed in (run `mugen login` in another window; this chat goes on once you have): " ++ why,
     "Claude Code: " ++ why)
 
 def ap.cc.res(+exit: U32, +err: String, o: C.cc.Once) -> ap.Step:

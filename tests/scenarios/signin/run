@@ -1,0 +1,5 @@
+#!/bin/sh
+# Claude Code signed out: mugen says to run `mugen login` and starts no chat
+# (with --api, Claude Code's sign-in plays no part: nothing to check)
+[ "$MUGEN_WIRE" = api ] && exit 0
+echo hi | MUGEN_FAKE_SIGNED_OUT=1 timeout 60 "$MUGEN"
