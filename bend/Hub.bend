@@ -74,9 +74,10 @@ type hb.W is Data:
 # agents; the requests waiting; stdin ended; leaving; the status last shown.
 # What the terminal shows besides the chat: the mode (0 auto: Unii runs its
 # tools as it needs them; 1 plan: it reads and proposes, changing nothing),
-# and whether a prompt is due (shown once the hub is idle).
+# whether a prompt is due (shown once the hub is idle), and whether tmux was
+# last told Unii works.
 type hb.Ui is Data:
-  hb.Ui{mode: U32, due: Bool}
+  hb.Ui{mode: U32, due: Bool, busy: Bool}
 
 type hb.S is Data:
   hb.S{cfg: hb.Cfg, mem: M.me.Mem, inbox: Chan(E.ev.Ev), junk: Chan(String), pick: A.ap.Pick, turn: hb.T, wait: List<&2, hb.Msg>, sent: List<&2, hb.Msg>, halt: String, agents: List<&2, hb.Ag>, reqs: List<&2, hb.W>, eof: Bool, quit: Bool, shown: String, ui: hb.Ui}
@@ -220,19 +221,27 @@ def hb.with.ui(s: hb.S, ui2: hb.Ui) -> hb.S:
 
 def hb.ui.mode(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d}:
+    case hb.Ui{m, d, b}:
       m
 
 def hb.ui.due(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d}:
+    case hb.Ui{m, d, b}:
       d
 
+def hb.ui.busy(u: hb.Ui) -> Bool:
+  match u:
+    case hb.Ui{m, d, b}:
+      b
+
 def hb.with.mode(+s: hb.S, +m: U32) -> hb.S:
-  hb.with.ui(s, hb.Ui{m, hb.ui.due(hb.ui(s))})
+  hb.with.ui(s, hb.Ui{m, hb.ui.due(hb.ui(s)), hb.ui.busy(hb.ui(s))})
 
 def hb.with.due(+s: hb.S, +d: Bool) -> hb.S:
-  hb.with.ui(s, hb.Ui{hb.ui.mode(hb.ui(s)), d})
+  hb.with.ui(s, hb.Ui{hb.ui.mode(hb.ui(s)), d, hb.ui.busy(hb.ui(s))})
+
+def hb.with.busy(+s: hb.S, +b: Bool) -> hb.S:
+  hb.with.ui(s, hb.Ui{hb.ui.mode(hb.ui(s)), hb.ui.due(hb.ui(s)), b})
 
 # plan mode: Unii reads and proposes, changing nothing
 def hb.plan(+s: hb.S) -> Bool:
@@ -1338,8 +1347,25 @@ def hb.status.lines(+s: hb.S, +lim: String) -> String:
 def hb.banner(+s: hb.S, +lim: String) -> String:
   "\n" ++ Tm.tm.esc("1;35", "\u{7121}\u{9650} mugen") ++ Tm.tm.esc("2", "  one chat that never ends") ++ "\n" ++ hb.status.lines(s, lim) ++ Tm.tm.esc("2", "  /help lists the commands")
 
+# tmux (on a terminal, in a tmux pane): the window named for mugen as it
+# starts, "mugen …" while Unii works, its bell rung when a reply comes while
+# you look at another window (tmux flags it), its own naming back as mugen
+# quits
+def hb.tmux.go(on: Bool, args: List<String>) -> IO(S.mu.Out):
+  match on:
+    case True{}:
+      S.mu.run("tmux", args, "", 4096, 5000)
+    case False{}:
+      IO.pure(S.mu.Out, S.mu.Out{1, "", ""})
+
+def hb.tmux.name(+s: hb.S, +name: String) -> IO(Unit):
+  do IO<Unit>:
+    +pane : String <- S.mu.env("TMUX_PANE", "")
+    o : S.mu.Out <- hb.tmux.go(Bool.and(hb.tty(s), Bool.not(String.is_empty(pane))), ["rename-window", "-t", pane, name])
+    return Unit{}
+
 def hb.welcome(+s: hb.S) -> IO(Unit):
-  Bool.pick(IO(Unit), hb.tty(s), IO.bind(String, Unit, hb.limits(s), lim => IO.print(hb.banner(s, lim))), IO.pure(Unit, Unit{}))
+  Bool.pick(IO(Unit), hb.tty(s), IO.bind(String, Unit, hb.limits(s), lim => IO.bind(Unit, Unit, IO.print(hb.banner(s, lim)), u => hb.tmux.name(s, "mugen"))), IO.pure(Unit, Unit{}))
 
 def hb.status.show(+s: hb.S) -> IO(hb.S):
   IO.bind(String, hb.S, hb.limits(s), lim => IO.bind(Unit, hb.S, IO.write(hb.status.lines(s, lim)), u => IO.pure(hb.S, s)))
@@ -1512,9 +1538,45 @@ def hb.prompt.text(+s: hb.S) -> String:
 def hb.idle(+s: hb.S) -> Bool:
   Bool.and(Bool.and(hb.is.idle(hb.turn(s)), List.is_empty(&2, hb.Msg, hb.wait(s))), Bool.not(hb.quit(s)))
 
-def hb.prompt(+s: hb.S) -> IO(hb.S):
+def hb.bell.if(o: S.mu.Out) -> IO(Unit):
+  match o:
+    case S.mu.Out{st, +out, err}:
+      Bool.pick(IO(Unit), Bool.and(U32.is_eq(st, 0), String.eq(T.tx.trim(out), "0")), IO.write("\u{7}"), IO.pure(Unit, Unit{}))
+
+def hb.tmux.bell(+s: hb.S) -> IO(Unit):
+  do IO<Unit>:
+    +pane : String <- S.mu.env("TMUX_PANE", "")
+    o : S.mu.Out <- hb.tmux.go(Bool.and(hb.tty(s), Bool.not(String.is_empty(pane))), ["display-message", "-p", "-t", pane, "#{window_active}"])
+    hb.bell.if(o)
+
+def hb.tmux.back(+s: hb.S) -> IO(Unit):
+  do IO<Unit>:
+    +pane : String <- S.mu.env("TMUX_PANE", "")
+    o : S.mu.Out <- hb.tmux.go(Bool.and(hb.tty(s), Bool.not(String.is_empty(pane))), ["set-option", "-w", "-t", pane, "automatic-rename", "on"])
+    return Unit{}
+
+def hb.working.now(+s: hb.S) -> Bool:
+  Bool.or(Bool.not(hb.is.idle(hb.turn(s))), Bool.not(List.is_empty(&2, hb.Msg, hb.wait(s))))
+
+def hb.tmux.turned(busy: Bool, +s: hb.S) -> IO(Unit):
+  match busy:
+    case True{}:
+      hb.tmux.name(s, "mugen \u{2026}")
+    case False{}:
+      IO.bind(Unit, Unit, hb.tmux.name(s, "mugen"), u => hb.tmux.bell(s))
+
+# the window's name kept with whether Unii works
+def hb.tmux.sync(+s: hb.S) -> IO(hb.S):
+  +busy = hb.working.now(s)
+  Bool.pick(IO(hb.S), Bool.and(hb.tty(s), Bool.xor(busy, hb.ui.busy(hb.ui(s)))),
+    IO.bind(Unit, hb.S, hb.tmux.turned(busy, s), u => IO.pure(hb.S, hb.with.busy(s, busy))), IO.pure(hb.S, s))
+
+def hb.prompt.if(+s: hb.S) -> IO(hb.S):
   Bool.pick(IO(hb.S), Bool.and(hb.tty(s), Bool.and(hb.ui.due(hb.ui(s)), hb.idle(s))),
     IO.bind(Unit, hb.S, IO.write(hb.prompt.text(s)), u => IO.pure(hb.S, hb.with.due(s, False{}))), IO.pure(hb.S, s))
+
+def hb.prompt(+s: hb.S) -> IO(hb.S):
+  IO.bind(hb.S, hb.S, hb.tmux.sync(s), s2 => hb.prompt.if(s2))
 
 def hb.loop(n: Nat, go: Bool, +s: hb.S) -> IO(hb.S):
   match n go:
@@ -1552,7 +1614,7 @@ def hb.leave(+s: hb.S) -> IO(Unit):
     Unit <- hb.kill.agents(hb.running(s), s)
     gs : String <- IO.bind(Result<&1, &1, U32 & String, String>, String, S.mu.read_file(hb.dir(s) ++ "/run/groups"), r => IO.pure(String, L.tl.text.of(r)))
     Unit <- hb.kill.all(String.lines(gs))
-    IO.pure(Unit, Unit{})
+    hb.tmux.back(s)
 
 def hb.resume.one(turn: Bool, +s: hb.S, +w: String, +msg: hb.Msg, +text: String) -> IO(hb.S):
   match turn:
@@ -1616,7 +1678,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     +inbox : Chan(E.ev.Ev) <- Chan.new(E.ev.Ev, 4096)
     +junk : Chan(String) <- Chan.new(String, 1)
     +pick : A.ap.Pick = hb.pick.of(M.me.kept.pick(M.me.kept(mem)), chat)
-    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}}}
+    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}}}
     Unit <- IO.spawn(Unit, Tm.tm.reader(inbox))
     w : hb.When <- hb.when()
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))

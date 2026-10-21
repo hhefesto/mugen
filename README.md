@@ -57,11 +57,38 @@ Develop). A short live chat has run on a Max plan through `claude -p`, with a
 tool call and cache reads. The `--api` backend has not yet run against the
 live API.
 
-Type a message and press Enter. A message of many lines goes between two
-lines of `"""`. Commands: `/stop [name]` (an empty line stops the turn),
-`/goal TEXT`, `/halt`, `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort
-low..max`, `/status`, `/help`, `/quit`. Whatever is running when you quit
-resumes at the next start.
+On a terminal mugen opens with a status: the account, the plan's limits,
+the chat and its view, the models, the mode, the work dir, the goal and the
+agents. Then it waits at its prompt:
+
+```
+~/.mugen/work/main · opus-5.5 · medium · 87% left · auto
+λ 
+```
+
+The line above the lambda shows where Unii works, the model, its effort,
+the context left (the room the view has before mugen folds its oldest
+lines, at 128 KB) and the mode.
+
+Type a message and press Enter. The input line is readline's, through
+`rlwrap`, with emacs keys (`C-a`, `C-e`, `C-k`, `C-y`, `M-b`, `M-f`), a
+history kept in `$MUGEN_DIR/history` (`C-p`, `C-n`, `C-r`), and Tab
+completing the commands, models, efforts and file names. `MUGEN_PLAIN=1`
+goes without. A message of many lines goes between two lines of `"""`.
+
+Commands:
+- `/stop [name]`: stop the turn, or one agent. An empty line stops the turn.
+- `/goal TEXT`, `/halt`: set a goal, or drop it.
+- `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
+- `/plan`: Unii reads and proposes, changing nothing. `/auto` lets it act.
+- `/status`, `/tree`, `/export`, `/help`, `/quit`.
+
+Whatever is running when you quit resumes at the next start.
+
+In tmux, mugen names its window `mugen`, shows `mugen …` while Unii works,
+and rings the window's bell when a reply comes while you look at another
+window, so tmux flags it. When mugen quits, tmux goes back to naming the
+window itself.
 
 From a pipe (stdin not a terminal), each line is a message, and mugen
 exits once stdin ends and nothing is running.
@@ -87,6 +114,7 @@ process group) can outlive it.
 | `MUGEN_CLAUDE` | `claude` | the Claude Code CLI to run |
 | `MUGEN_TRANSCRIPTS` | `chat` | which calls Claude Code saves as sessions: `chat` (turns, agents, goal checks), `all` (summaries too), `none` |
 | `MUGEN_DEBUG_DIR` | | where each chat call's Claude Code debug log goes (none if unset) |
+| `MUGEN_PLAIN` | | `1`: no readline (rlwrap) on the input line |
 
 The data dir is UniiChat's format (`users/<id>/` there), so either program
 can open the other's chat.
