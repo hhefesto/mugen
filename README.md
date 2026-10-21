@@ -13,6 +13,8 @@ it needs more. The chat runs tools on this computer (`shell`, `read`,
 `write`, `edit`), starts subagents (`spawn`, `tell`), works toward a `/goal`,
 and searches the web.
 
+![mugen in a real session: a question, a tool call, the answer, and a second turn that remembers the first](docs/demo.gif)
+
 ## Run
 
 mugen runs on one of two backends:
@@ -148,6 +150,58 @@ is a message, and mugen exits once stdin ends and nothing is running.
 [docs/guide.html](docs/guide.html) is a guide to all of it, a page that
 opens in any browser.
 
+## From your phone: Tailscale on NixOS
+
+mugen is a terminal app, so a phone reaches it the way it reaches any
+shell: over ssh or mosh, here through a private [Tailscale](https://tailscale.com)
+network, with mugen kept running in tmux. Nothing opens to the LAN or the
+internet.
+
+On the NixOS machine, in its configuration:
+
+```nix
+{
+  services.tailscale = {
+    enable = true;
+    openFirewall = true;                  # tailscaled's UDP 41641: direct links, not relays
+    extraSetFlags = [ "--operator=you" ]; # you run `tailscale up/down/set` without sudo
+  };
+
+  services.openssh.enable = true;         # ssh itself (port 22)
+
+  # mosh survives the phone sleeping and changing networks; its UDP ports
+  # open on the tailnet only.
+  programs.mosh.enable = true;
+  programs.mosh.openFirewall = false;
+  networking.firewall.interfaces.tailscale0.allowedUDPPortRanges = [
+    { from = 60000; to = 61000; }
+  ];
+
+  users.users.you.openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAA... phone" ];
+}
+```
+
+Rebuild (`sudo nixos-rebuild switch`), then once:
+
+1. `tailscale login` (or `tailscale up`), open the URL it prints, and sign
+   in with the account the phone will use. If it answers "Access denied:
+   checkprefs access denied", the operator isn't set yet: run
+   `sudo tailscale set --operator=you`.
+2. In the admin console (https://login.tailscale.com/admin/machines),
+   approve the machine if it asks, and pick "Disable key expiry" from its
+   `…` menu, so the login doesn't lapse in 180 days.
+3. `tailscale status` lists the machine; its MagicDNS name is its hostname.
+
+On the phone: the Tailscale app, signed in with the same account. Then an
+ssh/mosh client (Blink on iOS, Termux on Android) whose public key is in
+`authorizedKeys`: `mosh you@HOSTNAME`, `tmux new -A -s main`, `mugen`. The
+next time, the same two commands find mugen where you left it, and a reply
+that came meanwhile has rung tmux's bell. To land in tmux on every login,
+add to your shell's init: `[ -z "$TMUX" ] && [ -n "$SSH_TTY" ] && exec tmux new -A -s main`.
+
+`tailscaled` starts at boot and keeps the login; `tailscale down` and
+`tailscale up` take the machine off the network and back.
+
 ## Settings (environment)
 
 | Variable | Default | |
@@ -176,6 +230,9 @@ can open the other's chat.
 (`nix flake check` runs them all, including a step-for-step differential
 test against UniiChat's own `Memory.ts`), and the Bend 2 pitfalls that shaped
 the code.
+
+The demo at the top is a real Claude session: `nix run nixpkgs#vhs -- docs/demo.tape`
+records it again into `docs/demo.gif`.
 
 ## License
 
