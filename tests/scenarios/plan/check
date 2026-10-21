@@ -1,0 +1,6 @@
+#!/bin/sh
+# in plan mode a turn offers only the tools that change nothing, and says so
+set -e
+last=$(grep -l '"tools"' log/*.json | tail -1)
+jq -e '([.body.tools[].name] - ["web_search"]) == ["zoom", "date", "read"]' "$last" > /dev/null
+jq -e '.body.messages[0].content | map(.text) | any(startswith("Plan mode: "))' "$last" > /dev/null

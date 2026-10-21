@@ -44,7 +44,7 @@ def hb.searches() -> U32:
 # user's shell, their instructions (MUGEN_RULES' text), the compactor,
 # whether this is a terminal (stdin and stdout), the jobs at once, fsync.
 type hb.Cfg is Data:
-  hb.Cfg{api: A.ap.Cfg, dir: String, work: String, host: String, shell: String, rules: String, compactor: A.ap.Pick, tty: Bool, jobs: U32, sync: U32}
+  hb.Cfg{api: A.ap.Cfg, dir: String, work: String, host: String, shell: String, rules: String, compactor: A.ap.Pick, tty: Bool, jobs: U32, sync: U32, home: String, acct: String}
 
 # a message logged: its pages [id, end)
 type hb.Msg is Data:
@@ -71,175 +71,221 @@ type hb.W is Data:
 # compactions' busy notes go there), the chat's pick; the turn, the messages
 # waiting for it, those its call took, why it was stopped ("" not); the
 # agents; the requests waiting; stdin ended; leaving; the status last shown.
+# What the terminal shows besides the chat: the mode (0 auto: Unii runs its
+# tools as it needs them; 1 plan: it reads and proposes, changing nothing),
+# and whether a prompt is due (shown once the hub is idle).
+type hb.Ui is Data:
+  hb.Ui{mode: U32, due: Bool}
+
 type hb.S is Data:
-  hb.S{cfg: hb.Cfg, mem: M.me.Mem, inbox: Chan(E.ev.Ev), junk: Chan(String), pick: A.ap.Pick, turn: hb.T, wait: List<&2, hb.Msg>, sent: List<&2, hb.Msg>, halt: String, agents: List<&2, hb.Ag>, reqs: List<&2, hb.W>, eof: Bool, quit: Bool, shown: String}
+  hb.S{cfg: hb.Cfg, mem: M.me.Mem, inbox: Chan(E.ev.Ev), junk: Chan(String), pick: A.ap.Pick, turn: hb.T, wait: List<&2, hb.Msg>, sent: List<&2, hb.Msg>, halt: String, agents: List<&2, hb.Ag>, reqs: List<&2, hb.W>, eof: Bool, quit: Bool, shown: String, ui: hb.Ui}
 
 # Fields ---------------------------------------------------------------------
 
 def hb.cfg(s: hb.S) -> hb.Cfg:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       c
 
 def hb.mem(s: hb.S) -> M.me.Mem:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       m
 
 def hb.inbox(s: hb.S) -> Chan(E.ev.Ev):
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       ib
 
 def hb.junk(s: hb.S) -> Chan(String):
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       jk
 
 def hb.pick(s: hb.S) -> A.ap.Pick:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       pk
 
 def hb.turn(s: hb.S) -> hb.T:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       tu
 
 def hb.wait(s: hb.S) -> List<&2, hb.Msg>:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       wa
 
 def hb.halt(s: hb.S) -> String:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       ha
 
 def hb.agents(s: hb.S) -> List<&2, hb.Ag>:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       ag
 
 def hb.reqs(s: hb.S) -> List<&2, hb.W>:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       rq
 
 def hb.with.mem(s: hb.S, m2: M.me.Mem) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m2, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m2, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}
 
 def hb.with.pick(s: hb.S, pk2: A.ap.Pick) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk2, tu, wa, se, ha, ag, rq, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk2, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}
 
 def hb.with.turn(s: hb.S, tu2: hb.T) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu2, wa, se, ha, ag, rq, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu2, wa, se, ha, ag, rq, eo, qu, sh, ui}
 
 def hb.with.wait(s: hb.S, wa2: List<&2, hb.Msg>) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa2, se, ha, ag, rq, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa2, se, ha, ag, rq, eo, qu, sh, ui}
 
 def hb.with.sent(s: hb.S, se2: List<&2, hb.Msg>) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa, se2, ha, ag, rq, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se2, ha, ag, rq, eo, qu, sh, ui}
 
 def hb.sent(s: hb.S) -> List<&2, hb.Msg>:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       se
 
 def hb.with.halt(s: hb.S, ha2: String) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa, se, ha2, ag, rq, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se, ha2, ag, rq, eo, qu, sh, ui}
 
 def hb.with.agents(s: hb.S, ag2: List<&2, hb.Ag>) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag2, rq, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag2, rq, eo, qu, sh, ui}
 
 def hb.with.reqs(s: hb.S, rq2: List<&2, hb.W>) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq2, eo, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq2, eo, qu, sh, ui}
 
 def hb.eof(s: hb.S) -> Bool:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       eo
 
 def hb.with.eof(s: hb.S) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, True{}, qu, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, True{}, qu, sh, ui}
 
 def hb.quit(s: hb.S) -> Bool:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       qu
 
 def hb.with.quit(s: hb.S) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, True{}, sh}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, True{}, sh, ui}
 
 def hb.shown(s: hb.S) -> String:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       sh
 
 def hb.with.shown(s: hb.S, sh2: String) -> hb.S:
   match s:
-    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh}:
-      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh2}
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh2, ui}
+
+def hb.ui(s: hb.S) -> hb.Ui:
+  match s:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      ui
+
+def hb.with.ui(s: hb.S, ui2: hb.Ui) -> hb.S:
+  match s:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui2}
+
+def hb.ui.mode(u: hb.Ui) -> U32:
+  match u:
+    case hb.Ui{m, d}:
+      m
+
+def hb.ui.due(u: hb.Ui) -> Bool:
+  match u:
+    case hb.Ui{m, d}:
+      d
+
+def hb.with.mode(+s: hb.S, +m: U32) -> hb.S:
+  hb.with.ui(s, hb.Ui{m, hb.ui.due(hb.ui(s))})
+
+def hb.with.due(+s: hb.S, +d: Bool) -> hb.S:
+  hb.with.ui(s, hb.Ui{hb.ui.mode(hb.ui(s)), d})
+
+# plan mode: Unii reads and proposes, changing nothing
+def hb.plan(+s: hb.S) -> Bool:
+  U32.is_eq(hb.ui.mode(hb.ui(s)), 1)
 
 def hb.cfg.api(c: hb.Cfg) -> A.ap.Cfg:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       a
 
 def hb.cfg.dir(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       d
 
 def hb.cfg.work(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       w
 
 def hb.cfg.host(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       h
 
 def hb.cfg.shell(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       sh
 
 def hb.cfg.rules(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       r
 
 def hb.cfg.compactor(c: hb.Cfg) -> A.ap.Pick:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       cp
 
 def hb.cfg.tty(c: hb.Cfg) -> Bool:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       t
+
+def hb.cfg.home(c: hb.Cfg) -> String:
+  match c:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
+      ho
+
+def hb.cfg.acct(c: hb.Cfg) -> String:
+  match c:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
+      ac
 
 def hb.dir(+s: hb.S) -> String:
   hb.cfg.dir(hb.cfg(s))
@@ -498,10 +544,16 @@ def hb.says(ms: List<&2, hb.Msg>, +s: hb.S, +from: U32) -> IO(List<&2, String>):
         ts : List<&2, String> <- hb.says(rest, s, from)
         return List.append(&2, String, Bool.pick(List<&2, String>, keep, [t], []), ts)
 
+# what a turn in plan mode is told, after the agents at work
+def hb.plan.note() -> String:
+  "Plan mode: the user wants a plan, not changes. Read what you need (zoom, read, date, web search), then answer with a plan. shell, write, edit, spawn and tell are off until the user switches back to auto mode.\n\n"
+
 def hb.turn.ask(+s: hb.S, +from: U32, +text: String) -> A.ap.Ask:
+  +plan = hb.plan(s)
   A.ap.Ask{hb.pick(s), hb.system(s, Pr.pr.master()),
-    List.append(&2, V.vw.B, hb.view(s, from), [V.vw.B{hb.devices(s), False{}}, V.vw.B{hb.at.work(s), False{}}, V.vw.B{Pr.pr.head() ++ text, True{}}]),
-    L.tl.main(), hb.searches(), False{}}
+    List.concat(&2, V.vw.B, [hb.view(s, from), [V.vw.B{hb.devices(s), False{}}, V.vw.B{hb.at.work(s), False{}}],
+      Bool.pick(List<&2, V.vw.B>, plan, [V.vw.B{hb.plan.note(), False{}}], []), [V.vw.B{Pr.pr.head() ++ text, True{}}]]),
+    Bool.pick(List<&2, J.Json>, plan, L.tl.plan(), L.tl.main()), hb.searches(), False{}}
 
 # the turn's call started on the messages waiting, from message `from`
 def hb.call(+s: hb.S, +from: U32) -> IO(hb.S):
@@ -1131,7 +1183,8 @@ def hb.cmd.code(+w: String) -> Nat:
   Bool.pick(Nat, String.eq(w, "/help"), 1n, Bool.pick(Nat, String.eq(w, "/quit"), 2n, Bool.pick(Nat, String.eq(w, "/stop"), 3n,
     Bool.pick(Nat, String.eq(w, "/halt"), 4n, Bool.pick(Nat, String.eq(w, "/goal"), 5n, Bool.pick(Nat, String.eq(w, "/model"), 6n,
       Bool.pick(Nat, String.eq(w, "/effort"), 7n, Bool.pick(Nat, String.eq(w, "/status"), 8n, Bool.pick(Nat, String.eq(w, "/export"), 10n,
-        Bool.pick(Nat, String.eq(w, "/tree"), 11n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n)))))))))))
+        Bool.pick(Nat, String.eq(w, "/tree"), 11n, Bool.pick(Nat, String.eq(w, "/plan"), 12n, Bool.pick(Nat, String.eq(w, "/auto"), 13n,
+          Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n)))))))))))))
 
 def hb.tell.user(+s: hb.S, +text: String) -> IO(hb.S):
   IO.bind(Unit, hb.S, IO.print(Tm.tm.status(hb.tty(s), text)), u => IO.pure(hb.S, s))
@@ -1215,6 +1268,10 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
         tz : U32 <- S.mu.tzoff(hb.when.now(w))
         Unit <- X.ex.tree(hb.dir(s), M.me.count(hb.mem(s)), V.vw.parts(M.me.view(hb.mem(s))), hb.view.texts(V.vw.parts(M.me.view(hb.mem(s))), M.me.nodes(hb.mem(s))), tz, hb.dir(s) ++ "/tree.html")
         hb.tell.user(s, "the memory tree: file://" ++ hb.dir(s) ++ "/tree.html")
+    case 12n:
+      hb.tell.user(hb.with.mode(s, 1), "plan mode: Unii reads and proposes a plan; it runs no shell, writes and edits nothing, and starts no agents. /auto lets it act.")
+    case 13n:
+      hb.tell.user(hb.with.mode(s, 0), "auto mode: Unii runs its tools as it needs them. /plan to plan first.")
     case _:
       hb.tell.user(s, w ++ " is no command; nothing was sent. /help lists the commands.")
 
@@ -1374,12 +1431,12 @@ def hb.pick.of(+j: J.Json, +d: A.ap.Pick) -> A.ap.Pick:
 
 def hb.cfg.jobs(c: hb.Cfg) -> U32:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       j
 
 def hb.cfg.sync(c: hb.Cfg) -> U32:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac}:
       sy
 
 def hb.locked(+dir: String, r: Result<&1, &1, U32 & String, Unit>) -> IO(Unit):
@@ -1403,7 +1460,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     +inbox : Chan(E.ev.Ev) <- Chan.new(E.ev.Ev, 4096)
     +junk : Chan(String) <- Chan.new(String, 1)
     +pick : A.ap.Pick = hb.pick.of(M.me.kept.pick(M.me.kept(mem)), chat)
-    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, ""}
+    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}}}
     Unit <- IO.spawn(Unit, Tm.tm.reader(inbox))
     w : hb.When <- hb.when()
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))

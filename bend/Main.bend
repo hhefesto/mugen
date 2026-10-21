@@ -94,26 +94,33 @@ def mn.signed(+out: String) -> Nat:
   Bool.pick(Nat, Maybe.is_none(&2, J.Json, j), 0n,
     Bool.pick(Nat, Maybe.default(&2, Bool, J.js.bool(Maybe.default(&2, J.Json, j, J.JObj{[]}), "loggedIn"), False{}), 2n, 1n))
 
-def mn.claude.say(k: Nat, +prog: String, +err: String) -> IO(Unit):
+# who Claude Code is signed in as: the account, its plan
+def mn.acct(+j: J.Json) -> String:
+  +email = Maybe.default(&2, String, J.js.str(j, "email"), "")
+  +plan = Maybe.default(&2, String, J.js.str(j, "subscriptionType"), "")
+  Bool.pick(String, String.is_empty(email), "signed in", email)
+    ++ Bool.pick(String, String.is_empty(plan), "", " · " ++ String.to_upper(String.take(plan, 1n)) ++ String.drop(plan, 1n) ++ " plan") ++ ", on Claude Code"
+
+def mn.claude.say(k: Nat, +prog: String, +err: String, +acct: String) -> IO(String):
   match k:
     case 2n:
-      IO.pure(Unit, Unit{})
+      IO.pure(String, acct)
     case 1n:
-      IO.die(Unit, 1, "mugen: Claude Code is not signed in. Run `mugen login`, then `mugen` again (or `mugen --api` with ANTHROPIC_API_KEY).")
+      IO.die(String, 1, "mugen: Claude Code is not signed in. Run `mugen login`, then `mugen` again (or `mugen --api` with ANTHROPIC_API_KEY).")
     case _:
-      IO.die(Unit, 1, "mugen: cannot run " ++ prog ++ " (MUGEN_CLAUDE): " ++ err ++ "\nInstall Claude Code and run `mugen login`, or run `mugen --api` with ANTHROPIC_API_KEY.")
+      IO.die(String, 1, "mugen: cannot run " ++ prog ++ " (MUGEN_CLAUDE): " ++ err ++ "\nInstall Claude Code and run `mugen login`, or run `mugen --api` with ANTHROPIC_API_KEY.")
 
-def mn.claude.got(+prog: String, o: S.mu.Out) -> IO(Unit):
+def mn.claude.got(+prog: String, o: S.mu.Out) -> IO(String):
   match o:
     case S.mu.Out{status, +out, +err}:
-      mn.claude.say(mn.signed(out), prog, T.tx.trim(err))
+      mn.claude.say(mn.signed(out), prog, T.tx.trim(err), mn.acct(Maybe.default(&2, J.Json, J.js.read(out), J.JNull{})))
 
-def mn.claude(on: Bool, +prog: String) -> IO(Unit):
+def mn.claude(on: Bool, +prog: String) -> IO(String):
   match on:
     case True{}:
-      IO.bind(S.mu.Out, Unit, S.mu.run("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "status", "--json"], "", 65536, 60000), o => mn.claude.got(prog, o))
+      IO.bind(S.mu.Out, String, S.mu.run("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "status", "--json"], "", 65536, 60000), o => mn.claude.got(prog, o))
     case False{}:
-      IO.pure(Unit, Unit{})
+      IO.pure(String, "an API key (ANTHROPIC_API_KEY), on the Messages API")
 
 def mn.trans(+s: String) -> U32:
   Bool.pick(U32, String.eq(s, "none"), 0, Bool.pick(U32, String.eq(s, "all"), 2, 1))
@@ -134,7 +141,7 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     key : Result<&1, &1, U32 & String, String> <- IO.get_env("ANTHROPIC_API_KEY")
     Unit <- mn.key(api, curl, key)
     +claude : String <- S.mu.env("MUGEN_CLAUDE", "claude")
-    Unit <- mn.claude(Bool.not(api), claude)
+    +acct : String <- mn.claude(Bool.not(api), claude)
     debug : String <- S.mu.env("MUGEN_DEBUG_DIR", "")
     trans : String <- S.mu.env("MUGEN_TRANSCRIPTS", "chat")
     url : String <- S.mu.env("MUGEN_API_URL", "https://api.anthropic.com/v1/messages")
@@ -145,7 +152,7 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     o : U32 <- S.mu.isatty(1)
     +cc : C.cc.Cfg = C.cc.Cfg{Bool.pick(U32, api, 0, 1), claude, debug, mn.trans(trans), dir ++ "/run", work}
     +wire : A.ap.Cfg = A.ap.Cfg{curl, url, mn.nat(max, 16000), web, mn.nat(unit, 1000), cc}
-    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), Bool.and(U32.is_eq(i, 1), U32.is_eq(o, 1)), mn.nat(jobs, 48), mn.nat(sync, 1)}
+    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), Bool.and(U32.is_eq(i, 1), U32.is_eq(o, 1)), mn.nat(jobs, 48), mn.nat(sync, 1), home, acct}
     H.hb.start(cfg, mn.pick(pick))
 
 # `mugen login`: this process becomes Claude Code's sign-in, on the

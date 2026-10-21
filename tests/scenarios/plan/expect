@@ -1,0 +1,3 @@
+[plan mode: Unii reads and proposes a plan; it runs no shell, writes and edits nothing, and starts no agents. /auto lets it act.]
+user: plan the cleanup
+unii: First, list the old files; then remove them.

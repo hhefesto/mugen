@@ -704,20 +704,38 @@ def ag.cc.out(o: E.ev.Out) -> J.Json:
     case E.ev.Out{t, f}:
       Q.mc.out(t, f)
 
-# a tool call run as the API path runs one, logged as it is served
-def ag.cc.call(+env: ag.Env, +m: J.Json) -> IO(String):
-  +name = Q.mc.bare(Q.mc.name(m))
-  +input = Q.mc.input(m)
-  do IO<String>:
-    +st : Bool <- A.ap.stopped(ag.ctl(env))
-    +o : E.ev.Out <- Bool.pick(IO(E.ev.Out), st, IO.pure(E.ev.Out, E.ev.Out{"(stopped)", True{}}), ag.use(env, name, input))
-    Unit <- ag.result(env, Some{ag.json.show(name, input)}, ag.err(o))
-    return Q.mc.answer(Q.mc.id(m), ag.cc.out(o))
+# a tool the call offers
+def ag.listed(ds: List<&2, J.Json>, +name: String) -> Bool:
+  match ds:
+    case []:
+      False{}
+    case +d <> t:
+      Bool.or(String.eq(Maybe.default(&2, String, J.js.str(d, "name"), ""), name), ag.listed(t, name))
+
+def ag.cc.out.of(has: Bool, stopped: Bool, +env: ag.Env, +name: String, +input: J.Json) -> IO(E.ev.Out):
+  match has stopped:
+    case False{} _:
+      IO.pure(E.ev.Out, E.ev.Out{"No tool " ++ name ++ ".", True{}})
+    case True{} True{}:
+      IO.pure(E.ev.Out, E.ev.Out{"(stopped)", True{}})
+    case True{} False{}:
+      ag.use(env, name, input)
 
 def ag.ask.tools(a: A.ap.Ask) -> List<&2, J.Json>:
   match a:
     case A.ap.Ask{p, sy, b, t, se, pa}:
       t
+
+# a tool call run as the API path runs one (only a tool the call offers),
+# logged as it is served
+def ag.cc.call(+env: ag.Env, +ask: A.ap.Ask, +m: J.Json) -> IO(String):
+  +name = Q.mc.bare(Q.mc.name(m))
+  +input = Q.mc.input(m)
+  do IO<String>:
+    st : Bool <- A.ap.stopped(ag.ctl(env))
+    +o : E.ev.Out <- ag.cc.out.of(ag.listed(ag.ask.tools(ask), name), st, env, name, input)
+    Unit <- ag.result(env, Some{ag.json.show(name, input)}, ag.err(o))
+    return Q.mc.answer(Q.mc.id(m), ag.cc.out(o))
 
 def ag.ask.searches(a: A.ap.Ask) -> U32:
   match a:
@@ -744,7 +762,7 @@ def ag.cc.mcp.on(call: Bool, k: Nat, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(
   match call:
     case True{}:
       do IO<ag.Cs>:
-        +a : String <- ag.cc.call(env, m)
+        +a : String <- ag.cc.call(env, ask, m)
         +s2 : ag.Cs <- ag.cc.flush(texts, s)
         Unit <- ag.cc.answer(env, a)
         return s2

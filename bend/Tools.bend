@@ -86,6 +86,18 @@ def tl.kit(+who: String) -> List<&2, J.Json>:
 def tl.main() -> List<&2, J.Json>:
   List.concat(&2, J.Json, [tl.own(), tl.boss(), tl.kit("main")])
 
+# the specs named so
+def tl.named(xs: List<&2, J.Json>, +name: String) -> List<&2, J.Json>:
+  match xs:
+    case []:
+      []
+    case +x <> t:
+      List.append(&2, J.Json, Bool.pick(List<&2, J.Json>, String.eq(Maybe.default(&2, String, J.js.str(x, "name"), ""), name), [x], []), tl.named(t, name))
+
+# Unii's tools in plan mode: OWN and read, nothing that changes anything
+def tl.plan() -> List<&2, J.Json>:
+  List.append(&2, J.Json, tl.own(), tl.named(tl.kit("main"), "read"))
+
 # a subagent's: OWN and the kit
 def tl.sub(+who: String) -> List<&2, J.Json>:
   List.append(&2, J.Json, tl.own(), tl.kit(who))
