@@ -786,7 +786,7 @@ def pp.block.go(k: Nat, +who: String, +text: String, +res: String, +open: Bool, 
     case _:
       pp.para(pp.lines(pp.clean(pp.who(who) ++ text)), "  ", "  ", 2, "", True{}, w)
 
-# An entry's rows: who ("" Unii's), its kind and text; a tool call's
+# An entry's rows: who ("" mugen's), its kind and text; a tool call's
 # result ("" none yet) and whether it runs; open (unfolded); w columns;
 # home, said as ~ in paths
 def pp.block(+kind: String, +who: String, +text: String, +res: String, +open: Bool, +run: Bool, +w: U32, +home: String) -> List<&2, String>:

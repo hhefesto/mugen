@@ -10,7 +10,7 @@ import ./Tools.bend as L
 import ./Code.bend as C
 import ./Mcp.bend as Q
 
-# Agent: a call in Unii's own loop (UniiChat's Agent.ts), for Unii's turn or
+# Agent: a call in mugen's own loop (UniiChat's Agent.ts), for mugen's turn or
 # an agent: each step sends every item and reads one output; its tool calls
 # run in order; messages sent meanwhile (the hub's ev.Text on `says`) follow
 # the next results; the call ends at a step with no tools and nothing sent.
@@ -23,8 +23,8 @@ import ./Mcp.bend as Q
 #
 # Every def is prefixed `ag.` (a program's defs share one namespace).
 
-# A call's place: settings, the hub's inbox, who it is ("" Unii), whether it
-# may spawn and tell (Unii's), its tools' place (its control files too).
+# A call's place: settings, the hub's inbox, who it is ("" mugen), whether it
+# may spawn and tell (mugen's), its tools' place (its control files too).
 type ag.Env is Data:
   ag.Env{cfg: A.ap.Cfg, hub: Chan(E.ev.Ev), who: String, boss: Bool, tools: L.tl.Env}
 

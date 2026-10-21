@@ -19,7 +19,7 @@ type ev.Say is Data:
   ev.Text{text: String}
   ev.Stop{}
 
-# who: "" for Unii's turn, else an agent's name.
+# who: "" for mugen's turn, else an agent's name.
 #   Line, Eof       the user typed a line; stdin ended
 #   Built           a compaction's line (none: it was cut, to build anew)
 #   Entry           a message of a call, to log: a reply, a tool call, its result

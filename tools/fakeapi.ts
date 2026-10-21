@@ -52,7 +52,7 @@ const answer = (req: any) => {
 const req = JSON.parse(body);
 const system = String(req.system?.[0]?.text ?? "");
 const goal = system.startsWith("You check a goal.");
-const agent = system.startsWith("You are a subagent of Unii");
+const agent = system.startsWith("You are a subagent of mugen");
 const chat = req.tools !== undefined;
 let out: any = { code: 200, body: null };
 const env = process.env;

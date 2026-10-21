@@ -6,7 +6,7 @@ import ./Json.bend as J
 import ./Diff.bend as D
 import ./Ev.bend as E
 
-# Tools: what Unii's calls may run, as UniiChat's Tools.ts and Machine.ts
+# Tools: what mugen's calls may run, as UniiChat's Tools.ts and Machine.ts
 # define them, word for word, but all on this computer: the device the
 # prompts speak of is this one, named by its host. The hub's own (zoom, date,
 # spawn, tell) it answers itself (Hub.bend); these run in the caller's
@@ -86,7 +86,7 @@ def tl.kit(+who: String) -> List<&2, J.Json>:
     tl.spec("edit", "Replace text in files: the edits in order, each on its file as the edits before it left it. old must match exactly, whitespace included, and only once, unless all is true, which replaces every match. If any edit fails, no file is changed. Answers a unified diff of each file." ++ on,
       [tl.device(), J.JKv{"edits", J.JObj{[J.JKv{"type", J.JStr{"array"}}, J.JKv{"items", tl.edit.item()}, J.JKv{"minItems", J.JNum{"1"}}]}}], ["device", "edits"])]
 
-# Unii's tools: OWN, BOSS, the kit (UniiChat's computer tasks come later)
+# mugen's tools: OWN, BOSS, the kit (UniiChat's computer tasks come later)
 def tl.main() -> List<&2, J.Json>:
   List.concat(&2, J.Json, [tl.own(), tl.boss(), tl.kit("main")])
 
@@ -98,7 +98,7 @@ def tl.named(xs: List<&2, J.Json>, +name: String) -> List<&2, J.Json>:
     case +x <> t:
       List.append(&2, J.Json, Bool.pick(List<&2, J.Json>, String.eq(Maybe.default(&2, String, J.js.str(x, "name"), ""), name), [x], []), tl.named(t, name))
 
-# Unii's tools in plan mode: OWN and read, nothing that changes anything
+# mugen's tools in plan mode: OWN and read, nothing that changes anything
 def tl.plan() -> List<&2, J.Json>:
   List.append(&2, J.Json, tl.own(), tl.named(tl.kit("main"), "read"))
 

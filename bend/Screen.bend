@@ -10,16 +10,16 @@ import ./Pretty.bend as P
 # Screen: mugen on a terminal, full screen. One computation owns the
 # terminal: it reads the keys (raw mode), draws the chat, and sends the
 # hub (Hub.bend) the lines typed; the hub tells it what to show (sc.Put, as
-# it logs) and how it is (sc.State: Unii's work, the messages waiting, the
+# it logs) and how it is (sc.State: mugen's work, the messages waiting, the
 # status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel,
 # each tool call one block (a click opens or folds it, C-o all of them; a
 # drag selects text and copies it, see Selecting);
 # then a rule, what runs (with a spinner and its time), the messages waiting
-# for Unii, the status line, and the input (Edit.bend) after the lambda.
+# for mugen, the status line, and the input (Edit.bend) after the lambda.
 #
 # Keys: Enter sends; Shift-, Alt-, Ctrl-Enter or C-j make a new line (so
 # does a "\" ending the text); C-s sends the waiting messages now (Hub's
-# /now); C-g stops Unii's turn; Esc twice, C-c on an empty input or C-d
+# /now); C-g stops mugen's turn; Esc twice, C-c on an empty input or C-d
 # leave. The terminal comes back as it was on every way out, a signal's
 # too (Sys.bend mu.raw).
 #
@@ -42,14 +42,14 @@ def sc.back() -> String:
 
 # Types --------------------------------------------------------------------------
 
-# A block of the chat: its id, who ("" Unii's), its kind, text, a tool
+# A block of the chat: its id, who ("" mugen's), its kind, text, a tool
 # call's result ("" none yet), open (unfolded), whether its tool runs and
 # since when; its rows, bottom up, as drawn at width w (0: not yet), and how
 # many they are
 type sc.Blk is Data:
   sc.Blk{id: U32, who: String, kind: String, text: String, res: String, open: Bool, run: Bool, t0: Nat, w: U32, rows: List<&2, String>, n: U32}
 
-# How the hub is: whether Unii works and at what since when; the messages
+# How the hub is: whether mugen works and at what since when; the messages
 # waiting for it, and those handed to its running call (each a line);
 # the status line (SGR in it); the agents at work
 type sc.St is Data:
@@ -530,7 +530,7 @@ def sc.blk.runs(b: sc.Blk) -> Bool:
     case sc.Blk{i, +who, k, t, r, o, ru, t0, bw, rs, n}:
       Bool.and(ru, String.is_empty(who))
 
-# the newest running call of Unii's: its text and since when
+# the newest running call of mugen's: its text and since when
 def sc.running(bs: List<&2, sc.Blk>) -> Maybe<&2, sc.Blk>:
   match bs:
     case []:
@@ -682,7 +682,7 @@ def sc.tool.now(m: Maybe<&2, sc.Blk>, +now: Nat, +home: String) -> String:
     case None{}:
       ""
 
-# what runs: Unii's turn and its time, its tool running, the agents at work
+# what runs: mugen's turn and its time, its tool running, the agents at work
 def sc.act(+s: sc.S) -> List<&2, String>:
   +st = sc.st(s)
   +run = sc.running(sc.blks(s))
@@ -701,7 +701,7 @@ def sc.more(+xs: List<&2, String>) -> String:
   +n = List.length(&2, String, xs)
   Bool.pick(String, Nat.is_le(n, 1n), "", " +" ++ Nat.show(Nat.sub(n, 1n)) ++ " more")
 
-# the messages waiting for Unii, and those its call has
+# the messages waiting for mugen, and those its call has
 def sc.queue(+s: sc.S) -> List<&2, String>:
   +st = sc.st(s)
   +wa = sc.st.wait(st)

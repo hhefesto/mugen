@@ -76,14 +76,14 @@ agents) and the chat's last messages, so a restart shows where you were:
 λ
 ```
 
-Each entry is a block: your message (`❯`), Unii's reply (`●`, with a
+Each entry is a block: your message (`❯`), mugen's reply (`●`, with a
 little markdown), its summarized thinking (`✻`), and each tool call with
 its result: the command or path asked, how it went (`✓ 0.4 s`,
 `✗ exit 1`, `✂ cut`), its first lines of output, and for an edit or a
 write the diff, with the file's line numbers, red and green. Long blocks
 are folded: a click opens or folds one, `C-o` all of them. `PgUp`,
 `PgDn` and the wheel scroll (`M->` follows the end again). Under the chat:
-what runs and for how long (the tool too), the messages waiting for Unii,
+what runs and for how long (the tool too), the messages waiting for mugen,
 the status line (where mugen works, the model, its effort, the context
 left before mugen folds its oldest lines at 128 KB, the mode), and the
 input.
@@ -92,8 +92,8 @@ Keys:
 - `Enter` sends. While mugen works, the message waits, and says so.
 - `Shift-Enter`, `Alt-Enter`, `C-j` (or a `\` at the end): a new line. A
   paste comes whole, as one message.
-- `C-s` (`/now`): send the waiting messages now. A shell command Unii is
-  running is cut, and Unii gets its output and your messages; else its
+- `C-s` (`/now`): send the waiting messages now. A shell command mugen is
+  running is cut, and mugen gets its output and your messages; else its
   turn stops and one starts with them.
 - `C-g` (`/stop`): stop mugen's turn.
 - `Esc Esc`, `C-d`, `C-c` on an empty input (`/quit`): leave. `C-c` on

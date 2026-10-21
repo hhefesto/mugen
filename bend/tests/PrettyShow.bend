@@ -22,7 +22,7 @@ def main() -> IO(Unit):
     Unit <- show(P.pp.block("tool", "Brave", "edit {\"device\":\"olimpo\",\"edits\":[{\"path\":\"/home/u/src/a.ts\",\"old\":\"x\",\"new\":\"y\"}]}", diff(), False{}, False{}, 72, "/home/u"))
     Unit <- show(P.pp.block("tool", "", "read {\"device\":\"olimpo\",\"path\":\"/home/u/x.txt\"}", "a\nb\n[lines 1-2 of 2]", False{}, False{}, 72, "/home/u"))
     Unit <- show(P.pp.block("tool", "", "shell {\"device\":\"olimpo\",\"command\":\"sleep 100\"}", "", False{}, True{}, 72, "/home/u"))
-    Unit <- show(P.pp.block("note", "", "Stopped by the user: Unii's turn.", "", False{}, False{}, 72, "/home/u"))
+    Unit <- show(P.pp.block("note", "", "Stopped by the user: mugen's turn.", "", False{}, False{}, 72, "/home/u"))
     Unit <- show(P.pp.block("usage", "", "cache: 3.9k read, 595 written, 2 new in, 30 out", "", False{}, False{}, 72, "/home/u"))
     Unit <- show(P.pp.block("work", "", "[BraveOtter]\nI looked at it.\n\nFull chat: zoom(\"BraveOtter\")", "", False{}, False{}, 72, "/home/u"))
     show(P.pp.block("info", "", "\u{1B}[1;35m\u{7121}\u{9650} mugen\u{1B}[0m\u{1B}[2m  one chat that never ends\u{1B}[0m and a lot more text past the edge of the screen to be cut away here", "", False{}, False{}, 72, "/home/u"))

@@ -40,7 +40,7 @@ const out = (o: object) => process.stdout.write(JSON.stringify({ ...o, session_i
 // which script answers (fakeapi.ts): a goal check's, a call with tools' (a
 // turn's or an agent's), else any
 const goal = system.startsWith("You check a goal.");
-const agent = system.startsWith("You are a subagent of Unii");
+const agent = system.startsWith("You are a subagent of mugen");
 const chat = conf !== undefined;
 const script = goal ? env.MUGEN_FAKE_GOAL : agent ? env.MUGEN_FAKE_AGENT ?? env.MUGEN_FAKE_CHAT : chat ? env.MUGEN_FAKE_CHAT ?? env.MUGEN_FAKE : env.MUGEN_FAKE_CHAT ? undefined : env.MUGEN_FAKE;
 

@@ -74,11 +74,11 @@ type hb.W is Data:
 # compactions' busy notes go there), the chat's pick; the turn, the messages
 # waiting for it, those its call took, why it was stopped ("" not); the
 # agents; the requests waiting; stdin ended; leaving; the status last shown.
-# What the terminal shows besides the chat: the mode (0 auto: Unii runs its
+# What the terminal shows besides the chat: the mode (0 auto: mugen runs its
 # tools as it needs them; 1 plan: it reads and proposes, changing nothing),
 # whether a prompt is due (shown once the hub is idle), and whether tmux was
-# last told Unii works. On a full screen (Screen.bend): its inbox, whether a
-# stop is to send the messages waiting at once (/now), what Unii was last
+# last told mugen works. On a full screen (Screen.bend): its inbox, whether a
+# stop is to send the messages waiting at once (/now), what mugen was last
 # said to do and since when (IO.now), and how many messages its call
 # started with (the rest it was handed as it ran).
 type hb.Ui is Data:
@@ -294,7 +294,7 @@ def hb.scr(+s: hb.S) -> Maybe<&2, Chan(Sc.sc.In)>:
 def hb.on.screen(+s: hb.S) -> Bool:
   Maybe.is_some(&2, Chan(Sc.sc.In), hb.scr(s))
 
-# plan mode: Unii reads and proposes, changing nothing
+# plan mode: mugen reads and proposes, changing nothing
 def hb.plan(+s: hb.S) -> Bool:
   U32.is_eq(hb.ui.mode(hb.ui(s)), 1)
 
@@ -362,8 +362,37 @@ def hb.ctl(+s: hb.S, +who: String) -> String:
 def hb.system(+s: hb.S, +head: String) -> String:
   head ++ "\n\n" ++ hb.cfg.rules(hb.cfg(s))
 
+# our name in UniiChat's prompts (Prompts.bend keeps them word for word):
+# "Unii" becomes "mugen", but not in "UniiChat"; so does the program in
+# "unii open" and "unii on". The kind `unii` stays: the files keep it.
+def hb.named.at(+s: String) -> Nat:
+  Bool.pick(Nat, Bool.and(String.starts_with(s, "Unii"), Bool.not(String.starts_with(s, "UniiChat"))), 1n,
+    Bool.pick(Nat, Bool.or(String.starts_with(s, "unii open"), String.starts_with(s, "unii on")), 1n, 0n))
+
+# skip: the letters of a "Unii" replaced, still to drop; k: hb.named.at(s)
+def hb.named.go(+s: String, skip: Nat, k: Nat, +acc: String) -> String:
+  match s:
+    case SNil{}:
+      String.reverse(acc)
+    case SCon{c, t}:
+      match skip:
+        case 0n:
+          match k:
+            case 0n:
+              hb.named.go(t, 0n, hb.named.at(t), SCon{c, acc})
+            case _:
+              hb.named.go(t, 3n, 0n, String.reverse("mugen") ++ acc)
+        case 1n+p:
+          hb.named.go(t, p, hb.named.at(t), acc)
+
+def hb.named(+s: String) -> String:
+  hb.named.go(s, 0n, hb.named.at(s), "")
+
+def hb.master() -> String:
+  hb.named(Pr.pr.master())
+
 def hb.sub() -> String:
-  Pr.pr.sub.head() ++ "\n\n" ++ Pr.pr.view.doc() ++ "\n\n" ++ Pr.pr.devices()
+  hb.named(Pr.pr.sub.head() ++ "\n\n" ++ Pr.pr.view.doc() ++ "\n\n" ++ Pr.pr.devices())
 
 # Time ---------------------------------------------------------------------------
 
@@ -441,7 +470,7 @@ def hb.jobs(js: List<&2, M.me.Job>, +s: hb.S) -> IO(Unit):
       IO.pure(Unit, Unit{})
     case j <> t:
       do IO<Unit>:
-        Unit <- IO.spawn(Unit, hb.compact(hb.cfg(s), hb.inbox(s), hb.junk(s), hb.system(s, Pr.pr.master()), j))
+        Unit <- IO.spawn(Unit, hb.compact(hb.cfg(s), hb.inbox(s), hb.junk(s), hb.system(s, hb.master()), j))
         hb.jobs(t, s)
 
 def hb.mem.jobs(+s: hb.S, r: M.me.Mem & List<&2, M.me.Job>) -> IO(hb.S):
@@ -591,7 +620,7 @@ def hb.working(as: List<&2, hb.Ag>) -> List<&2, String>:
     case +a <> rest:
       List.append(&2, String, Bool.pick(List<&2, String>, hb.ag.running(a), [hb.ag.name(a)], []), hb.working(rest))
 
-# what runs: Unii's turn, the agents at work (Chat.running)
+# what runs: mugen's turn, the agents at work (Chat.running)
 def hb.running(+s: hb.S) -> List<&2, String>:
   List.append(&2, String, Bool.pick(List<&2, String>, hb.busy(hb.turn(s)), [hb.turn.name()], []), hb.working(hb.agents(s)))
 
@@ -658,7 +687,7 @@ def hb.plan.note() -> String:
 
 def hb.turn.ask(+s: hb.S, +from: U32, +text: String) -> A.ap.Ask:
   +plan = hb.plan(s)
-  A.ap.Ask{hb.pick(s), hb.system(s, Pr.pr.master()),
+  A.ap.Ask{hb.pick(s), hb.system(s, hb.master()),
     List.concat(&2, V.vw.B, [hb.view(s, from), [V.vw.B{hb.devices(s), False{}}, V.vw.B{hb.at.work(s), False{}}],
       Bool.pick(List<&2, V.vw.B>, plan, [V.vw.B{hb.plan.note(), False{}}], []), [V.vw.B{Pr.pr.head() ++ text, True{}}]]),
     Bool.pick(List<&2, J.Json>, plan, L.tl.plan(), L.tl.main()), hb.searches(), False{}}
@@ -779,7 +808,7 @@ def hb.check(+s: hb.S, +goal: String) -> IO(hb.S):
   do IO<hb.S>:
     +at : U32 <- M.me.whole(hb.mem(s), 0)
     tail : List<&2, String> <- hb.lines(U32.to_nat((M.me.count(hb.mem(s)) - at : U32)), s, at, [])
-    +a : A.ap.Ask = A.ap.Ask{hb.pick(s), Pr.pr.goal(), List.append(&2, V.vw.B, hb.view(s, at), [V.vw.B{T.tx.concat(tail) ++ Pr.pr.goal.ask() ++ goal, True{}}]), [], 0, False{}}
+    +a : A.ap.Ask = A.ap.Ask{hb.pick(s), hb.named(Pr.pr.goal()), List.append(&2, V.vw.B, hb.view(s, at), [V.vw.B{T.tx.concat(tail) ++ Pr.pr.goal.ask() ++ goal, True{}}]), [], 0, False{}}
     Unit <- hb.fresh(hb.ctl(s, ""))
     Unit <- IO.spawn(Unit, hb.goal.run(hb.cfg.api(hb.cfg(s)), hb.inbox(s), hb.junk(s), hb.ctl(s, ""), a, goal))
     return hb.with.turn(s, hb.Check{goal})
@@ -1286,9 +1315,9 @@ def hb.stop(+s: hb.S, +name: String) -> IO(hb.S):
 # Sending now --------------------------------------------------------------------
 #
 # /now (C-s on the screen): the messages waiting, sent at once. With a shell
-# command of Unii's running, the command is cut (Tools.bend says "cut by the
+# command of mugen's running, the command is cut (Tools.bend says "cut by the
 # user"): the call gets its output so far, then the messages, as it would
-# after any tool. Else Unii's turn (or its goal check) is stopped, and a new
+# after any tool. Else mugen's turn (or its goal check) is stopped, and a new
 # turn starts with them.
 
 def hb.stop.as(+s: hb.S, +name: String, +why: String) -> IO(hb.S):
@@ -1503,7 +1532,7 @@ def hb.banner(+s: hb.S, +lim: String) -> String:
   "\n" ++ Tm.tm.esc("1;35", "\u{7121}\u{9650} mugen") ++ Tm.tm.esc("2", "  one chat that never ends") ++ "\n" ++ hb.status.lines(s, lim) ++ Tm.tm.esc("2", "  /help lists the commands")
 
 # tmux (on a terminal, in a tmux pane): the window named for mugen as it
-# starts, "mugen …" while Unii works, its bell rung when a reply comes while
+# starts, "mugen …" while mugen works, its bell rung when a reply comes while
 # you look at another window (tmux flags it), its own naming back as mugen
 # quits
 def hb.tmux.go(on: Bool, args: List<String>) -> IO(S.mu.Out):
@@ -1676,7 +1705,7 @@ def hb.alive(+s: hb.S) -> Bool:
 # The prompt -------------------------------------------------------------------------
 #
 # On a terminal, once the hub is idle and a prompt is due: a line of where
-# Unii works, the model, its effort, the context left (the room the view
+# mugen works, the model, its effort, the context left (the room the view
 # has before mugen folds its oldest lines, at 128 KB) and the mode, then a
 # lambda to type after.
 
@@ -1687,7 +1716,7 @@ def hb.mode.text(plan: Bool) -> String:
     case False{}:
       Tm.tm.esc("32", "auto")
 
-# where Unii works, the model, its effort, the context left and the mode
+# where mugen works, the model, its effort, the context left and the mode
 def hb.status.line(+s: hb.S) -> String:
   +dot = Tm.tm.esc("2", " · ")
   Tm.tm.esc("2", hb.workdir(s)) ++ dot ++ Tm.tm.esc("36", hb.pick.model(hb.pick(s))) ++ dot ++ A.ap.pick.effort(hb.pick(s)) ++ dot
@@ -1733,7 +1762,7 @@ def hb.tmux.turned(busy: Bool, +s: hb.S) -> IO(Unit):
     case False{}:
       IO.bind(Unit, Unit, hb.tmux.name(s, "mugen"), u => hb.tmux.bell(s))
 
-# the window's name kept with whether Unii works
+# the window's name kept with whether mugen works
 def hb.tmux.sync(+s: hb.S) -> IO(hb.S):
   +busy = hb.working.now(s)
   Bool.pick(IO(hb.S), Bool.and(hb.tty(s), Bool.xor(busy, hb.ui.busy(hb.ui(s)))),
@@ -1744,7 +1773,7 @@ def hb.prompt.if(+s: hb.S) -> IO(hb.S):
     IO.bind(Unit, hb.S, IO.write(hb.prompt.text(s)), u => IO.pure(hb.S, hb.with.due(s, False{}))), IO.pure(hb.S, s))
 
 # On the full screen, the hub as it is, for the lines under the chat: what
-# Unii does and since when, the messages waiting and those its call holds,
+# mugen does and since when, the messages waiting and those its call holds,
 # the status line, the agents at work
 def hb.what.of(t: hb.T, +s: hb.S) -> String:
   match t:
