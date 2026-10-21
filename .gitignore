@@ -4,3 +4,4 @@ result-*
 /run/
 *.tmp
 mugen-memory.json
+tests/scenarios/*/*.json.n

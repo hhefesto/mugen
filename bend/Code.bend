@@ -312,6 +312,41 @@ def cc.once.go(ls: List<&2, String>, +o: cc.Once) -> cc.Once:
 def cc.once.read(+out: String) -> cc.Once:
   cc.once.go(String.lines(out), cc.Once{[], cc.none()})
 
+# The plan's limits as the latest call said them (its rate_limit_event's
+# info), kept in run/limits.json with when they were said, for the status
+def cc.limits.save(+c: cc.Cfg, +info: J.Json) -> IO(Unit):
+  do IO<Unit>:
+    +now : Nat <- S.mu.wall()
+    r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(cc.cfg.run(c) ++ "/limits.json", J.js.write(J.JObj{[J.JKv{"at", J.js.nat(now)}, J.JKv{"info", info}]}), 0)
+    return Unit{}
+
+def cc.limits.keep(+c: cc.Cfg, m: Maybe<&2, J.Json>) -> IO(Unit):
+  match m:
+    case Some{info}:
+      cc.limits.save(c, info)
+    case None{}:
+      IO.pure(Unit, Unit{})
+
+def cc.limits.of(hit: Bool, +line: String, +acc: Maybe<&2, J.Json>) -> Maybe<&2, J.Json>:
+  match hit:
+    case True{}:
+      J.js.field(Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]}), "rate_limit_info")
+    case False{}:
+      acc
+
+# the last rate_limit_event's info in a run's output
+def cc.limits.find(ls: List<&2, String>, +acc: Maybe<&2, J.Json>) -> Maybe<&2, J.Json>:
+  match ls:
+    case []:
+      acc
+    case +l <> t:
+      cc.limits.find(t, cc.limits.of(String.starts_with(l, "{\"type\":\"rate_limit_event\""), l, acc))
+
+def cc.out.text(o: S.mu.Out) -> String:
+  match o:
+    case S.mu.Out{st, out, err}:
+      out
+
 # One call of one turn, no tools: its message on stdin, its output whole
 # (Process.run; 64 MiB at most, 16 minutes), run in the work dir. ctl: the
 # caller's control files ("" a compaction's: the system prompt in run/once).
@@ -324,8 +359,10 @@ def cc.once(+c: cc.Cfg, +id: String, +effort: String, +system: String, +blocks: 
     +sid : String = Bool.pick(String, keep, u, "")
     +debug : String <- Bool.pick(IO(String), keep, cc.debug.file(c, Bool.pick(String, String.is_empty(ctl), "compact", "goal"), u), IO.pure(String, ""))
     +m : String <- cc.uuid()
-    S.mu.run("sh", List.append(&1, String, ["-c", "cd \"$0\" && exec \"$@\"", cc.cfg.work(c) ++ "/main", "env"],
+    +o : S.mu.Out <- S.mu.run("sh", List.append(&1, String, ["-c", "cd \"$0\" && exec \"$@\"", cc.cfg.work(c) ++ "/main", "env"],
       cc.args(c, cc.Run{id, effort, sys, "", "", sid, debug, True{}})), cc.user(cc.parts(blocks, False{}), m), 67108864, 960000)
+    Unit <- cc.limits.keep(c, cc.limits.find(String.lines(cc.out.text(o)), None{}))
+    return o
 
 # Claude Code at work -----------------------------------------------------------
 #

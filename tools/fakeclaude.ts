@@ -92,6 +92,8 @@ if (conf !== undefined) {
   tools = listed.result.tools.map((t: any) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }));
 }
 out({ type: "system", subtype: "init", model, tools: tools.map((t) => "mcp__mugen__" + t.name), mcp_servers: chat ? [{ name: "mugen", status: "connected" }] : [] });
+// the plan's limits, as Claude Code reports them before a turn
+out({ type: "rate_limit_event", rate_limit_info: { status: "allowed", resetsAt: 1792621200, rateLimitType: "five_hour", unifiedWindows: { five_hour: { utilization: 0.25, resetsAt: 1792621200 }, seven_day: { utilization: 0.11, resetsAt: 1793088000 } } } });
 
 const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 const message = (content: object[], stop = "end_turn") => ({ id: "msg_fake", type: "message", role: "assistant", model, content, stop_reason: stop, usage });

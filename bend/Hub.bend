@@ -17,6 +17,7 @@ import ./Agent.bend as G
 import ./Prompts.bend as Pr
 import ./Term.bend as Tm
 import ./Export.bend as X
+import ./Code.bend as Cc
 
 # Hub: the chat (UniiChat's Server.ts Chat, for one user in one process). One
 # computation owns the memory and all of the chat's state; everything else
@@ -1209,11 +1210,139 @@ def hb.set.goal(+s: hb.S, g: Maybe<&2, String>) -> IO(hb.S):
   +m = M.me.with.kept(hb.mem(s), hb.kept.goal(M.me.kept(hb.mem(s)), g))
   IO.bind(Unit, hb.S, M.me.save(m), u => IO.pure(hb.S, hb.with.mem(s, m)))
 
-def hb.status.text(+s: hb.S) -> String:
+# The status --------------------------------------------------------------------------
+#
+# What mugen says as it starts, and on /status: the account, the plan's
+# limits (as the latest call said them), the chat and its view, the models,
+# the mode, the work dir, the goal, the agents.
+
+def hb.raw(m: Maybe<&2, J.Json>) -> String:
+  match m:
+    case Some{J.JNum{r}}:
+      r
+    case _:
+      ""
+
+# a fraction (0.11) as a whole percent (11)
+def hb.pct(+raw: String) -> U32:
+  +ps = L.tl.split(raw, ".")
+  +ip = Maybe.default(&2, String, List.get(&2, String, ps, 0n), "0")
+  +fp = String.take(Maybe.default(&2, String, List.get(&2, String, ps, 1n), "") ++ "00", 2n)
+  Bool.pick(U32, String.contains(raw, "e"), 0, (U32.from_nat(Maybe.default(&2, Nat, Nat.read(ip), 0n)) * 100 + U32.from_nat(Maybe.default(&2, Nat, Nat.read(fp), 0n)) : U32))
+
+# a local time (ms) as its hour and minute, or its date
+def hb.hm(+ms: Nat, +tz: U32) -> String:
+  String.take(String.drop(C.ck.show(ms, tz), 11n), 5n)
+
+def hb.ymd(+ms: Nat, +tz: U32) -> String:
+  String.take(C.ck.show(ms, tz), 10n)
+
+# a window's use and reset (in seconds), "" if the call said nothing of it
+def hb.window(+name: String, m: Maybe<&2, J.Json>, +tz: U32, day: Bool) -> String:
+  match m:
+    case Some{+o}:
+      +at = Nat.mul(Maybe.default(&2, Nat, J.js.num(o, "resetsAt"), 0n), 1000n)
+      name ++ " " ++ U32.show(hb.pct(hb.raw(J.js.field(o, "utilization")))) ++ "%"
+        ++ Bool.pick(String, Nat.is_eq(at, 0n), "", " (resets " ++ Bool.pick(String, day, hb.ymd(at, tz), hb.hm(at, tz)) ++ ")")
+    case None{}:
+      ""
+
+def hb.nonempty(xs: List<&2, String>) -> List<&2, String>:
+  match xs:
+    case []:
+      []
+    case +x <> t:
+      List.append(&2, String, Bool.pick(List<&2, String>, String.is_empty(x), [], [x]), hb.nonempty(t))
+
+def hb.limits.of(+j: J.Json, +tz: U32) -> String:
+  +info = Maybe.default(&2, J.Json, J.js.field(j, "info"), J.JObj{[]})
+  +wins = Maybe.default(&2, J.Json, J.js.field(info, "unifiedWindows"), J.JObj{[]})
+  +status = Maybe.default(&2, String, J.js.str(info, "status"), "")
+  +said = hb.nonempty([hb.window("5-hour", J.js.field(wins, "five_hour"), tz, False{}), hb.window("weekly", J.js.field(wins, "seven_day"), tz, True{}),
+    Bool.pick(String, Bool.or(String.is_empty(status), String.eq(status, "allowed")), "", status)])
+  Bool.pick(String, List.is_empty(&2, String, said), "no figures yet", T.tx.join(said, " · "))
+    ++ " · as of " ++ hb.hm(Maybe.default(&2, Nat, J.js.num(j, "at"), 0n), tz)
+
+def hb.limits.json(m: Maybe<&2, J.Json>, +tz: U32) -> String:
+  match m:
+    case Some{+j}:
+      hb.limits.of(j, tz)
+    case None{}:
+      "shown after the first reply"
+
+def hb.limits.got(r: Result<&1, &1, U32 & String, String>, +tz: U32) -> String:
+  match r:
+    case Done{t}:
+      hb.limits.json(J.js.read(t), tz)
+    case Fail{e}:
+      "shown after the first reply"
+
+def hb.on.cc(+s: hb.S) -> Bool:
+  Cc.cc.on(A.ap.cfg.cc(hb.cfg.api(hb.cfg(s))))
+
+def hb.limits(+s: hb.S) -> IO(String):
+  do IO<String>:
+    +now : Nat <- S.mu.wall()
+    tz : U32 <- S.mu.tzoff(now)
+    r : Result<&1, &1, U32 & String, String> <- S.mu.read_file(hb.dir(s) ++ "/run/limits.json")
+    return Bool.pick(String, hb.on.cc(s), hb.limits.got(r, tz), "billed per token to the API key")
+
+def hb.paint(tty: Bool, +code: String, +text: String) -> String:
+  match tty:
+    case True{}:
+      Tm.tm.esc(code, text)
+    case False{}:
+      text
+
+def hb.row(+s: hb.S, +key: String, +text: String) -> String:
+  "  " ++ hb.paint(hb.tty(s), "2", key ++ T.tx.repeat(" ", Nat.sub(10n, String.length(key)))) ++ text ++ "\n"
+
+def hb.goal.text(m: Maybe<&2, String>) -> String:
+  match m:
+    case Some{g}:
+      g
+    case None{}:
+      "none"
+
+# the view's room left before it folds, in percent
+def hb.left(+s: hb.S) -> U32:
+  +size = U32.min(M.me.v.size(M.me.view(hb.mem(s))), M.me.high())
+  U32.div(((M.me.high() - size : U32) * 100 : U32), M.me.high())
+
+def hb.pick.model(p: A.ap.Pick) -> String:
+  match p:
+    case A.ap.Pick{m, e, sp}:
+      m
+
+def hb.tilde(+home: String, +path: String) -> String:
+  Bool.pick(String, Bool.and(Bool.not(String.is_empty(home)), String.starts_with(path, home)), "~" ++ String.drop(path, String.length(home)), path)
+
+def hb.workdir(+s: hb.S) -> String:
+  hb.tilde(hb.cfg.home(hb.cfg(s)), hb.cfg.work(hb.cfg(s)) ++ "/main")
+
+def hb.status.lines(+s: hb.S, +lim: String) -> String:
   +m = hb.mem(s)
   +agents = hb.working(hb.agents(s))
-  "view " ++ U32.show(U32.div(M.me.v.size(M.me.view(m)), 1000)) ++ " KB, " ++ U32.show(M.me.count(m)) ++ " messages, " ++ U32.show(M.me.nbusy(m)) ++ " summarizing, "
-    ++ Bool.pick(String, hb.busy(hb.turn(s)), "a turn runs, ", "") ++ "agents at work: " ++ Bool.pick(String, List.is_empty(&2, String, agents), "none", T.tx.join(agents, ", ")) ++ "; " ++ hb.pick.label(hb.pick(s))
+  +p = hb.pick(s)
+  +cp = hb.cfg.compactor(hb.cfg(s))
+  hb.row(s, "account", hb.cfg.acct(hb.cfg(s)))
+    ++ hb.row(s, "limits", lim)
+    ++ hb.row(s, "chat", U32.show(M.me.count(m)) ++ " messages · view " ++ U32.show(U32.div(M.me.v.size(M.me.view(m)), 1000)) ++ " KB, " ++ U32.show(hb.left(s)) ++ "% left before it folds · " ++ U32.show(M.me.nbusy(m)) ++ " summarizing")
+    ++ hb.row(s, "model", hb.paint(hb.tty(s), "36", hb.pick.model(p)) ++ " · effort " ++ A.ap.pick.effort(p) ++ " · summaries on " ++ hb.pick.model(cp) ++ " (" ++ A.ap.pick.effort(cp) ++ ")")
+    ++ hb.row(s, "mode", Bool.pick(String, hb.plan(s), hb.paint(hb.tty(s), "33", "plan") ++ ": Unii reads and proposes; /auto lets it act", hb.paint(hb.tty(s), "32", "auto") ++ ": Unii runs its tools as it needs them; /plan to plan first"))
+    ++ hb.row(s, "work dir", hb.workdir(s))
+    ++ hb.row(s, "goal", hb.goal.text(hb.goal(s)))
+    ++ hb.row(s, "agents", Bool.pick(String, hb.busy(hb.turn(s)), "a turn runs; ", "") ++ Bool.pick(String, List.is_empty(&2, String, agents), "none at work", T.tx.join(agents, ", ") ++ " at work"))
+
+# what mugen says as it starts, on a terminal
+def hb.banner(+s: hb.S, +lim: String) -> String:
+  "\n" ++ Tm.tm.esc("1;35", "\u{7121}\u{9650} mugen") ++ Tm.tm.esc("2", "  one chat that never ends") ++ "\n" ++ hb.status.lines(s, lim) ++ Tm.tm.esc("2", "  /help lists the commands")
+
+def hb.welcome(+s: hb.S) -> IO(Unit):
+  Bool.pick(IO(Unit), hb.tty(s), IO.bind(String, Unit, hb.limits(s), lim => IO.print(hb.banner(s, lim))), IO.pure(Unit, Unit{}))
+
+def hb.status.show(+s: hb.S) -> IO(hb.S):
+  IO.bind(String, hb.S, hb.limits(s), lim => IO.bind(Unit, hb.S, IO.write(hb.status.lines(s, lim)), u => IO.pure(hb.S, s)))
 
 def hb.with.model(p: A.ap.Pick, +m2: String) -> A.ap.Pick:
   match p:
@@ -1257,7 +1386,7 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
       Bool.pick(IO(hb.S), hb.has(hb.efforts(), rest), hb.set.pick(s, hb.with.effort(hb.pick(s), rest)),
         hb.tell.user(s, "/effort takes one of " ++ T.tx.join(hb.efforts(), ", ")))
     case 8n:
-      hb.tell.user(s, hb.status.text(s))
+      hb.status.show(s)
     case 10n:
       do IO<hb.S>:
         Unit <- X.ex.export(hb.dir(s), M.me.count(hb.mem(s)), "mugen-memory.json")
@@ -1367,22 +1496,6 @@ def hb.alive(+s: hb.S) -> Bool:
 # Unii works, the model, its effort, the context left (the room the view
 # has before mugen folds its oldest lines, at 128 KB) and the mode, then a
 # lambda to type after.
-
-def hb.tilde(+home: String, +path: String) -> String:
-  Bool.pick(String, Bool.and(Bool.not(String.is_empty(home)), String.starts_with(path, home)), "~" ++ String.drop(path, String.length(home)), path)
-
-def hb.workdir(+s: hb.S) -> String:
-  hb.tilde(hb.cfg.home(hb.cfg(s)), hb.cfg.work(hb.cfg(s)) ++ "/main")
-
-# the view's room left before it folds, in percent
-def hb.left(+s: hb.S) -> U32:
-  +size = U32.min(M.me.v.size(M.me.view(hb.mem(s))), M.me.high())
-  U32.div(((M.me.high() - size : U32) * 100 : U32), M.me.high())
-
-def hb.pick.model(p: A.ap.Pick) -> String:
-  match p:
-    case A.ap.Pick{m, e, sp}:
-      m
 
 def hb.mode.text(plan: Bool) -> String:
   match plan:
@@ -1508,7 +1621,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     w : hb.When <- hb.when()
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))
     +s1 : hb.S <- hb.mem.jobs(s0, r)
-    Unit <- Bool.pick(IO(Unit), hb.tty(s1), IO.print(Tm.tm.status(True{}, "mugen: " ++ hb.status.text(s1) ++ ". /help")), IO.pure(Unit, Unit{}))
+    Unit <- hb.welcome(s1)
     +s2 : hb.S <- hb.resume(s1)
     +s3 : hb.S <- hb.after(s2)
     +s4 : hb.S <- hb.prompt(s3)

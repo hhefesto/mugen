@@ -669,11 +669,13 @@ def ag.cc.retry(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
   +secs = Nat.div(C.cc.n(j, "retry_delay_ms"), 1000n)
   IO.bind(Unit, ag.Cs, ag.show(env, "mind", "The AI service is busy: asking again in " ++ Nat.show(secs) ++ " s."), u => IO.pure(ag.Cs, s))
 
-# 0 an output, 1 a user event, 2 a result, 3 a retry, 4 else
+# 0 an output, 1 a user event, 2 a result, 3 a retry, 4 the plan's limits,
+# 5 else
 def ag.cc.kind(+j: J.Json) -> Nat:
   +ty = C.cc.ty(j)
   Bool.pick(Nat, String.eq(ty, "assistant"), 0n, Bool.pick(Nat, String.eq(ty, "user"), 1n, Bool.pick(Nat, String.eq(ty, "result"), 2n,
-    Bool.pick(Nat, Bool.and(String.eq(ty, "system"), String.eq(C.cc.s(j, "subtype"), "api_retry")), 3n, 4n))))
+    Bool.pick(Nat, Bool.and(String.eq(ty, "system"), String.eq(C.cc.s(j, "subtype"), "api_retry")), 3n,
+      Bool.pick(Nat, String.eq(ty, "rate_limit_event"), 4n, 5n)))))
 
 def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
   match k:
@@ -685,6 +687,8 @@ def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.
       ag.cc.result(env, texts, s, j)
     case 3n:
       ag.cc.retry(env, s, j)
+    case 4n:
+      IO.bind(Unit, ag.Cs, C.cc.limits.keep(A.ap.cfg.cc(ag.cfg(env)), J.js.field(j, "rate_limit_info")), u => IO.pure(ag.Cs, s))
     case _:
       IO.pure(ag.Cs, s)
 
