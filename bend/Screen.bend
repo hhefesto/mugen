@@ -13,7 +13,7 @@ import ./Pic.bend as Pc
 # hub (Hub.bend) the lines typed; the hub tells it what to show (sc.Put, as
 # it logs) and how it is (sc.State: mugen's work, the messages waiting, the
 # status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel,
-# each tool call one block, open (a click folds or opens it, C-o all; a
+# each tool call one block, open (a click folds or opens it, M-o all; a
 # drag selects text and copies it, see Selecting);
 # then a rule, what runs (with a spinner and its time), the messages waiting
 # for mugen, the status line, and the input (Edit.bend) after the lambda.
@@ -1224,7 +1224,8 @@ def sc.all(+s: sc.S) -> sc.S:
   +bs = sc.blks(s)
   sc.dirty(sc.with.blks(s, sc.open.all(bs, sc.any.closed(bs), sc.w(s), sc.home(s))), 2)
 
-# what a key does: 0 an edit, 1 Enter, 2 C-c, 3 C-d, 4 C-g, 5 C-s, 6 C-o,
+# what a key does: 0 an edit, 1 Enter, 2 C-c, 3 C-d, 4 C-g, 5 C-s, 6 M-o (or C-o,
+# tmux's prefix where it is set so),
 # 7 C-l, 8 Esc, 9 Tab, 10 PgUp, 11 PgDn, 12 M-<, 13 M-> or End on an empty
 # input, 14 the wheel up, 15 down, 16 a press, 17 nothing, 18 a drag, 19 a
 # let go. While searching,
@@ -1242,6 +1243,8 @@ def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool) -> Nat:
     case K.ky.Ctrl{115}:
       5n
     case K.ky.Ctrl{111}:
+      6n
+    case K.ky.Meta{111}:
       6n
     case K.ky.Ctrl{108}:
       7n

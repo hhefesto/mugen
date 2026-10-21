@@ -71,7 +71,7 @@ def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -
 # and prompts the model sees, the files under ~/.mugen, the wires to the
 # API or Claude Code), and only then; see AGENTS.md, Versions
 def mn.version() -> String:
-  "0.2.0"
+  "0.2.1"
 
 def mn.usage() -> String:
   "usage: mugen [--api | login | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login)\n  mugen --version  says mugen's version"

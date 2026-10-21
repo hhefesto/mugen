@@ -2,6 +2,11 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.2.1 (2026-10-21)
+
+- `M-o` folds or opens all blocks (`C-o` still does, unless tmux takes it as
+  its prefix, as it does on olimpo).
+
 ## 0.2.0 (2026-10-21)
 
 - Images: `/image PATH` (or `/image` alone, the clipboard's) attaches one to

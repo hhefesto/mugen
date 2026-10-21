@@ -359,7 +359,7 @@ mugen --api</pre>
       <ul>
         <li><strong>A tool call is one block.</strong> Its header says the tool, what it was asked (a shell's command, a file's path) and how it went on the right: <code>✓ 0.4 s</code>, <code>✗ exit 1 · 0.2 s</code>, <code>✂ cut</code>, <code>■ stopped</code>, or <code>running…</code>. Under it, the first lines of its output.</li>
         <li><strong>An edit or a write shows its diff,</strong> with the line numbers of the file, taken-out lines in red and added ones in green, long lines wrapped under their own text.</li>
-        <li><strong>Blocks come open, whole.</strong> Click a block to fold it, click again to open it; its header stays where it is. <kbd>C-o</kbd> folds or opens all of them.</li>
+        <li><strong>Blocks come open, whole.</strong> Click a block to fold it, click again to open it; its header stays where it is. <kbd>M-o</kbd> (or <kbd>C-o</kbd>, where tmux does not take it as its prefix) folds or opens all of them.</li>
         <li><strong>Scroll</strong> with <kbd>PgUp</kbd>, <kbd>PgDn</kbd> and the mouse wheel. While you are scrolled up, new entries don't move what you read; the rule says how far below the end is, and <kbd>M-&gt;</kbd> (or <kbd>End</kbd> on an empty input) follows it again.</li>
       </ul>
       <p>Under the chat, a rule, then what runs: a spinner, what mugen does and for how long, the tool it is running and for how long (a stuck command shows here at once), and the agents at work. Then the messages waiting for mugen, or handed to its running call, then the status line: where mugen works, the model, its effort, the context left before mugen folds the oldest lines of the view, and the mode. Last, the input.</p>
@@ -382,7 +382,7 @@ mugen --api</pre>
             <tr><td><kbd>C-g</kbd></td><td>Stops mugen's turn (<code>/stop</code>).</td></tr>
             <tr><td><kbd>Esc</kbd> <kbd>Esc</kbd></td><td>Leaves mugen. So do <kbd>C-d</kbd> and <kbd>C-c</kbd> on an empty input; <kbd>C-c</kbd> on text clears it (<kbd>C-y</kbd> brings it back).</td></tr>
             <tr><td><kbd>PgUp</kbd> <kbd>PgDn</kbd>, the wheel</td><td>Scroll the chat. <kbd>M-&lt;</kbd> goes to its start, <kbd>M-&gt;</kbd> back to its end.</td></tr>
-            <tr><td>a click, <kbd>C-o</kbd></td><td>Opens or folds a block; all of them.</td></tr>
+            <tr><td>a click, <kbd>M-o</kbd> (<kbd>C-o</kbd>)</td><td>Opens or folds a block; all of them.</td></tr>
             <tr><td><kbd>C-a</kbd> <kbd>C-e</kbd> <kbd>C-b</kbd> <kbd>C-f</kbd> <kbd>M-b</kbd> <kbd>M-f</kbd></td><td>Start and end of the line; back and forward a character, a word.</td></tr>
             <tr><td><kbd>C-k</kbd> <kbd>C-u</kbd> <kbd>C-w</kbd> <kbd>M-d</kbd> <kbd>C-y</kbd></td><td>Cut to the line's end, to its start, the word before, the word after; paste what was cut.</td></tr>
             <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>C-p</kbd> <kbd>C-n</kbd></td><td>Move between the lines of a message; past its first or last line, the history (kept in <code>~/.mugen/history</code>).</td></tr>

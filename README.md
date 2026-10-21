@@ -83,7 +83,8 @@ little markdown), its summarized thinking (`✻`), and each tool call with
 its result: the command or path asked, how it went (`✓ 0.4 s`,
 `✗ exit 1`, `✂ cut`), its first lines of output, and for an edit or a
 write the diff, with the file's line numbers, red and green. Blocks come
-open, whole: a click folds or opens one, `C-o` all of them. `PgUp`,
+open, whole: a click folds or opens one, `M-o` all of them (`C-o` too,
+unless tmux takes it as its prefix). `PgUp`,
 `PgDn` and the wheel scroll (`M->` follows the end again). Under the chat:
 what runs and for how long (the tool too), the messages waiting for mugen,
 the status line (where mugen works, the model, its effort, the context
