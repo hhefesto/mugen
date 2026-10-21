@@ -1,4 +1,4 @@
 user: run a long job
 tool: shell {"device":"@HOST@","command":"sleep 30 & sleep 31; echo never"}
 echo: error: (stopped in T s)
-note: Stopped by the user: Unii's turn.
+note: Stopped by the user: mugen's turn.

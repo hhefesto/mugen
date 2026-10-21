@@ -21,7 +21,7 @@ three
 tool: edit {"device":"@HOST@","edits":[{"path":"notes/a.txt","old":"zzz","new":"y"}]}
 echo: error: Edit 1 (notes/a.txt): old was not found. No file was changed.
 tool: shell {"device":"elsewhere","command":"ls"}
-echo: error: No device elsewhere is open (unii isn't running there). Open: @HOST@. Only the user opens it, so don't retry or wait: end your turn, saying what is left.
+echo: error: No device elsewhere is open (mugen isn't running there). Open: @HOST@. Only the user opens it, so don't retry or wait: end your turn, saying what is left.
 tool: fly {"to":"moon"}
 echo: error: No tool fly.
 tool: shell "not an object"

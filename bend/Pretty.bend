@@ -734,11 +734,36 @@ def pp.work(+text: String, +open: Bool, +w: U32) -> List<&2, String>:
   +name = Maybe.default(&2, String, List.get(&2, String, ls, 0n), "")
   (pp.paint("36", "\u{25c6} ") ++ pp.paint("1;36", name) ++ pp.paint("2", " reports")) <> pp.fold(pp.md(List.drop(&2, String, ls, 1n), False{}, "", "  ", w), open, 8n, "  ")
 
+# A row on a background (SGR's, as "48;5;236"): every reset in it keeps
+# the background, and the row is filled out to w columns
+def pp.bg.go(s: String, +bg: String, +acc: String) -> String:
+  match s:
+    case SNil{}:
+      String.reverse(acc)
+    case SCon{Chr{27}, SCon{Chr{91}, SCon{Chr{48}, SCon{Chr{109}, +t}}}}:
+      pp.bg.go(t, bg, String.reverse("\u{1B}[0;" ++ bg ++ "m") ++ acc)
+    case SCon{+c, +t}:
+      pp.bg.go(t, bg, SCon{c, acc})
+
+def pp.bg(+bg: String, +w: U32, +r: String) -> String:
+  "\u{1B}[" ++ bg ++ "m" ++ pp.bg.go(r, bg, "") ++ pp.spaces((w - U32.min(pp.vis(r), w) : U32)) ++ "\u{1B}[0m"
+
+def pp.bg.rows(rs: List<&2, String>, +bg: String, +w: U32) -> List<&2, String>:
+  match rs:
+    case []:
+      []
+    case r <> rest:
+      pp.bg(bg, w, r) <> pp.bg.rows(rest, bg, w)
+
+# the user's messages' background
+def pp.user.bg() -> String:
+  "48;5;236"
+
 def pp.block.go(k: Nat, +who: String, +text: String, +res: String, +open: Bool, +run: Bool, +w: U32, +home: String) -> List<&2, String>:
   match k:
     case 1n:
       +rs = pp.para(pp.lines(pp.clean(pp.who(who) ++ text)), pp.paint("1;35", "\u{276f} "), "  ", 2, "1", True{}, w)
-      "" <> pp.fold(rs, open, 12n, "  ")
+      "" <> pp.bg.rows(pp.fold(rs, open, 12n, "  "), pp.user.bg(), w)
     case 2n:
       "" <> pp.md(pp.lines(pp.clean(text)), False{}, "", pp.paint("1", "\u{25cf} ") ++ pp.paint("36", pp.who(who)), w)
     case 3n:

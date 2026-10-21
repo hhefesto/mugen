@@ -69,11 +69,15 @@ def tl.edit.item() -> J.Json:
   J.JObj{[J.JKv{"type", J.JStr{"object"}}, J.JKv{"properties", J.JObj{[J.JKv{"path", tl.ty("string")}, J.JKv{"old", tl.ty("string")}, J.JKv{"new", tl.ty("string")}, J.JKv{"all", tl.ty("boolean")}]}},
     J.JKv{"required", J.JArr{tl.strs(["path", "old", "new"])}}]}
 
+# where a kit tool runs
+def tl.where() -> String:
+  " It runs on the device named, in your work dir there (relative paths start from it)."
+
 # the tools that touch the device (Machine.ts TOOLS), for `who`'s dir (kit)
 def tl.kit(+who: String) -> List<&2, J.Json>:
-  +on = " It runs on the device named, in <work>/" ++ who ++ ", <work> being the work dir Devices lists for it."
+  +on = tl.where()
   +cap = U32.show(tl.cap())
-  [tl.spec("shell", "Run a command with the device's shell ($SHELL -c), stdout and stderr together, and return its output, then its exit code and time, as (exit 0 in 0.4 s); output past " ++ cap ++ " characters keeps its head and tail. Each call is a new shell. The call waits until the command and everything holding its output end, so give background jobs their own output file. Background jobs live only while unii is open on the device: closing it kills every process the calls started." ++ on,
+  [tl.spec("shell", "Run a command with the device's shell ($SHELL -c), stdout and stderr together, and return its output, then its exit code and time, as (exit 0 in 0.4 s); output past " ++ cap ++ " characters keeps its head and tail. Each call is a new shell. The call waits until the command and everything holding its output end, so give background jobs their own output file. Background jobs live only while mugen is open on the device: closing it kills every process the calls started." ++ on,
       [tl.device(), J.JKv{"command", tl.ty("string")}], ["device", "command"]),
     tl.spec("read", "Read a text file. offset: the first line to show (from 1); limit: how many lines; at: the character of the first line to start from. It ends saying the lines shown, as [lines 4-7 of 15]; output past " ++ cap ++ " characters comes in pages, saying where to go on." ++ on,
       [tl.device(), J.JKv{"path", tl.ty("string")}, J.JKv{"offset", tl.ty("integer")}, J.JKv{"limit", tl.ty("integer")}, J.JKv{"at", tl.ty("integer")}], ["device", "path"]),
@@ -522,8 +526,9 @@ def tl.kit.run(+env: tl.Env, +name: String, +input: J.Json) -> IO(E.ev.Out):
   +cwd = tl.env.cwd(env)
   Bool.pick(IO(E.ev.Out), String.eq(device, host),
     IO.bind(Result<&1, &1, U32 & String, Unit>, E.ev.Out, S.mu.mkdirs(cwd), r => tl.kit.go(tl.kit.code(name), env, cwd, input)),
-    IO.pure(E.ev.Out, tl.fail("No device " ++ device ++ " is open (unii isn't running there). Open: " ++ host ++ ". Only the user opens it, so don't retry or wait: end your turn, saying what is left.")))
+    IO.pure(E.ev.Out, tl.fail("No device " ++ device ++ " is open (mugen isn't running there). Open: " ++ host ++ ". Only the user opens it, so don't retry or wait: end your turn, saying what is left.")))
 
-# the devices open now, at the start of each call's message (Tools.devices)
-def tl.devices(+host: String, +work: String) -> String:
-  "Devices open now:\n- " ++ host ++ ", work dir " ++ work ++ "\n\n"
+# the devices open now, at the start of each call's message (Tools.devices).
+# Each has the same work dir, so it is not said: the tools run there.
+def tl.devices(+host: String) -> String:
+  "Devices open now:\n- " ++ host ++ "\n\n"

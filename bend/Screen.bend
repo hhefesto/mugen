@@ -12,7 +12,8 @@ import ./Pretty.bend as P
 # hub (Hub.bend) the lines typed; the hub tells it what to show (sc.Put, as
 # it logs) and how it is (sc.State: Unii's work, the messages waiting, the
 # status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel,
-# each tool call one block (a click opens or folds it, C-o all of them);
+# each tool call one block (a click opens or folds it, C-o all of them; a
+# drag selects text and copies it, see Selecting);
 # then a rule, what runs (with a spinner and its time), the messages waiting
 # for Unii, the status line, and the input (Edit.bend) after the lambda.
 #
@@ -34,10 +35,10 @@ def sc.csi() -> String:
 # bracketed paste, modifyOtherKeys and kitty's disambiguated keys (each a
 # way for Shift-Enter to be told from Enter)
 def sc.init() -> String:
-  "\u{1B}[?1049h\u{1B}[?7l\u{1B}[?1000h\u{1B}[?1006h\u{1B}[?2004h\u{1B}[>4;1m\u{1B}[>1u\u{1B}[H\u{1B}[2J"
+  "\u{1B}[?1049h\u{1B}[?7l\u{1B}[?1000h\u{1B}[?1002h\u{1B}[?1006h\u{1B}[?2004h\u{1B}[>4;1m\u{1B}[>1u\u{1B}[H\u{1B}[2J"
 
 def sc.back() -> String:
-  "\u{1B}[<u\u{1B}[>4;0m\u{1B}[?2004l\u{1B}[?1006l\u{1B}[?1000l\u{1B}[?7h\u{1B}[?25h\u{1B}[?1049l"
+  "\u{1B}[<u\u{1B}[>4;0m\u{1B}[?2004l\u{1B}[?1006l\u{1B}[?1002l\u{1B}[?1000l\u{1B}[?7h\u{1B}[?25h\u{1B}[?1049l"
 
 # Types --------------------------------------------------------------------------
 
@@ -86,8 +87,22 @@ type sc.Tm is Data:
 type sc.U is Data:
   sc.U{now: Nat, esc: Nat, hint: String, quit: Bool, done: Bool}
 
+# a selection by the mouse: on (the left button is down), moved (dragged),
+# where it began and where it is (column, row; from 1), and the chat's rows
+# as last drawn (top down, SGR in them), whose text it takes
+type sc.Sel is Data:
+  sc.Sel{on: Bool, moved: Bool, x0: U32, y0: U32, x1: U32, y1: U32, rows: List<&2, String>, pin: U32}
+
+# a selection's ends in reading order (column, row of each)
+type sc.Ends is Data:
+  sc.Ends{xa: U32, ya: U32, xb: U32, yb: U32}
+
+# a row cut in three: before the selection, inside, after
+type sc.Three is Data:
+  sc.Three{a: String, b: String, c: String}
+
 type sc.S is Data:
-  sc.S{cf: sc.Cf, ed: D.ed.Ed, tr: sc.Tr, tm: sc.Tm, st: sc.St, u: sc.U}
+  sc.S{cf: sc.Cf, ed: D.ed.Ed, tr: sc.Tr, tm: sc.Tm, st: sc.St, u: sc.U, z: sc.Sel}
 
 def sc.idle() -> sc.St:
   sc.St{False{}, "", 0n, [], [], "", []}
@@ -96,58 +111,123 @@ def sc.idle() -> sc.St:
 
 def sc.cf(s: sc.S) -> sc.Cf:
   match s:
-    case sc.S{c, e, t, m, st, u}:
+    case sc.S{c, e, t, m, st, u, z}:
       c
 
 def sc.ed(s: sc.S) -> D.ed.Ed:
   match s:
-    case sc.S{c, e, t, m, st, u}:
+    case sc.S{c, e, t, m, st, u, z}:
       e
 
 def sc.tr(s: sc.S) -> sc.Tr:
   match s:
-    case sc.S{c, e, t, m, st, u}:
+    case sc.S{c, e, t, m, st, u, z}:
       t
 
 def sc.tm(s: sc.S) -> sc.Tm:
   match s:
-    case sc.S{c, e, t, m, st, u}:
+    case sc.S{c, e, t, m, st, u, z}:
       m
 
 def sc.st(s: sc.S) -> sc.St:
   match s:
-    case sc.S{c, e, t, m, st, u}:
+    case sc.S{c, e, t, m, st, u, z}:
       st
 
 def sc.u(s: sc.S) -> sc.U:
   match s:
-    case sc.S{c, e, t, m, st, u}:
+    case sc.S{c, e, t, m, st, u, z}:
       u
 
 def sc.with.ed(s: sc.S, +e2: D.ed.Ed) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u}:
-      sc.S{c, e2, t, m, st, u}
+    case sc.S{c, e, t, m, st, u, z}:
+      sc.S{c, e2, t, m, st, u, z}
 
 def sc.with.tr(s: sc.S, +t2: sc.Tr) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u}:
-      sc.S{c, e, t2, m, st, u}
+    case sc.S{c, e, t, m, st, u, z}:
+      sc.S{c, e, t2, m, st, u, z}
 
 def sc.with.tm(s: sc.S, +m2: sc.Tm) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u}:
-      sc.S{c, e, t, m2, st, u}
+    case sc.S{c, e, t, m, st, u, z}:
+      sc.S{c, e, t, m2, st, u, z}
 
 def sc.with.st(s: sc.S, +st2: sc.St) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u}:
-      sc.S{c, e, t, m, st2, u}
+    case sc.S{c, e, t, m, st, u, z}:
+      sc.S{c, e, t, m, st2, u, z}
 
 def sc.with.u(s: sc.S, +u2: sc.U) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u}:
-      sc.S{c, e, t, m, st, u2}
+    case sc.S{c, e, t, m, st, u, z}:
+      sc.S{c, e, t, m, st, u2, z}
+
+def sc.z(s: sc.S) -> sc.Sel:
+  match s:
+    case sc.S{c, e, t, m, st, u, z}:
+      z
+
+def sc.with.z(s: sc.S, +z2: sc.Sel) -> sc.S:
+  match s:
+    case sc.S{c, e, t, m, st, u, z}:
+      sc.S{c, e, t, m, st, u, z2}
+
+def sc.sel.none(+rows: List<&2, String>) -> sc.Sel:
+  sc.Sel{False{}, False{}, 0, 0, 0, 0, rows, 0}
+
+def sc.sel.on(z: sc.Sel) -> Bool:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      on
+
+def sc.sel.moved(z: sc.Sel) -> Bool:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      mv
+
+def sc.sel.rows(z: sc.Sel) -> List<&2, String>:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      rs
+
+# the selection's ends in reading order: the first's column and row, the
+# last's (a drag up or left swaps them)
+def sc.sel.ends(z: sc.Sel) -> sc.Ends:
+  match z:
+    case sc.Sel{on, mv, +x0, +y0, +x1, +y1, rs, pn}:
+      +back = Bool.or(U32.is_lt(y1, y0), Bool.and(U32.is_eq(y1, y0), U32.is_lt(x1, x0)))
+      sc.Ends{Bool.pick(U32, back, x1, x0), Bool.pick(U32, back, y1, y0), Bool.pick(U32, back, x0, x1), Bool.pick(U32, back, y0, y1)}
+
+# a press: a selection begins where it is
+def sc.sel.press(z: sc.Sel, +x: U32, +y: U32) -> sc.Sel:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      sc.Sel{True{}, False{}, x, y, x, y, rs, pn}
+
+# a drag: the selection reaches where the mouse is
+def sc.sel.drag(z: sc.Sel, +x: U32, +y: U32) -> sc.Sel:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      sc.Sel{on, True{}, x0, y0, x, y, rs, pn}
+
+# the chat's rows and the prompt pinned on top (0 none), as drawn now
+def sc.sel.with.drawn(z: sc.Sel, +rows: List<&2, String>, +pin: U32) -> sc.Sel:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      sc.Sel{on, mv, x0, y0, x1, y1, rows, pin}
+
+def sc.sel.pin(z: sc.Sel) -> U32:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      pn
+
+# the selection over, what is drawn kept
+def sc.sel.off(z: sc.Sel) -> sc.Sel:
+  match z:
+    case sc.Sel{on, mv, x0, y0, x1, y1, rs, pn}:
+      sc.Sel{False{}, False{}, 0, 0, 0, 0, rs, pn}
 
 def sc.cf.hub(c: sc.Cf) -> Chan(E.ev.Ev):
   match c:
@@ -631,7 +711,7 @@ def sc.queue(+s: sc.S) -> List<&2, String>:
     Bool.pick(List<&2, String>, List.is_empty(&2, String, wa), [],
       [P.pp.sgr.cut(P.pp.paint("33", "\u{29d7} " ++ Nat.show(List.length(&2, String, wa)) ++ " waiting: ") ++ "\u{ab}" ++ sc.first(wa) ++ "\u{bb}" ++ sc.more(wa) ++ P.pp.paint("2", " \u{b7} C-s sends now"), w)]),
     Bool.pick(List<&2, String>, List.is_empty(&2, String, se), [],
-      [P.pp.sgr.cut(P.pp.paint("36", "\u{2192} handed to Unii: ") ++ "\u{ab}" ++ sc.first(se) ++ "\u{bb}" ++ sc.more(se) ++ P.pp.paint("2", " \u{b7} read after its running tool \u{b7} C-s cuts the tool"), w)]))
+      [P.pp.sgr.cut(P.pp.paint("36", "\u{2192} handed to mugen: ") ++ "\u{ab}" ++ sc.first(se) ++ "\u{bb}" ++ sc.more(se) ++ P.pp.paint("2", " \u{b7} read after its running tool \u{b7} C-s cuts the tool"), w)]))
 
 def sc.find.row(m: Maybe<&2, String>) -> List<&2, String>:
   match m:
@@ -641,7 +721,7 @@ def sc.find.row(m: Maybe<&2, String>) -> List<&2, String>:
       []
 
 def sc.placeholder() -> String:
-  "Enter sends \u{b7} Shift- or Alt-Enter: a new line \u{b7} C-s sends waiting now \u{b7} C-g stops Unii \u{b7} Esc Esc leaves"
+  "Enter sends \u{b7} Shift- or Alt-Enter: a new line \u{b7} C-s sends waiting now \u{b7} C-g stops mugen \u{b7} Esc Esc leaves"
 
 # The lines under the chat, top down, and where the cursor is among them
 type sc.Low is Data:
@@ -687,13 +767,188 @@ def sc.low(+s: sc.S) -> sc.Low:
   +head = List.concat(&2, String, [[sc.rule(w, sc.off(s))], sc.act(s), sc.queue(s), info, [P.pp.sgr.cut(Bool.pick(String, String.is_empty(line), P.pp.paint("1;35", "\u{7121}\u{9650} mugen"), line), w)]])
   sc.Low{List.append(&2, String, head, sc.prompt(input, True{})), (U32.from_nat(List.length(&2, String, head)) + (cy - top : U32) : U32), (D.ed.lay.col(lay) + 2 : U32)}
 
+# Selecting -----------------------------------------------------------------------
+#
+# The left button dragged over the chat selects its text: the rows show it
+# reversed, and letting go copies it (to X's clipboard by xclip, and to
+# tmux's buffers, which tmux hands the terminal as OSC 52). A press let go
+# where it was is a click. Shift-drag is the terminal's own selection.
+
+def sc.ends.xa(e: sc.Ends) -> U32:
+  match e:
+    case sc.Ends{xa, ya, xb, yb}:
+      xa
+
+def sc.ends.ya(e: sc.Ends) -> U32:
+  match e:
+    case sc.Ends{xa, ya, xb, yb}:
+      ya
+
+def sc.ends.xb(e: sc.Ends) -> U32:
+  match e:
+    case sc.Ends{xa, ya, xb, yb}:
+      xb
+
+def sc.ends.yb(e: sc.Ends) -> U32:
+  match e:
+    case sc.Ends{xa, ya, xb, yb}:
+      yb
+
+# a row's text cut where the selection meets it: before, inside, after.
+# Row y of the ends takes columns from xa on its first row, to xb on its
+# last, all between.
+def sc.cut(+r: String, +y: U32, +e: sc.Ends) -> sc.Three:
+  +p = P.pp.clean(r)
+  +from = Bool.pick(U32, U32.is_eq(y, sc.ends.ya(e)), sc.ends.xa(e), 1)
+  +to = Bool.pick(U32, U32.is_eq(y, sc.ends.yb(e)), sc.ends.xb(e), 65535)
+  +a = P.pp.take(p, (from - 1 : U32))
+  +b = P.pp.take(P.pp.snd(a), (to - U32.min(to, (from - 1 : U32)) : U32))
+  sc.Three{P.pp.fst(a), P.pp.fst(b), P.pp.snd(b)}
+
+def sc.three.a(t: sc.Three) -> String:
+  match t:
+    case sc.Three{a, b, c}:
+      a
+
+def sc.three.b(t: sc.Three) -> String:
+  match t:
+    case sc.Three{a, b, c}:
+      b
+
+def sc.three.c(t: sc.Three) -> String:
+  match t:
+    case sc.Three{a, b, c}:
+      c
+
+# whether row y is selected: 1 yes, 0 no
+def sc.in.k(+y: U32, +e: sc.Ends) -> Nat:
+  Bool.pick(Nat, Bool.and(U32.is_ge(y, sc.ends.ya(e)), U32.is_le(y, sc.ends.yb(e))), 1n, 0n)
+
+def sc.hl.one(k: Nat, +r: String, +y: U32, +e: sc.Ends) -> String:
+  match k:
+    case 0n:
+      r
+    case _:
+      +t = sc.cut(r, y, e)
+      sc.three.a(t) ++ "\u{1B}[7m" ++ sc.three.b(t) ++ "\u{1B}[27m" ++ sc.three.c(t)
+
+# the rows (top down, from row y), the selected ones reversed
+def sc.hl.rows(rs: List<&2, String>, +y: U32, +e: sc.Ends) -> List<&2, String>:
+  match rs:
+    case []:
+      []
+    case r <> rest:
+      sc.hl.one(sc.in.k(y, e), r, y, e) <> sc.hl.rows(rest, (y + 1 : U32), e)
+
+def sc.take.one(k: Nat, +r: String, +y: U32, +e: sc.Ends, +acc: List<&2, String>) -> List<&2, String>:
+  match k:
+    case 0n:
+      acc
+    case _:
+      String.trim_end(sc.three.b(sc.cut(r, y, e))) <> acc
+
+# the selected text of the rows (top down, from row y), its lines reversed
+def sc.take.sel(rs: List<&2, String>, +y: U32, +e: sc.Ends, +acc: List<&2, String>) -> List<&2, String>:
+  match rs:
+    case []:
+      acc
+    case r <> rest:
+      sc.take.sel(rest, (y + 1 : U32), e, sc.take.one(sc.in.k(y, e), r, y, e, acc))
+
+def sc.sel.text(+z: sc.Sel) -> String:
+  String.join(List.reverse(&2, String, sc.take.sel(sc.sel.rows(z), 1, sc.sel.ends(z), [])), "\n")
+
+# the rows to paint: reversed where a drag selects
+def sc.sel.show.go(k: Nat, +z: sc.Sel, +rows: List<&2, String>) -> List<&2, String>:
+  match k:
+    case 0n:
+      rows
+    case _:
+      sc.hl.rows(rows, 1, sc.sel.ends(z))
+
+def sc.sel.show(+z: sc.Sel, +rows: List<&2, String>) -> List<&2, String>:
+  sc.sel.show.go(Bool.pick(Nat, Bool.and(sc.sel.on(z), sc.sel.moved(z)), 1n, 0n), z, rows)
+
+# copying: X's clipboard (xclip), tmux's buffer (and so the terminal's, by
+# OSC 52); whichever is there
+def sc.clip() -> String:
+  "t=$(cat); [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null && printf %s \"$t\" | xclip -selection clipboard >/dev/null 2>&1; [ -n \"$TMUX\" ] && printf %s \"$t\" | tmux load-buffer -w - >/dev/null 2>&1; true"
+
 def sc.cursor(+r: U32, +c: U32) -> String:
   "\u{1B}[" ++ U32.show(r) ++ ";" ++ U32.show((c + 1 : U32)) ++ "H"
 
-def sc.with.drawn(+s: sc.S, +g: sc.G, +ids: List<&2, U32>, +off: U32, +low: U32) -> sc.S:
+def sc.with.drawn(+s: sc.S, +g: sc.G, +ids: List<&2, U32>, +off: U32, +low: U32, +rows: List<&2, String>, +pin: U32) -> sc.S:
   +t = sc.tr(s)
   +m = sc.tm(s)
-  sc.with.tm(sc.with.tr(s, sc.Tr{sc.g.bs(g), sc.tr.next(t), off, ids}), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low})
+  sc.with.z(sc.with.tm(sc.with.tr(s, sc.Tr{sc.g.bs(g), sc.tr.next(t), off, ids}), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low}), sc.sel.with.drawn(sc.z(s), rows, pin))
+
+# The prompt pinned on top: the newest of the user's messages above the
+# chat's top row (its block's id under it) stays on the first row, on its
+# background, while what answers it is read; a click there scrolls to it.
+
+def sc.blk.kind(b: sc.Blk) -> String:
+  match b:
+    case sc.Blk{i, who, k, t, r, o, ru, t0, bw, rs, n}:
+      k
+
+# the next block: 0 none, 1 the one pinned, 2 not it
+def sc.pin.v(bs: List<&2, sc.Blk>, +top: U32) -> Nat:
+  match bs:
+    case []:
+      0n
+    case +b <> rest:
+      Bool.pick(Nat, Bool.and(String.eq(sc.blk.kind(b), "user"), U32.is_lt(sc.blk.id(b), top)), 1n, 2n)
+
+def sc.pin.go(bs: List<&2, sc.Blk>, v: Nat, +top: U32) -> Maybe<&2, sc.Blk>:
+  match bs v:
+    case b <> rest 1n:
+      Some{b}
+    case b <> +rest 2n:
+      sc.pin.go(rest, sc.pin.v(rest, top), top)
+    case _ _:
+      None{}
+
+def sc.pin.id(m: Maybe<&2, sc.Blk>) -> U32:
+  match m:
+    case None{}:
+      0
+    case Some{b}:
+      sc.blk.id(b)
+
+# its row: the first line, how many more, an arrow up
+def sc.pin.row(m: Maybe<&2, sc.Blk>, +w: U32) -> String:
+  match m:
+    case None{}:
+      ""
+    case Some{b}:
+      +ls = P.pp.lines(P.pp.clean(sc.blk.text(b)))
+      +n = List.length(&2, String, ls)
+      +more = Bool.pick(String, Nat.is_le(n, 1n), "", " (+" ++ Nat.show(Nat.sub(n, 1n)) ++ " lines)") ++ " \u{2191}"
+      +room = (w - U32.min(w, (P.pp.width(more) + 3 : U32)) : U32)
+      P.pp.bg(P.pp.user.bg(), w, P.pp.paint("1;35", "\u{276f} ") ++ P.pp.paint("1", P.pp.fit(Maybe.default(&2, String, List.get(&2, String, ls, 0n), ""), room)) ++ P.pp.paint("2", more))
+
+# the rows (and their ids) with the pinned prompt over the first
+def sc.pinned.rows(+pid: U32, +prow: String, +rows: List<&2, String>) -> List<&2, String>:
+  Bool.pick(List<&2, String>, U32.is_eq(pid, 0), rows, prow <> List.drop(&2, String, rows, 1n))
+
+def sc.pinned.ids(+pid: U32, +ids: List<&2, U32>) -> List<&2, U32>:
+  Bool.pick(List<&2, U32>, U32.is_eq(pid, 0), ids, 0 <> List.drop(&2, U32, ids, 1n))
+
+# the rows from the newest block up to block id's, inclusive (each drawn at w)
+def sc.rows.to(bs: List<&2, sc.Blk>, go: Bool, +id: U32, +w: U32, +home: String, +acc: U32) -> U32:
+  match bs go:
+    case b <> rest True{}:
+      +b2 = sc.blk.fresh(b, w, home)
+      sc.rows.to(rest, Bool.not(U32.is_eq(sc.blk.id(b2), id)), id, w, home, (acc + sc.blk.n(b2) : U32))
+    case _ _:
+      acc
+
+# a click on the pinned prompt: the chat scrolled to put it on top
+def sc.to.pin(+s: sc.S) -> sc.S:
+  +total = sc.rows.to(sc.blks(s), True{}, sc.sel.pin(sc.z(s)), sc.w(s), sc.home(s), 0)
+  +h = sc.h(s)
+  +t = (h - U32.min(h, sc.tm.low(sc.tm(s))) : U32)
+  sc.dirty(sc.with.off(s, (total - U32.min(total, t) : U32)), 2)
 
 # all of it
 def sc.draw.all(+s: sc.S) -> IO(sc.S):
@@ -707,11 +962,15 @@ def sc.draw.all(+s: sc.S) -> IO(sc.S):
   +g = sc.gather(sc.blks(s), U32.is_gt(need, 0), need, 0, [], [], sc.w(s), sc.home(s))
   +k = sc.g.k(g)
   +off2 = U32.min(off, (k - U32.min(k, t) : U32))
-  +rows = List.take(&2, String, sc.g.rows(g), U32.to_nat(t))
-  +ids = List.take(&2, U32, sc.g.ids(g), U32.to_nat(t))
-  +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(t), rows, 1), sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
+  +rows0 = List.take(&2, String, sc.g.rows(g), U32.to_nat(t))
+  +ids0 = List.take(&2, U32, sc.g.ids(g), U32.to_nat(t))
+  +pm = sc.pin.go(sc.g.bs(g), sc.pin.v(sc.g.bs(g), Maybe.default(&2, U32, List.get(&2, U32, ids0, 0n), 0)), Maybe.default(&2, U32, List.get(&2, U32, ids0, 0n), 0))
+  +pid = Bool.pick(U32, U32.is_ge(t, 4), sc.pin.id(pm), 0)
+  +rows = sc.pinned.rows(pid, sc.pin.row(pm, sc.w(s)), rows0)
+  +ids = sc.pinned.ids(pid, ids0)
+  +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(t), sc.sel.show(sc.z(s), rows), 1), sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
     [sc.cursor((t + (sc.low.row(low) + 1 : U32) : U32), sc.low.col(low)), "\u{1B}[?25h\u{1B}[?2026l"]]))
-  IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.drawn(s, g, ids, off2, nl)))
+  IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.drawn(s, g, ids, off2, nl, rows, pid)))
 
 def sc.with.clean(+s: sc.S) -> sc.S:
   +m = sc.tm(s)
@@ -838,9 +1097,9 @@ def sc.edit(+s: sc.S, +key: K.ky.Key) -> sc.S:
 def sc.mouse.say(on: Bool) -> String:
   match on:
     case True{}:
-      "\u{1B}[?1000h\u{1B}[?1006h"
+      "\u{1B}[?1000h\u{1B}[?1002h\u{1B}[?1006h"
     case False{}:
-      "\u{1B}[?1006l\u{1B}[?1000l"
+      "\u{1B}[?1006l\u{1B}[?1002l\u{1B}[?1000l"
 
 # /mouse: the mouse's reports off (the terminal selects text) or on
 def sc.mouse(+s: sc.S) -> IO(sc.S):
@@ -849,7 +1108,7 @@ def sc.mouse(+s: sc.S) -> IO(sc.S):
   do IO<sc.S>:
     Unit <- IO.write(sc.mouse.say(on))
     return sc.dirty(sc.with.hint(sc.with.tm(s, sc.Tm{sc.tm.w(m), sc.tm.h(m), sc.tm.draw(m), on, sc.tm.low(m)}),
-      Bool.pick(String, on, "the mouse scrolls and opens blocks (/mouse to select text instead)", "the terminal selects text now (/mouse for the mouse back)")), 1)
+      Bool.pick(String, on, "the mouse scrolls, opens blocks and copies what it drags over (/mouse gives it to the terminal)", "the terminal has the mouse now (/mouse for mugen's back)")), 1)
 
 def sc.cmd.word(+t: String) -> String:
   Maybe.default(&2, String, List.get(&2, String, String.split(String.trim(t), ' '), 0n), "")
@@ -937,7 +1196,8 @@ def sc.all(+s: sc.S) -> sc.S:
 
 # what a key does: 0 an edit, 1 Enter, 2 C-c, 3 C-d, 4 C-g, 5 C-s, 6 C-o,
 # 7 C-l, 8 Esc, 9 Tab, 10 PgUp, 11 PgDn, 12 M-<, 13 M-> or End on an empty
-# input, 14 the wheel up, 15 down, 16 a click, 17 nothing. While searching,
+# input, 14 the wheel up, 15 down, 16 a press, 17 nothing, 18 a drag, 19 a
+# let go. While searching,
 # Enter, C-g and Esc are the search's.
 def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool) -> Nat:
   match key:
@@ -975,6 +1235,10 @@ def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool) -> Nat:
       15n
     case K.ky.Mouse{0, x, y, False{}}:
       16n
+    case K.ky.Mouse{0, x, y, True{}}:
+      19n
+    case K.ky.Mouse{32, x, y, up}:
+      18n
     case K.ky.Mouse{b, x, y, up}:
       17n
     case K.ky.Focus{on}:
@@ -990,6 +1254,47 @@ def sc.mouse.y(key: K.ky.Key) -> U32:
       y
     case _:
       0
+
+def sc.mouse.x(key: K.ky.Key) -> U32:
+  match key:
+    case K.ky.Mouse{b, x, y, up}:
+      x
+    case _:
+      0
+
+# a drag: the selection grows (drawn anew); none begun, nothing
+def sc.drag(+s: sc.S, +x: U32, +y: U32) -> sc.S:
+  +z = sc.z(s)
+  Bool.pick(sc.S, sc.sel.on(z), sc.dirty(sc.with.z(s, sc.sel.drag(z, x, y)), 2), s)
+
+# what a let go does: 0 nothing (no press), 1 a click, 2 a copy
+def sc.up.k(+z: sc.Sel) -> Nat:
+  Bool.pick(Nat, sc.sel.on(z), Bool.pick(Nat, sc.sel.moved(z), 2n, 1n), 0n)
+
+# a click: on the pinned prompt (1) it scrolls there, else it folds
+def sc.click.at(k: Nat, +s: sc.S, +y: U32) -> sc.S:
+  match k:
+    case 1n:
+      sc.to.pin(s)
+    case _:
+      sc.click(s, y)
+
+def sc.copied(+n: Nat) -> String:
+  "copied " ++ Nat.show(n) ++ Bool.pick(String, Nat.is_eq(n, 1n), " line", " lines") ++ " \u{b7} Shift-drag selects with the terminal"
+
+def sc.up(k: Nat, +s: sc.S, +y: U32) -> IO(sc.S):
+  match k:
+    case 0n:
+      IO.pure(sc.S, s)
+    case 1n:
+      +s1 = sc.with.z(s, sc.sel.off(sc.z(s)))
+      IO.pure(sc.S, sc.click.at(Bool.pick(Nat, Bool.and(U32.is_eq(y, 1), Bool.not(U32.is_eq(sc.sel.pin(sc.z(s1)), 0))), 1n, 0n), s1, y))
+    case _:
+      +z = sc.z(s)
+      +text = sc.sel.text(z)
+      do IO<sc.S>:
+        o : S.mu.Out <- S.mu.run("sh", ["-c", sc.clip()], text, 4096, 5000)
+        return sc.dirty(sc.with.hint(sc.with.z(s, sc.sel.off(z)), sc.copied(List.length(&2, String, P.pp.split(text)))), 2)
 
 def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
   match k:
@@ -1026,7 +1331,11 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
     case 15n:
       IO.pure(sc.S, sc.scroll(s, False{}, 3))
     case 16n:
-      IO.pure(sc.S, sc.click(s, sc.mouse.y(key)))
+      IO.pure(sc.S, sc.with.z(s, sc.sel.press(sc.z(s), sc.mouse.x(key), sc.mouse.y(key))))
+    case 18n:
+      IO.pure(sc.S, sc.drag(s, sc.mouse.x(key), sc.mouse.y(key)))
+    case 19n:
+      sc.up(sc.up.k(sc.z(s)), s, sc.mouse.y(key))
     case _:
       IO.pure(sc.S, s)
 
@@ -1157,7 +1466,7 @@ def sc.run(+hub: Chan(E.ev.Ev), +me: Chan(sc.In), +home: String, +hfile: String)
     ws : U32 <- S.mu.winsize()
     hist : List<&2, String> <- sc.hist.load(hfile)
     now : Nat <- IO.now()
-    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, []}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}}}, ws)
+    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, []}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}}, sc.sel.none([])}, ws)
     Unit <- IO.spawn(Unit, sc.reader(me))
     Unit <- IO.spawn(Unit, sc.ticker(sc.fuel(), me, Done{Unit{}}))
     +s1 : sc.S <- sc.draw(sc.dirty(s0, 2))

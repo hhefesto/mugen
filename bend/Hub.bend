@@ -37,7 +37,7 @@ import ./Screen.bend as Sc
 # Every def is prefixed `hb.` (a program's defs share one namespace).
 
 def hb.turn.name() -> String:
-  "Unii's turn"
+  "mugen's turn"
 
 def hb.searches() -> U32:
   10
@@ -601,7 +601,7 @@ def hb.at.work(+s: hb.S) -> String:
   "Agents at work now: " ++ Bool.pick(String, List.is_empty(&2, String, names), "none.", T.tx.join(names, ", ") ++ ".") ++ "\n\n"
 
 def hb.devices(+s: hb.S) -> String:
-  L.tl.devices(hb.cfg.host(hb.cfg(s)), hb.cfg.work(hb.cfg(s)))
+  L.tl.devices(hb.cfg.host(hb.cfg(s)))
 
 def hb.tools.env(+s: hb.S, +who: String) -> L.tl.Env:
   +c = hb.cfg(s)
@@ -1278,7 +1278,7 @@ def hb.stop.go(none: Bool, +s: hb.S, +what: List<&2, String>, +why: String, +tur
 # work stopped by the user (Chat.act stop): all, or the one named; the turn's
 # why noted as it ends, else at once
 def hb.stop(+s: hb.S, +name: String) -> IO(hb.S):
-  +what = hb.sel(hb.running(s), Bool.pick(String, Bool.or(String.eq(name, "turn"), String.eq(name, "Unii")), hb.turn.name(), name))
+  +what = hb.sel(hb.running(s), Bool.pick(String, Bool.or(String.eq(name, "turn"), Bool.or(String.eq(name, "Unii"), String.eq(name, "mugen"))), hb.turn.name(), name))
   +why = "Stopped by the user: " ++ T.tx.join(what, ", ") ++ "."
   +turn = hb.has(what, hb.turn.name())
   hb.stop.go(List.is_empty(&2, String, what), s, what, why, turn)
@@ -1324,7 +1324,7 @@ def hb.now.go(k: Nat, +s: hb.S, +pid: U32) -> IO(hb.S):
       do IO<hb.S>:
         r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(hb.ctl(s, "") ++ ".cut", "", 0)
         x : U32 <- S.mu.kill(pid, 1, 9)
-        hb.tell.user(s, "Unii's command was cut: it reads the messages waiting with what the command printed")
+        hb.tell.user(s, "mugen's command was cut: it reads the messages waiting with what the command printed")
     case 2n:
       hb.stop.as(hb.with.force(s, True{}), hb.turn.name(), "Stopped by the user to send the messages waiting.")
     case _:
@@ -1493,7 +1493,7 @@ def hb.status.lines(+s: hb.S, +lim: String) -> String:
     ++ hb.row(s, "limits", lim)
     ++ hb.row(s, "chat", U32.show(M.me.count(m)) ++ " messages · view " ++ U32.show(U32.div(M.me.v.size(M.me.view(m)), 1000)) ++ " KB, " ++ U32.show(hb.left(s)) ++ "% left before it folds · " ++ U32.show(M.me.nbusy(m)) ++ " summarizing")
     ++ hb.row(s, "model", hb.paint(hb.tty(s), "36", hb.pick.model(p)) ++ " · effort " ++ A.ap.pick.effort(p) ++ " · summaries on " ++ hb.pick.model(cp) ++ " (" ++ A.ap.pick.effort(cp) ++ ")")
-    ++ hb.row(s, "mode", Bool.pick(String, hb.plan(s), hb.paint(hb.tty(s), "33", "plan") ++ ": Unii reads and proposes; /auto lets it act", hb.paint(hb.tty(s), "32", "auto") ++ ": Unii runs its tools as it needs them; /plan to plan first"))
+    ++ hb.row(s, "mode", Bool.pick(String, hb.plan(s), hb.paint(hb.tty(s), "33", "plan") ++ ": mugen reads and proposes; /auto lets it act", hb.paint(hb.tty(s), "32", "auto") ++ ": mugen runs its tools as it needs them; /plan to plan first"))
     ++ hb.row(s, "work dir", hb.workdir(s))
     ++ hb.row(s, "goal", hb.goal.text(hb.goal(s)))
     ++ hb.row(s, "agents", Bool.pick(String, hb.busy(hb.turn(s)), "a turn runs; ", "") ++ Bool.pick(String, List.is_empty(&2, String, agents), "none at work", T.tx.join(agents, ", ") ++ " at work"))
@@ -1579,9 +1579,9 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
         Unit <- X.ex.tree(hb.dir(s), M.me.count(hb.mem(s)), V.vw.parts(M.me.view(hb.mem(s))), hb.view.texts(V.vw.parts(M.me.view(hb.mem(s))), M.me.nodes(hb.mem(s))), tz, hb.dir(s) ++ "/tree.html")
         hb.tell.user(s, "the memory tree: file://" ++ hb.dir(s) ++ "/tree.html")
     case 12n:
-      hb.tell.user(hb.with.mode(s, 1), "plan mode: Unii reads and proposes a plan; it runs no shell, writes and edits nothing, and starts no agents. /auto lets it act.")
+      hb.tell.user(hb.with.mode(s, 1), "plan mode: mugen reads and proposes a plan; it runs no shell, writes and edits nothing, and starts no agents. /auto lets it act.")
     case 13n:
-      hb.tell.user(hb.with.mode(s, 0), "auto mode: Unii runs its tools as it needs them. /plan to plan first.")
+      hb.tell.user(hb.with.mode(s, 0), "auto mode: mugen runs its tools as it needs them. /plan to plan first.")
     case 14n:
       hb.now(s)
     case _:
@@ -1751,9 +1751,9 @@ def hb.what.of(t: hb.T, +s: hb.S) -> String:
     case hb.Idle{}:
       ""
     case hb.Settle{}:
-      Bool.pick(String, String.is_empty(hb.shown(s)), "Unii's turn starts", hb.shown(s))
+      Bool.pick(String, String.is_empty(hb.shown(s)), "mugen's turn starts", hb.shown(s))
     case hb.Call{c}:
-      "Unii works"
+      "mugen works"
     case hb.Check{g}:
       "checking whether the goal is met"
 

@@ -339,7 +339,7 @@ mugen --api</pre>
 <span class="gap"></span><b>●</b> Fixed: <span class="model">tow</span> is now <span class="model">two</span>.
 <span class="dim">  · cache: 3.9k read, 595 written, 2 new in, 30 out</span>
 <span class="rule">──────────────────────────────────────────────────────────────</span>
-<span class="run">⠼</span> Unii works · 12s · <span class="run">▸ shell</span> 9s  <span class="dim">nix build .#mugen</span>
+<span class="run">⠼</span> mugen works · 12s · <span class="run">▸ shell</span> 9s  <span class="dim">nix build .#mugen</span>
 <span class="run">⧗ 1 waiting:</span> «and run the tests after» <span class="dim">· C-s sends now</span>
 <span class="dim">~/.mugen/work/main · </span><span class="model">opus-5.5</span><span class="dim"> · </span>medium<span class="dim"> · </span>87% left<span class="dim"> · </span><span class="auto">auto</span>
 <span class="lambda">λ</span> <span class="you">█</span></pre>
@@ -362,10 +362,10 @@ mugen --api</pre>
         <li><strong>Long blocks are folded.</strong> Click a block to open it whole, click again to fold it; its header stays where it is. <kbd>C-o</kbd> opens or folds all of them.</li>
         <li><strong>Scroll</strong> with <kbd>PgUp</kbd>, <kbd>PgDn</kbd> and the mouse wheel. While you are scrolled up, new entries don't move what you read; the rule says how far below the end is, and <kbd>M-&gt;</kbd> (or <kbd>End</kbd> on an empty input) follows it again.</li>
       </ul>
-      <p>Under the chat, a rule, then what runs: a spinner, what Unii does and for how long, the tool it is running and for how long (a stuck command shows here at once), and the agents at work. Then the messages waiting for Unii, or handed to its running call, then the status line: where Unii works, the model, its effort, the context left before mugen folds the oldest lines of the view, and the mode. Last, the input.</p>
-      <div class="note"><strong>Selecting text.</strong> The mouse goes to mugen, for clicks and the wheel. To select text with the mouse, hold <kbd>Shift</kbd> while you drag (most terminals), or type <code>/mouse</code> to hand the mouse back to the terminal, and <code>/mouse</code> again to take it back.</div>
+      <p>Under the chat, a rule, then what runs: a spinner, what Unii does and for how long, the tool it is running and for how long (a stuck command shows here at once), and the agents at work. Then the messages waiting for mugen, or handed to its running call, then the status line: where mugen works, the model, its effort, the context left before mugen folds the oldest lines of the view, and the mode. Last, the input.</p>
+      <div class="note"><strong>Selecting text.</strong> The mouse goes to mugen, for clicks, the wheel and selecting: drag over the chat and the text shows reversed; let go and it is copied, to X's clipboard (by <code>xclip</code>, if it is there) and to tmux's buffer (which tmux hands the terminal too). A click that doesn't move still opens or folds a block. To select with the terminal instead, hold <kbd>Shift</kbd> while you drag (most terminals), or type <code>/mouse</code> to hand the mouse to the terminal, and <code>/mouse</code> again to take it back.</div>
       <h3>In tmux</h3>
-      <p>mugen works in tmux as it does outside it, with nothing to set up: the mouse and <kbd>PgUp</kbd>/<kbd>PgDn</kbd> reach it whether tmux's <code>mouse</code> option is on or off. As it starts in tmux, mugen turns tmux's <code>extended-keys</code> on (unless it is set), so that <kbd>Shift-Enter</kbd> can reach it as a key of its own; that is a server option and lasts while the tmux server does. It names its window <code>mugen</code>, shows <code>mugen …</code> while Unii works, and rings the window's bell when a reply comes while you look at another window.</p>
+      <p>mugen works in tmux as it does outside it, with nothing to set up: the mouse and <kbd>PgUp</kbd>/<kbd>PgDn</kbd> reach it whether tmux's <code>mouse</code> option is on or off. As it starts in tmux, mugen turns tmux's <code>extended-keys</code> on (unless it is set), so that <kbd>Shift-Enter</kbd> can reach it as a key of its own; that is a server option and lasts while the tmux server does. It names its window <code>mugen</code>, shows <code>mugen …</code> while mugen works, and rings the window's bell when a reply comes while you look at another window.</p>
       <p>Whether <kbd>Shift-Enter</kbd> comes through also depends on the terminal under tmux: kitty, foot, WezTerm, Ghostty and iTerm2 send it; GNOME Terminal and other VTE terminals don't. <kbd>Alt-Enter</kbd> and <kbd>C-j</kbd> make a new line everywhere, and so does a <code>\</code> typed at the end before <kbd>Enter</kbd>.</p>
     </section>
 
@@ -376,10 +376,10 @@ mugen --api</pre>
         <table>
           <thead><tr><th>Keys</th><th>What they do</th></tr></thead>
           <tbody>
-            <tr><td><kbd>Enter</kbd></td><td>Sends the message. While Unii works it waits, and the line under the chat says so.</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>Sends the message. While mugen works it waits, and the line under the chat says so.</td></tr>
             <tr><td><kbd>Shift-Enter</kbd> <kbd>Alt-Enter</kbd> <kbd>C-j</kbd></td><td>A new line in the message. A paste comes whole, its new lines kept, as one message.</td></tr>
             <tr><td><kbd>C-s</kbd></td><td>Sends the waiting messages now (<code>/now</code>). If Unii is running a shell command, the command is cut: Unii gets its output so far, then your messages. Otherwise its turn stops, and a new one starts with them.</td></tr>
-            <tr><td><kbd>C-g</kbd></td><td>Stops Unii's turn (<code>/stop</code>).</td></tr>
+            <tr><td><kbd>C-g</kbd></td><td>Stops mugen's turn (<code>/stop</code>).</td></tr>
             <tr><td><kbd>Esc</kbd> <kbd>Esc</kbd></td><td>Leaves mugen. So do <kbd>C-d</kbd> and <kbd>C-c</kbd> on an empty input; <kbd>C-c</kbd> on text clears it (<kbd>C-y</kbd> brings it back).</td></tr>
             <tr><td><kbd>PgUp</kbd> <kbd>PgDn</kbd>, the wheel</td><td>Scroll the chat. <kbd>M-&lt;</kbd> goes to its start, <kbd>M-&gt;</kbd> back to its end.</td></tr>
             <tr><td>a click, <kbd>C-o</kbd></td><td>Opens or folds a block; all of them.</td></tr>
@@ -396,14 +396,14 @@ mugen --api</pre>
         <table>
           <thead><tr><th>Type</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>/stop [name]</code></td><td>Stops Unii's turn and the agents, or the one agent named.</td></tr>
+            <tr><td><code>/stop [name]</code></td><td>Stops mugen's turn and the agents, or the one agent named.</td></tr>
             <tr><td><code>/now</code></td><td>As <kbd>C-s</kbd>: the waiting messages, sent at once.</td></tr>
             <tr><td><code>/goal TEXT</code></td><td>A goal Unii keeps working toward. After each turn a check asks whether it is met; until it is, Unii is told to keep working. <code>/halt</code> drops it.</td></tr>
             <tr><td><code>/model LABEL</code></td><td><code>opus-5.5</code> (default), <code>sonnet-5.5</code>, <code>haiku-5.5</code>, or a model id.</td></tr>
             <tr><td><code>/effort LEVEL</code></td><td><code>low</code>, <code>medium</code> (default), <code>high</code>, <code>xhigh</code>, <code>max</code>.</td></tr>
-            <tr><td><code>/plan</code>, <code>/auto</code></td><td>Plan mode: Unii reads and proposes a plan, and runs no shell, writes and edits nothing, starts no agents. Auto mode (the default) lets it act. The mode shows on the status line.</td></tr>
+            <tr><td><code>/plan</code>, <code>/auto</code></td><td>Plan mode: mugen reads and proposes a plan, and runs no shell, writes and edits nothing, starts no agents. Auto mode (the default) lets it act. The mode shows on the status line.</td></tr>
             <tr><td><code>/status</code></td><td>The opening status again: account, limits, chat and view, models, mode, work dir, goal, agents.</td></tr>
-            <tr><td><code>/mouse</code></td><td>The mouse to the terminal (to select text), or back to mugen.</td></tr>
+            <tr><td><code>/mouse</code></td><td>The mouse to the terminal (its own selection), or back to mugen.</td></tr>
             <tr><td><code>/tree</code>, <code>/export</code></td><td>The whole memory tree as a page, <code>~/.mugen/tree.html</code>; the memory as <code>./mugen-memory.json</code>.</td></tr>
             <tr><td><code>/help</code>, <code>/quit</code></td><td>The commands and keys; leave, killing every process the tools started.</td></tr>
           </tbody>
