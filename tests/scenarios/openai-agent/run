@@ -1,4 +1,0 @@
-#!/bin/sh
-# the chat on Claude (either wire), its agents on an OpenAI model
-# (MUGEN_AGENTS): a subagent's call goes to the Responses API
-MUGEN_AGENTS=gpt-6-luna:low OPENAI_API_KEY=sk-test-dummy timeout 120 "$MUGEN" < "$(dirname "$0")/input"

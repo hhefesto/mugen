@@ -2,22 +2,6 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
-## 0.5.0 (2026-10-22)
-
-- OpenAI's models: a pick of one (`/model gpt-6.1-sol`, `gpt-6-astra`,
-  `gpt-6-luna` or an OpenAI id; `MUGEN_PICK`, `MUGEN_AGENTS`,
-  `MUGEN_COMPACTOR`) runs on OpenAI's Responses API by curl, on either
-  backend, in mugen's own tool loop (UniiChat's `openai-api`): store off,
-  reasoning kept across turns, the view's mark a prompt-cache breakpoint,
-  `fast` the priority tier. Its key: `OPENAI_API_KEY`, or the file
-  `MUGEN_OPENAI_KEY_FILE` names (`~/.mugen/openai.key`), read by curl at
-  each call; with none, a call says so and makes none. The chat's pick is
-  saved with vendor `openai-api`. Claude's picks run as before.
-- `MUGEN_AGENTS`: the agents' model, effort and speed (unset: the chat's,
-  as before).
-- `/status` says which picks run on OpenAI's API, and the agents' pick;
-  `/model` and `/effort` say where an OpenAI pick's key comes from.
-
 ## 0.4.0 (2026-10-21)
 
 - `!COMMAND` runs a shell command of the user's, at once, in the directory

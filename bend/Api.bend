@@ -11,9 +11,7 @@ import ./Code.bend as C
 # shape and read it, but not streamed (v1): a request is one Process.run of
 # curl, its body on stdin, the key read by curl from the environment (never
 # in argv); or (the default wire) one call of Claude Code's CLI, a turn
-# with no tools (Code.bend cc.once), read into the same step; or, for an
-# OpenAI model on either wire, the Responses API by curl (UniiChat's
-# OpenAI.ts: below, OpenAI). A step sends every item and reads one message; an error is
+# with no tools (Code.bend cc.once), read into the same step. A step sends every item and reads one message; an error is
 # `busy` (no connection, a retry status) and asked again, TRIES times at
 # most, after its retry-after or a doubling wait, else `down`; a refusal or
 # a stop reason is `fail` (the input's doing: asked again, it fails alike).
@@ -27,55 +25,39 @@ import ./Code.bend as C
 # the curl to run (MUGEN_CURL: a stand-in for tests), the endpoint, the
 # most tokens a reply writes, the web search tool's type, how many ms a
 # second of waiting takes (1000; tests make waits short), Claude Code's
-# settings (its wire, when on, the calls'); OpenAI's endpoint, whether its
-# key is in the environment (OPENAI_API_KEY), else the file it is read from
+# settings (its wire, when on, the calls')
 type ap.Cfg is Data:
-  ap.Cfg{curl: String, url: String, max: U32, web: String, unit: U32, cc: C.cc.Cfg, ourl: String, okey: Bool, ofile: String}
+  ap.Cfg{curl: String, url: String, max: U32, web: String, unit: U32, cc: C.cc.Cfg}
 
 def ap.cfg.curl(c: ap.Cfg) -> String:
   match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       curl
 
 def ap.cfg.url(c: ap.Cfg) -> String:
   match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       url
 
 def ap.cfg.max(c: ap.Cfg) -> U32:
   match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       max
 
 def ap.cfg.web(c: ap.Cfg) -> String:
   match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       web
 
 def ap.cfg.unit(c: ap.Cfg) -> U32:
   match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       unit
 
 def ap.cfg.cc(c: ap.Cfg) -> C.cc.Cfg:
   match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
+    case ap.Cfg{curl, url, max, web, unit, cc}:
       cc
-
-def ap.cfg.ourl(c: ap.Cfg) -> String:
-  match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
-      ourl
-
-def ap.cfg.okey(c: ap.Cfg) -> Bool:
-  match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
-      okey
-
-def ap.cfg.ofile(c: ap.Cfg) -> String:
-  match c:
-    case ap.Cfg{curl, url, max, web, unit, cc, ourl, okey, ofile}:
-      ofile
 
 def ap.tries() -> U32:
   8
@@ -88,21 +70,9 @@ def ap.busy.text() -> String:
   "the AI service is busy or unavailable right now"
 
 # What a call runs on (Pick.ts): a model by its label (opus-5.5, or an id
-# as is), an effort, a speed. Its vendor is the model's: OpenAI's
-# (openai-api) for gpt-6-astra, gpt-6.1-sol, gpt-6-luna and any id of
-# theirs (gpt-..., o1..., o3..., o4..., codex-...), else Anthropic's
-# (claude-api).
+# as is), an effort, a speed.
 type ap.Pick is Data:
   ap.Pick{model: String, effort: String, speed: String}
-
-# a model of OpenAI's, by its label or id
-def ap.oai(+id: String) -> Bool:
-  Bool.or(Bool.or(String.starts_with(id, "gpt-"), String.starts_with(id, "chatgpt-")),
-    Bool.or(Bool.or(String.starts_with(id, "o1"), String.starts_with(id, "o3")), Bool.or(String.starts_with(id, "o4"), String.starts_with(id, "codex-"))))
-
-# the vendor, as UniiChat's picks name it
-def ap.vendor(+id: String) -> String:
-  Bool.pick(String, ap.oai(id), "openai-api", "claude-api")
 
 def ap.id(+label: String) -> String:
   Bool.pick(String, String.eq(label, "opus-5.5"), "claude-opus-5-5",
@@ -553,343 +523,6 @@ def ap.cc.read(o: S.mu.Out) -> ap.Step:
     case S.mu.Out{+status, out, +err}:
       ap.cc.res(status, err, C.cc.once.read(out))
 
-# OpenAI ------------------------------------------------------------------------
-#
-# openai-api, UniiChat's OpenAI.ts: the Responses API by curl, not streamed
-# (as the Messages API's here), store off, so a step sends every item and an
-# output goes back as it came (its reasoning items keep their encrypted
-# content). Reasoning keeps all turns (else a message sent mid-run drops it
-# and misses the cache); the speed is a service tier (fast: OpenAI's fast,
-# the priority tier). A marked block is an explicit cache breakpoint; the
-# end is cached implicitly only if marked. Our tools are functions (not
-# strict: their schemas are Anthropic's), web search the API's own. A
-# failed response is busy if the server's error, else it fails, as one
-# incomplete or refused does. The key is curl's to read, never in argv:
-# OPENAI_API_KEY from the environment, else the key file (read at each
-# call, so a key written there works at once).
-
-def ap.oai.mark() -> J.Json:
-  J.JObj{[J.JKv{"mode", J.JStr{"explicit"}}]}
-
-def ap.oai.tier(+speed: String) -> String:
-  Bool.pick(String, String.eq(speed, "fast"), "fast", Bool.pick(String, String.eq(speed, "ultrafast"), "ultrafast", "default"))
-
-def ap.oai.input.text(+text: String) -> J.Json:
-  J.JObj{[J.JKv{"type", J.JStr{"input_text"}}, J.JKv{"text", J.JStr{text}}]}
-
-def ap.oai.text(+text: String, mark: Bool) -> J.Json:
-  match mark:
-    case True{}:
-      J.JObj{[J.JKv{"type", J.JStr{"input_text"}}, J.JKv{"text", J.JStr{text}}, J.JKv{"prompt_cache_breakpoint", ap.oai.mark()}]}
-    case False{}:
-      ap.oai.input.text(text)
-
-# a pic as an input image, its data URL
-def ap.oai.image(+p: String) -> J.Json:
-  J.JObj{[J.JKv{"type", J.JStr{"input_image"}}, J.JKv{"image_url", J.JStr{"data:" ++ Pc.pc.media(p) ++ ";base64," ++ Pc.pc.data(p)}}]}
-
-def ap.oai.images(ps: List<&2, String>) -> List<&2, J.Json>:
-  match ps:
-    case []:
-      []
-    case p <> t:
-      ap.oai.image(p) <> ap.oai.images(t)
-
-# the blocks with text, each marked as it is (ap.parts)
-def ap.oai.parts(bs: List<&2, V.vw.B>) -> List<&2, J.Json>:
-  match bs:
-    case []:
-      []
-    case V.vw.B{SNil{}, mark} <> t:
-      ap.oai.parts(t)
-    case V.vw.B{SCon{Chr{1}, p}, mark} <> t:
-      ap.oai.image(p) <> ap.oai.parts(t)
-    case V.vw.B{text, mark} <> t:
-      ap.oai.text(text, mark) <> ap.oai.parts(t)
-
-# a result's words: a failure's said so
-def ap.oai.said(+text: String, fail: Bool) -> J.Json:
-  match fail:
-    case True{}:
-      ap.oai.input.text("error: " ++ text)
-    case False{}:
-      ap.oai.input.text(Bool.pick(String, String.is_empty(text), "(no output)", text))
-
-def ap.oai.backs(bs: List<&2, ap.Bk>) -> List<&2, J.Json>:
-  match bs:
-    case []:
-      []
-    case ap.Bk{id, +text, fail} <> t:
-      J.JObj{[J.JKv{"type", J.JStr{"function_call_output"}}, J.JKv{"call_id", J.JStr{id}},
-        J.JKv{"output", J.JArr{ap.oai.said(Pc.pc.text(text), fail) <> ap.oai.images(Pc.pc.pics(text))}}]} <> ap.oai.backs(t)
-
-# an item as input: the user's message; an output, as it came; results
-def ap.oai.item(it: ap.Item) -> List<&2, J.Json>:
-  match it:
-    case ap.User{parts}:
-      [J.JObj{[J.JKv{"role", J.JStr{"user"}}, J.JKv{"content", J.JArr{ap.oai.parts(parts)}}]}]
-    case ap.Turn{out}:
-      out
-    case ap.Back{backs}:
-      ap.oai.backs(backs)
-
-def ap.oai.items(its: List<&2, ap.Item>) -> List<&2, J.Json>:
-  match its:
-    case []:
-      []
-    case it <> t:
-      List.append(&2, J.Json, ap.oai.item(it), ap.oai.items(t))
-
-# our tools as functions
-def ap.oai.tool(+d: J.Json) -> J.Json:
-  J.JObj{[J.JKv{"type", J.JStr{"function"}}, J.JKv{"name", J.JStr{ap.s(d, "name")}}, J.JKv{"description", J.JStr{ap.s(d, "description")}},
-    J.JKv{"parameters", Maybe.default(&2, J.Json, J.js.field(d, "input_schema"), J.JObj{[]})}, J.JKv{"strict", J.JBool{False{}}}]}
-
-def ap.oai.tools(ds: List<&2, J.Json>) -> List<&2, J.Json>:
-  match ds:
-    case []:
-      []
-    case d <> t:
-      ap.oai.tool(d) <> ap.oai.tools(t)
-
-# the tools: ours, then web search if any
-def ap.oai.web(+defs: List<&2, J.Json>, +searches: U32) -> List<&2, J.Json>:
-  Bool.pick(List<&2, J.Json>, U32.is_eq(searches, 0), defs, List.append(&2, J.Json, defs, [J.JObj{[J.JKv{"type", J.JStr{"web_search"}}]}]))
-
-# the request's body (OpenAI.body), not streamed: the system prompt a
-# developer message, then the items
-def ap.oai.body(+cfg: ap.Cfg, a: ap.Ask, its: List<&2, ap.Item>) -> String:
-  match a:
-    case ap.Ask{p, system, blocks, defs, +searches, patient}:
-      match p:
-        case ap.Pick{label, effort, speed}:
-          +tools = ap.oai.web(ap.oai.tools(defs), searches)
-          J.js.write(J.JObj{List.concat(&2, J.JKv, [
-            [J.JKv{"model", J.JStr{ap.id(label)}}, J.JKv{"stream", J.JBool{False{}}}, J.JKv{"store", J.JBool{False{}}}],
-            ap.opt(Bool.not(List.is_empty(&2, J.Json, tools)), J.JKv{"tools", J.JArr{tools}}),
-            [J.JKv{"reasoning", J.JObj{[J.JKv{"effort", J.JStr{effort}}, J.JKv{"summary", J.JStr{"auto"}}, J.JKv{"context", J.JStr{"all_turns"}}]}},
-              J.JKv{"max_output_tokens", J.js.u32(ap.cfg.max(cfg))}],
-            ap.opt(U32.is_gt(searches, 0), J.JKv{"max_tool_calls", J.js.u32(searches)}),
-            [J.JKv{"service_tier", J.JStr{ap.oai.tier(speed)}}],
-            ap.opt(Bool.not(ap.last.mark(blocks, False{})), J.JKv{"prompt_cache_options", ap.oai.mark()}),
-            [J.JKv{"input", J.JArr{J.JObj{[J.JKv{"role", J.JStr{"developer"}}, J.JKv{"content", J.JArr{[ap.oai.input.text(system)]}}]} <> ap.oai.items(its)}}]])})
-
-# curl's arguments: the key, from the environment or its file, into the
-# header (curl >= 8.3), the body from stdin, after it the status line
-def ap.oai.key.args(env: Bool, +file: String) -> List<String>:
-  match env:
-    case True{}:
-      ["--variable", "%OPENAI_API_KEY"]
-    case False{}:
-      ["--variable", "OPENAI_API_KEY@" ++ file]
-
-def ap.oai.args(+cfg: ap.Cfg) -> List<String>:
-  List.append(&1, String, ["-sS"],
-    List.append(&1, String, ap.oai.key.args(ap.cfg.okey(cfg), ap.cfg.ofile(cfg)),
-      ["--expand-header", "Authorization: Bearer {{OPENAI_API_KEY:trim}}", "-H", "content-type: application/json",
-        "--connect-timeout", "30", "--max-time", "1800", "--data-binary", "@-",
-        "-w", "\n%{http_code} %header{retry-after} %header{x-should-retry}", ap.cfg.ourl(cfg)]))
-
-# one request (64 MiB at most back, 31 minutes: a model that thinks long
-# says nothing till it is done)
-def ap.oai.send(+cfg: ap.Cfg, +ctl: String, body: String) -> IO(ap.Res):
-  +curl = ap.cfg.curl(cfg)
-  IO.bind(S.mu.Out, ap.Res, S.mu.run(Bool.pick(String, String.is_empty(ctl), curl, "sh"), ap.argv(Bool.not(String.is_empty(ctl)), ctl, curl, ap.oai.args(cfg)), body, 67108864, 1860000), o => IO.pure(ap.Res, ap.res(o)))
-
-# Reading a response: its output items' messages (OpenAI.entries) and calls
-
-def ap.oai.texts(xs: List<&2, J.Json>, +k: String) -> List<&2, String>:
-  match xs:
-    case []:
-      []
-    case x <> t:
-      ap.s(x, k) <> ap.oai.texts(t, k)
-
-def ap.oai.urls(ns: List<&2, J.Json>) -> List<&2, String>:
-  match ns:
-    case []:
-      []
-    case +n <> t:
-      List.append(&2, String, Bool.pick(List<&2, String>, String.eq(ap.ty(n), "url_citation"), [ap.s(n, "title") ++ " " ++ ap.s(n, "url")], []), ap.oai.urls(t))
-
-# the web sources a message's content cites
-def ap.oai.cites(cs: List<&2, J.Json>) -> List<&2, String>:
-  match cs:
-    case []:
-      []
-    case c <> t:
-      List.append(&2, String, ap.oai.urls(J.js.arr(c, "annotations")), ap.oai.cites(t))
-
-def ap.oai.has(xs: List<&2, String>, +x: String) -> Bool:
-  match xs:
-    case []:
-      False{}
-    case +y <> t:
-      Bool.or(String.eq(x, y), ap.oai.has(t, x))
-
-# each once, in order (seen: those kept, reversed)
-def ap.oai.uniq(xs: List<&2, String>, +seen: List<&2, String>) -> List<&2, String>:
-  match xs:
-    case []:
-      List.reverse(&2, String, seen)
-    case +x <> t:
-      ap.oai.uniq(t, Bool.pick(List<&2, String>, ap.oai.has(seen, x), seen, x <> seen))
-
-def ap.oai.one(+text: String, +kind: String) -> List<&2, ap.Entry>:
-  Bool.pick(List<&2, ap.Entry>, String.is_empty(text), [], [ap.Entry{kind, text, ""}])
-
-def ap.oai.sources(+cited: List<&2, String>) -> List<&2, ap.Entry>:
-  Bool.pick(List<&2, ap.Entry>, List.is_empty(&2, String, cited), [], [ap.Entry{"echo", "sources:\n" ++ T.tx.join(cited, "\n"), ""}])
-
-# a call's arguments as JSON (written anew, as the API path writes an
-# input), or as they came if they are none
-def ap.oai.args.of(+raw: String, m: Maybe<&2, J.Json>) -> String:
-  match m:
-    case Some{j}:
-      J.js.write(j)
-    case None{}:
-      raw
-
-def ap.oai.args.text(+raw: String) -> String:
-  ap.oai.args.of(raw, J.js.read(raw))
-
-# 0 a thought, 1 a message, 2 a call of ours, 3 a web search, 4 else
-def ap.oai.kind(+ty: String) -> Nat:
-  Bool.pick(Nat, String.eq(ty, "reasoning"), 0n, Bool.pick(Nat, String.eq(ty, "message"), 1n,
-    Bool.pick(Nat, String.eq(ty, "function_call"), 2n, Bool.pick(Nat, String.eq(ty, "web_search_call"), 3n, 4n))))
-
-def ap.oai.entry(k: Nat, +o: J.Json) -> List<&2, ap.Entry>:
-  match k:
-    case 0n:
-      ap.oai.one(T.tx.trim(T.tx.join(ap.oai.texts(J.js.arr(o, "summary"), "text"), "\n\n")), "mind")
-    case 1n:
-      List.append(&2, ap.Entry, ap.oai.one(T.tx.trim(T.tx.concat(ap.oai.texts(J.js.arr(o, "content"), "text"))), "unii"),
-        ap.oai.sources(ap.oai.uniq(ap.oai.cites(J.js.arr(o, "content")), [])))
-    case 2n:
-      [ap.Entry{"tool", ap.s(o, "name") ++ " " ++ ap.oai.args.text(ap.s(o, "arguments")), ap.s(o, "call_id")}]
-    case 3n:
-      [ap.Entry{"tool", "web_search " ++ J.js.write(Maybe.default(&2, J.Json, J.js.field(o, "action"), J.JObj{[]})), ""}]
-    case _:
-      []
-
-def ap.oai.entries(xs: List<&2, J.Json>) -> List<&2, ap.Entry>:
-  match xs:
-    case []:
-      []
-    case +x <> t:
-      List.append(&2, ap.Entry, ap.oai.entry(ap.oai.kind(ap.ty(x)), x), ap.oai.entries(t))
-
-# a call's input: its arguments parsed (none: an empty object), null if
-# they are no JSON (Agent.parse)
-def ap.oai.input(m: Maybe<&2, J.Json>) -> J.Json:
-  match m:
-    case Some{j}:
-      j
-    case None{}:
-      J.JNull{}
-
-def ap.oai.parse(+raw: String) -> J.Json:
-  ap.oai.input(J.js.read(Bool.pick(String, String.is_empty(raw), "{}", raw)))
-
-def ap.oai.uses(xs: List<&2, J.Json>) -> List<&2, ap.Use>:
-  match xs:
-    case []:
-      []
-    case +x <> t:
-      List.append(&2, ap.Use, Bool.pick(List<&2, ap.Use>, String.eq(ap.ty(x), "function_call"),
-        [ap.Use{ap.s(x, "call_id"), ap.s(x, "name"), ap.oai.parse(ap.s(x, "arguments"))}], []), ap.oai.uses(t))
-
-def ap.oai.refused(cs: List<&2, J.Json>) -> List<&2, String>:
-  match cs:
-    case []:
-      []
-    case +c <> t:
-      List.append(&2, String, Bool.pick(List<&2, String>, String.eq(ap.ty(c), "refusal"), [ap.s(c, "refusal")], []), ap.oai.refused(t))
-
-# the refusals in an output's messages
-def ap.oai.refusals(xs: List<&2, J.Json>) -> List<&2, String>:
-  match xs:
-    case []:
-      []
-    case x <> t:
-      List.append(&2, String, ap.oai.refused(J.js.arr(x, "content")), ap.oai.refusals(t))
-
-def ap.oai.obj(m: Maybe<&2, J.Json>) -> J.Json:
-  Maybe.default(&2, J.Json, m, J.JObj{[]})
-
-# a response's step (OpenAI.step): failed, busy if the server's error, else
-# a failure; incomplete or refused, a failure; else its calls, if any
-def ap.oai.step.of(+r: J.Json) -> ap.Step:
-  +out = J.js.arr(r, "output")
-  +uses = ap.oai.uses(out)
-  +status = ap.s(r, "status")
-  +err = ap.oai.obj(J.js.field(r, "error"))
-  +refused = ap.oai.refusals(out)
-  +failed = String.eq(status, "failed")
-  +cut = String.eq(status, "incomplete")
-  +no = Bool.not(List.is_empty(&2, String, refused))
-  +code = Bool.pick(U32, failed, Bool.pick(U32, String.eq(ap.s(err, "code"), "server_error"), 3, 6),
-    Bool.pick(U32, Bool.or(cut, no), 6, Bool.pick(U32, List.is_empty(&2, ap.Use, uses), 0, 1)))
-  +why = Bool.pick(String, failed, Bool.pick(String, String.is_empty(ap.s(err, "message")), "failed", ap.s(err, "message")),
-    Bool.pick(String, cut, "incomplete: " ++ ap.s(ap.oai.obj(J.js.field(r, "incomplete_details")), "reason"),
-      Bool.pick(String, no, "refused: " ++ T.tx.join(refused, " "), "")))
-  ap.Step{out, uses, ap.oai.entries(out), code, why, 0}
-
-def ap.oai.ok.body(m: Maybe<&2, J.Json>) -> ap.Step:
-  match m:
-    case Some{+j}:
-      ap.oai.step.of(j)
-    case None{}:
-      ap.fail("the response was not JSON", 3, 0)
-
-# a response's step, as ap.read reads the Messages API's, but an error of
-# the request's (a 4xx not asked again: a bad key, an unknown model) fails,
-# so the user reads why
-def ap.oai.read(r: ap.Res) -> ap.Step:
-  match r:
-    case ap.Res{+exit, +code, +after, +should, +body, +err}:
-      +ours = Bool.and(U32.is_ge(code, 400), U32.is_lt(code, 500))
-      Bool.pick(ap.Step, Bool.not(U32.is_eq(exit, 0)), ap.fail(Bool.pick(String, String.is_empty(err), "curl exited " ++ U32.show(exit), err), 3, 0),
-        Bool.pick(ap.Step, U32.is_eq(code, 200), ap.oai.ok.body(J.js.read(body)),
-          ap.fail("OpenAI's API: HTTP " ++ U32.show(code) ++ ": " ++ ap.reason(body), Bool.pick(U32, ap.passing(code, should), 3, Bool.pick(U32, ours, 6, 4)), after)))
-
-# The key: the environment's, else its file's if there (or a curl of a
-# test's, which needs none); none, said
-def ap.oai.there(r: Result<&1, &1, U32 & String, Nat>) -> Bool:
-  match r:
-    case Done{n}:
-      True{}
-    case Fail{e}:
-      False{}
-
-def ap.oai.nokey(+cfg: ap.Cfg) -> String:
-  "no OpenAI API key: set OPENAI_API_KEY, or write the key to " ++ ap.cfg.ofile(cfg) ++ " (MUGEN_OPENAI_KEY_FILE names another file)"
-
-def ap.oai.keyed(+cfg: ap.Cfg) -> IO(Bool):
-  IO.bind(Result<&1, &1, U32 & String, Nat>, Bool, S.mu.size(ap.cfg.ofile(cfg)), r =>
-    IO.pure(Bool, Bool.or(ap.cfg.okey(cfg), Bool.or(ap.oai.there(r), Bool.not(String.eq(ap.cfg.curl(cfg), "curl"))))))
-
-# where the key comes from, said ("" none)
-def ap.oai.key.from(+cfg: ap.Cfg) -> IO(String):
-  IO.bind(Result<&1, &1, U32 & String, Nat>, String, S.mu.size(ap.cfg.ofile(cfg)), r =>
-    IO.pure(String, Bool.pick(String, ap.cfg.okey(cfg), "OPENAI_API_KEY", Bool.pick(String, ap.oai.there(r), ap.cfg.ofile(cfg), ""))))
-
-def ap.oai.go(keyed: Bool, +cfg: ap.Cfg, +ctl: String, body: String) -> IO(ap.Step):
-  match keyed:
-    case True{}:
-      IO.bind(ap.Res, ap.Step, ap.oai.send(cfg, ctl, body), r => IO.pure(ap.Step, ap.oai.read(r)))
-    case False{}:
-      IO.pure(ap.Step, ap.fail(ap.oai.nokey(cfg), 6, 0))
-
-# one try on OpenAI's API
-def ap.oai.try(+cfg: ap.Cfg, +ctl: String, body: String) -> IO(ap.Step):
-  IO.bind(Bool, ap.Step, ap.oai.keyed(cfg), k => ap.oai.go(k, cfg, ctl, body))
-
-# a call's wire: 0 the Messages API by curl, 1 Claude Code, 2 OpenAI's
-# Responses API by curl (an OpenAI model's, whatever the wire)
-def ap.wire(+cfg: ap.Cfg, +id: String) -> Nat:
-  Bool.pick(Nat, ap.oai(id), 2n, Bool.pick(Nat, C.cc.on(ap.cfg.cc(cfg)), 1n, 0n))
-
 def ap.step.stop(s: ap.Step) -> U32:
   match s:
     case ap.Step{o, u, e, stop, w, a}:
@@ -940,15 +573,12 @@ def ap.ask.blocks(a: ap.Ask) -> List<&2, V.vw.B>:
     case ap.Ask{p, sy, b, t, se, pa}:
       b
 
-# one try on the call's wire (ap.wire): the body by curl, or the ask (its
-# one message) by Claude Code
-def ap.try.on(w: Nat, +cfg: ap.Cfg, +a: ap.Ask, +id: String, +fast: Bool, +ctl: String, +body: String) -> IO(ap.Step):
-  match w:
-    case 1n:
+# one try: the body by curl, or the ask (its one message) by Claude Code
+def ap.try.on(on: Bool, +cfg: ap.Cfg, +a: ap.Ask, +id: String, +fast: Bool, +ctl: String, +body: String) -> IO(ap.Step):
+  match on:
+    case True{}:
       IO.bind(S.mu.Out, ap.Step, C.cc.once(ap.cfg.cc(cfg), id, ap.pick.effort(ap.ask.pick(a)), ap.ask.system(a), ap.ask.blocks(a), ctl), o => IO.pure(ap.Step, ap.cc.read(o)))
-    case 2n:
-      ap.oai.try(cfg, ctl, body)
-    case _:
+    case False{}:
       IO.bind(ap.Res, ap.Step, ap.send(cfg, id, fast, ctl, body), r => IO.pure(ap.Step, ap.read(r)))
 
 # One step: the request sent, asked again while busy, TRIES in all, each
@@ -966,7 +596,7 @@ def ap.step.go(n: Nat, v: Nat, +cfg: ap.Cfg, +a: ap.Ask, +id: String, +fast: Boo
         ap.step.go(f, Bool.pick(Nat, st, 3n, 4n), cfg, a, id, fast, body, notes, ctl, k, s)
     case 1n+f 4n:
       do IO<ap.Step>:
-        +s2 : ap.Step <- ap.try.on(ap.wire(cfg, id), cfg, a, id, fast, ctl, body)
+        +s2 : ap.Step <- ap.try.on(C.cc.on(ap.cfg.cc(cfg)), cfg, a, id, fast, ctl, body)
         st : Bool <- ap.stopped(ctl)
         ap.step.go(f, Bool.pick(Nat, st, 3n, Bool.pick(Nat, ap.final(s2, k), 1n, 2n)), cfg, a, id, fast, body, notes, ctl, k, s2)
     case 1n+f 1n:
@@ -986,18 +616,15 @@ def ap.pick.id(p: ap.Pick) -> String:
     case ap.Pick{m, e, s}:
       ap.id(m)
 
-# the body, for curl only: the Messages API's or OpenAI's
-def ap.body.if(w: Nat, +cfg: ap.Cfg, +a: ap.Ask, its: List<&2, ap.Item>) -> String:
-  match w:
-    case 1n:
+# the body, for curl only
+def ap.body.if(on: Bool, +cfg: ap.Cfg, +a: ap.Ask, its: List<&2, ap.Item>) -> String:
+  match on:
+    case True{}:
       ""
-    case 2n:
-      ap.oai.body(cfg, a, its)
-    case _:
+    case False{}:
       ap.body(cfg, a, its)
 
 # a step of a call: its body sent, as often as busy calls for
 def ap.step(+cfg: ap.Cfg, +a: ap.Ask, its: List<&2, ap.Item>, +notes: Chan(String), +ctl: String) -> IO(ap.Step):
   +p = ap.ask.pick(a)
-  +id = ap.pick.id(p)
-  ap.step.go(Nat.add(Nat.mul(U32.to_nat(ap.tries()), 4n), 4n), 0n, cfg, a, id, ap.fast(p), ap.body.if(ap.wire(cfg, id), cfg, a, its), notes, ctl, 1, ap.fail(ap.busy.text(), 3, 0))
+  ap.step.go(Nat.add(Nat.mul(U32.to_nat(ap.tries()), 4n), 4n), 0n, cfg, a, ap.pick.id(p), ap.fast(p), ap.body.if(C.cc.on(ap.cfg.cc(cfg)), cfg, a, its), notes, ctl, 1, ap.fail(ap.busy.text(), 3, 0))

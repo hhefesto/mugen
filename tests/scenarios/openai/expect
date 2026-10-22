@@ -1,9 +1,0 @@
-[the chat now runs on gpt-6.1-sol:medium:slow, on OpenAI's API (the key: OPENAI_API_KEY)]
-[the chat now runs on gpt-6.1-sol:high:slow, on OpenAI's API (the key: OPENAI_API_KEY)]
-user: run echo hi
-mind: let me run it
-unii: Running it.
-tool: shell {"device":"@HOST@","command":"echo hi"}
-echo: hi
-(exit 0 in T s)
-unii: It said hi.

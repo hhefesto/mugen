@@ -15,11 +15,6 @@
 // as a compactor would (its input flattened and cut) or, with tools, a chat.
 //
 // MUGEN_FAKE_LOG: a directory each request is written to, {argv, body}.
-//
-// A request to OpenAI's Responses API (a body with `input`, an OpenAI
-// model's: Api.bend ap.oai) is told apart by its body: its system prompt is
-// its first item's (the developer message), and an unscripted one is
-// answered as a Responses API response (a reasoning item, a message).
 import * as fs from "node:fs";
 
 const body = await Bun.stdin.text();
@@ -43,39 +38,19 @@ const message = (req: any, content: object[], stop = "end_turn") => ({
 
 const cut = (s: string, n: number) => Buffer.from(s, "utf8").subarray(0, n).toString("utf8").replace(/�+$/, "");
 
-// a response of OpenAI's: a thought, then the reply
-const response = (req: any, reply: string) => ({
-  id: "resp_fake",
-  object: "response",
-  status: "completed",
-  model: req.model,
-  output: [
-    { type: "reasoning", id: "rs_fake", summary: [{ type: "summary_text", text: "fake thought" }], encrypted_content: "fake-encrypted" },
-    { type: "message", id: "msg_fake", role: "assistant", status: "completed", content: [{ type: "output_text", text: reply, annotations: [] }] },
-  ],
-  service_tier: req.service_tier,
-  usage: { input_tokens: 1, output_tokens: 1 },
-});
-
-const openai = (req: any) => req.input !== undefined;
-
 // a compactor's line: its input, flattened, cut to 300 bytes
 const answer = (req: any) => {
-  const items = openai(req) ? req.input : req.messages;
-  const last = items[items.length - 1].content;
-  const text = last.filter((b: any) => b.type === "text" || b.type === "input_text").map((b: any) => b.text).join("");
+  const last = req.messages[req.messages.length - 1].content;
+  const text = last.filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
   const input = /<input>\n([\s\S]*)\n<\/input>/.exec(text)?.[1] ?? text;
   const reply = req.tools === undefined ? cut("S: " + input.replace(/\s*\n\s*/g, " "), 300) : "fake reply";
-  if (openai(req)) {
-    return response(req, reply);
-  }
   return message(req, [{ type: "thinking", thinking: "fake thought", signature: "fake-signature" }, { type: "text", text: reply }]);
 };
 
 // which script answers: a goal check's (MUGEN_FAKE_GOAL), a call with
 // tools' (a turn or an agent: MUGEN_FAKE_CHAT), else any (MUGEN_FAKE)
 const req = JSON.parse(body);
-const system = String(req.system?.[0]?.text ?? req.input?.[0]?.content?.[0]?.text ?? "");
+const system = String(req.system?.[0]?.text ?? "");
 const goal = system.startsWith("You check a goal.");
 const agent = system.startsWith("You are a subagent of mugen");
 const chat = req.tools !== undefined;
@@ -83,7 +58,7 @@ let out: any = { code: 200, body: null };
 const env = process.env;
 const script = goal ? env.MUGEN_FAKE_GOAL : agent ? env.MUGEN_FAKE_AGENT ?? env.MUGEN_FAKE_CHAT : chat ? env.MUGEN_FAKE_CHAT ?? env.MUGEN_FAKE : env.MUGEN_FAKE_CHAT ? undefined : env.MUGEN_FAKE;
 if (goal && !script) {
-  out = { code: 200, body: openai(req) ? response(req, "yes") : message(req, [{ type: "text", text: "yes" }]) };
+  out = { code: 200, body: message(req, [{ type: "text", text: "yes" }]) };
 }
 if (script) {
   const list = JSON.parse(fs.readFileSync(script, "utf8"));

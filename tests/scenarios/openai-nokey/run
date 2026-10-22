@@ -1,6 +1,0 @@
-#!/bin/sh
-# an OpenAI model with no key (none in the environment, no key file): the
-# turn says so at once, and curl never runs (a real curl's name, so the
-# check is made; ANTHROPIC_API_KEY only lets --api start: nothing calls it)
-env -u OPENAI_API_KEY MUGEN_CURL=curl MUGEN_OPENAI_KEY_FILE=/nonexistent/openai.key ANTHROPIC_API_KEY=unused \
-  MUGEN_PICK=gpt-6.1-sol:medium timeout 60 "$MUGEN" < "$(dirname "$0")/input"
