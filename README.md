@@ -13,6 +13,10 @@ it needs more. The chat runs tools on this computer (`shell`, `read`,
 `write`, `edit`), starts subagents (`spawn`, `tell`), works toward a `/goal`,
 and searches the web.
 
+**[Read the guide](https://blog.hhefesto.com/mugen/guide.html)**: every key,
+command and setting on one page, served by GitHub Pages from
+[docs/guide.html](docs/guide.html).
+
 ![mugen in a real session: it launches two agents, their tabs show while they work, and their reports come back to one answer](docs/demo.gif)
 
 ## Run
@@ -241,7 +245,12 @@ test against UniiChat's own `Memory.ts`), and the Bend 2 pitfalls that shaped
 the code.
 
 The demo at the top is a real Claude session: `nix run nixpkgs#vhs -- docs/demo.tape`
-records it again into `docs/demo.gif`.
+records it again into `docs/demo.gif`. Then hold its last scene for 8 seconds
+before it loops (vhs can't set one frame's delay):
+
+```sh
+nix run nixpkgs#gifsicle -- -b docs/demo.gif '#0--2' -d800 '#-1'
+```
 
 ## License
 

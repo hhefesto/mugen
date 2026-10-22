@@ -2,7 +2,9 @@
 #   nix run nixpkgs#vhs -- docs/demo.tape
 # It runs mugen in a fresh MUGEN_DIR, its work dir a copy of bend/. mugen
 # launches two agents; their blocks and tabs show while they work, and
-# their reports come back to it.
+# their reports come back to it. Then hold the last scene for 8 s before the
+# gif loops, so the watcher can take in the answer:
+#   nix run nixpkgs#gifsicle -- -b docs/demo.gif '#0--2' -d800 '#-1'
 Output docs/demo.gif
 Set Shell bash
 Set FontSize 15
