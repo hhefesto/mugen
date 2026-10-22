@@ -2,9 +2,9 @@
   description = "mugen: Victor Taelin's UniiChat (one chat that never ends, its memory a binary summary tree) in Bend 2, as a terminal app";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  # Bend 2: the ft-kernels fork of bendlang/bend, pinned with
-  # formalTransformer and OptMem.  Its `default` package runs the fork's
-  # own source with Bun (clang on PATH, telemetry off).
+  # Bend 2: the ft-kernels fork of bendlang/bend, pinned with ana
+  # (formerly formalTransformer) and OptMem.  Its `default` package runs
+  # the fork's own source with Bun (clang on PATH, telemetry off).
   inputs.bend2 = {
     url = "github:hhefesto/bend2/ft-kernels";
     inputs.nixpkgs.follows = "nixpkgs";
