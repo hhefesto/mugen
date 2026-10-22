@@ -73,10 +73,19 @@ type sc.In is Data:
 type sc.Cf is Data:
   sc.Cf{hub: Chan(E.ev.Ev), me: Chan(sc.In), home: String, hfile: String}
 
+# where the chat's top row was when last drawn: its block's id (0 none),
+# the row's place in that block (from the block's top), and the rows
+# scrolled up then. While those are still the rows scrolled up, the view
+# is held on that row: what comes below (a block more, a result under its
+# call) never moves what is being read.
+type sc.An is Data:
+  sc.An{id: U32, row: U32, off: U32}
+
 # the chat: its blocks (newest first), the next id, the rows scrolled up
-# from its end, and the ids of the blocks on its rows as drawn (top down)
+# from its end, the ids of the blocks on its rows as drawn (top down), and
+# where its top row was
 type sc.Tr is Data:
-  sc.Tr{blks: List<&2, sc.Blk>, next: U32, off: U32, ids: List<&2, U32>}
+  sc.Tr{blks: List<&2, sc.Blk>, next: U32, off: U32, ids: List<&2, U32>, an: sc.An}
 
 # the terminal: its columns and rows, what to draw (0 nothing, 1 the lines
 # under the chat, 2 all), the mouse's reports on, the rows under the chat as
@@ -260,23 +269,50 @@ def sc.home(+s: sc.S) -> String:
 
 def sc.tr.blks(t: sc.Tr) -> List<&2, sc.Blk>:
   match t:
-    case sc.Tr{b, n, o, i}:
+    case sc.Tr{b, n, o, i, a}:
       b
 
 def sc.tr.next(t: sc.Tr) -> U32:
   match t:
-    case sc.Tr{b, n, o, i}:
+    case sc.Tr{b, n, o, i, a}:
       n
 
 def sc.tr.off(t: sc.Tr) -> U32:
   match t:
-    case sc.Tr{b, n, o, i}:
+    case sc.Tr{b, n, o, i, a}:
       o
 
 def sc.tr.ids(t: sc.Tr) -> List<&2, U32>:
   match t:
-    case sc.Tr{b, n, o, i}:
+    case sc.Tr{b, n, o, i, a}:
       i
+
+def sc.tr.an(t: sc.Tr) -> sc.An:
+  match t:
+    case sc.Tr{b, n, o, i, a}:
+      a
+
+def sc.an.id(a: sc.An) -> U32:
+  match a:
+    case sc.An{i, r, o}:
+      i
+
+def sc.an.row(a: sc.An) -> U32:
+  match a:
+    case sc.An{i, r, o}:
+      r
+
+def sc.an.off(a: sc.An) -> U32:
+  match a:
+    case sc.An{i, r, o}:
+      o
+
+# a block more at the end, while scrolled up (o > 0): the rows scrolled up
+# grow by its k rows, and so do those the top row was drawn at
+def sc.an.bump(a: sc.An, +o: U32, +k: U32) -> sc.An:
+  match a:
+    case sc.An{i, r, +ao}:
+      sc.An{i, r, Bool.pick(U32, U32.is_eq(o, 0), ao, (ao + k : U32))}
 
 def sc.blks(+s: sc.S) -> List<&2, sc.Blk>:
   sc.tr.blks(sc.tr(s))
@@ -286,11 +322,11 @@ def sc.off(+s: sc.S) -> U32:
 
 def sc.with.blks(+s: sc.S, +bs: List<&2, sc.Blk>) -> sc.S:
   +t = sc.tr(s)
-  sc.with.tr(s, sc.Tr{bs, sc.tr.next(t), sc.tr.off(t), sc.tr.ids(t)})
+  sc.with.tr(s, sc.Tr{bs, sc.tr.next(t), sc.tr.off(t), sc.tr.ids(t), sc.tr.an(t)})
 
 def sc.with.off(+s: sc.S, +o: U32) -> sc.S:
   +t = sc.tr(s)
-  sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), o, sc.tr.ids(t)})
+  sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), o, sc.tr.ids(t), sc.tr.an(t)})
 
 def sc.tm.w(t: sc.Tm) -> U32:
   match t:
@@ -977,17 +1013,17 @@ def sc.sel.show(+z: sc.Sel, +rows: List<&2, String>) -> List<&2, String>:
   sc.sel.show.go(Bool.pick(Nat, Bool.and(sc.sel.on(z), sc.sel.moved(z)), 1n, 0n), z, rows)
 
 # copying: X's clipboard (xclip), tmux's buffer (and so the terminal's, by
-# OSC 52); whichever is there
+# OSC 52); whichever is there. It says where it went: x X's, t tmux's.
 def sc.clip() -> String:
-  "t=$(cat); [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null && printf %s \"$t\" | xclip -selection clipboard >/dev/null 2>&1; [ -n \"$TMUX\" ] && printf %s \"$t\" | tmux load-buffer -w - >/dev/null 2>&1; true"
+  "t=$(cat); r=; if [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null && printf %s \"$t\" | xclip -selection clipboard >/dev/null 2>&1; then r=x; fi; if [ -n \"$TMUX\" ] && printf %s \"$t\" | tmux load-buffer -w - >/dev/null 2>&1; then r=${r}t; fi; printf %s \"$r\""
 
 def sc.cursor(+r: U32, +c: U32) -> String:
   "\u{1B}[" ++ U32.show(r) ++ ";" ++ U32.show((c + 1 : U32)) ++ "H"
 
-def sc.with.drawn(+s: sc.S, +g: sc.G, +ids: List<&2, U32>, +off: U32, +low: U32, +rows: List<&2, String>, +pin: U32) -> sc.S:
+def sc.with.drawn(+s: sc.S, +g: sc.G, +ids: List<&2, U32>, +off: U32, +an: sc.An, +low: U32, +rows: List<&2, String>, +pin: U32) -> sc.S:
   +t = sc.tr(s)
   +m = sc.tm(s)
-  sc.with.z(sc.with.tm(sc.with.tr(s, sc.Tr{sc.g.bs(g), sc.tr.next(t), off, ids}), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low}), sc.sel.with.drawn(sc.z(s), rows, pin))
+  sc.with.z(sc.with.tm(sc.with.tr(s, sc.Tr{sc.g.bs(g), sc.tr.next(t), off, ids, an}), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low}), sc.sel.with.drawn(sc.z(s), rows, pin))
 
 # The prompt pinned on top: the newest of the user's messages above the
 # chat's top row (its block's id under it) stays on the first row, on its
@@ -1058,28 +1094,67 @@ def sc.to.pin(+s: sc.S) -> sc.S:
   +t = (h - U32.min(h, sc.tm.low(sc.tm(s))) : U32)
   sc.dirty(sc.with.off(s, (total - U32.min(total, t) : U32)), 2)
 
-# all of it
+def sc.blk.has(bs: List<&2, sc.Blk>, +id: U32) -> Bool:
+  match bs:
+    case []:
+      False{}
+    case b <> rest:
+      Bool.or(U32.is_eq(sc.blk.id(b), id), sc.blk.has(rest, id))
+
+# the rows scrolled up: those that put the chat's top row back where it was
+# drawn (k 1: nothing but new rows moved it), else off as it is (k 0). The
+# top row is the row-th of its block's, so as many rows are left from it to
+# the chat's end as there are to its block's top, less row; t of them show.
+def sc.an.go(k: Nat, +a: sc.An, bs: List<&2, sc.Blk>, +off: U32, +t: U32, +w: U32, +home: String, +focus: String) -> U32:
+  match k:
+    case 0n:
+      off
+    case _:
+      +n = sc.rows.to(bs, True{}, sc.an.id(a), w, home, 0, focus)
+      +top = (n - U32.min(n, sc.an.row(a)) : U32)
+      (top - U32.min(top, t) : U32)
+
+# held while scrolled up and not scrolled since the last draw (the rows
+# scrolled up are still those the top row was drawn at), its block still there
+def sc.an.held(+s: sc.S, +off: U32, +t: U32) -> U32:
+  +a = sc.tr.an(sc.tr(s))
+  +id = sc.an.id(a)
+  +bs = sc.blks(s)
+  +same = Bool.and(U32.is_gt(off, 0), U32.is_eq(sc.an.off(a), off))
+  +k = Bool.pick(Nat, Bool.and(same, Bool.and(Bool.not(U32.is_eq(id, 0)), sc.blk.has(bs, id))), 1n, 0n)
+  sc.an.go(k, a, bs, off, t, sc.w(s), sc.home(s), sc.focus(s))
+
+# the top row as drawn: its block's id, its place there (the rows from the
+# chat's end to the block's top, less the seen ones: those from the end up to
+# the top row), and the rows scrolled up
+def sc.an.take(bs: List<&2, sc.Blk>, +top: U32, +seen: U32, +off: U32, +w: U32, +home: String, +focus: String) -> sc.An:
+  +n = sc.rows.to(bs, True{}, top, w, home, 0, focus)
+  sc.An{top, (n - U32.min(n, seen) : U32), off}
+
+# all of it (the lines under the chat laid out again once the rows scrolled
+# up are known: the rule says how many are below)
 def sc.draw.all(+s: sc.S) -> IO(sc.S):
-  +low = sc.low(s)
-  +lrows = sc.low.rows(low)
-  +nl = U32.from_nat(List.length(&2, String, lrows))
+  +nl = U32.from_nat(List.length(&2, String, sc.low.rows(sc.low(s))))
   +h = sc.h(s)
   +t = Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0)
-  +off = sc.off(s)
+  +off = sc.an.held(s, sc.off(s), t)
   +need = (off + t : U32)
   +focus = sc.focus(s)
   +g = sc.gather(sc.blks(s), U32.is_gt(need, 0), sc.shows.head(sc.blks(s), focus), need, 0, [], [], sc.w(s), sc.home(s), focus)
   +k = sc.g.k(g)
   +off2 = U32.min(off, (k - U32.min(k, t) : U32))
+  +low = sc.low(sc.with.off(s, off2))
+  +lrows = sc.low.rows(low)
   +rows0 = List.take(&2, String, sc.g.rows(g), U32.to_nat(t))
   +ids0 = List.take(&2, U32, sc.g.ids(g), U32.to_nat(t))
+  +an = sc.an.take(sc.g.bs(g), Maybe.default(&2, U32, List.get(&2, U32, ids0, 0n), 0), (off2 + U32.from_nat(List.length(&2, String, rows0)) : U32), off2, sc.w(s), sc.home(s), focus)
   +pm = sc.pin.go(sc.g.bs(g), sc.pin.v(sc.g.bs(g), Maybe.default(&2, U32, List.get(&2, U32, ids0, 0n), 0)), Maybe.default(&2, U32, List.get(&2, U32, ids0, 0n), 0))
   +pid = Bool.pick(U32, Bool.and(U32.is_ge(t, 4), Bool.or(String.is_empty(focus), String.eq(focus, "mugen"))), sc.pin.id(pm), 0)
   +rows = sc.pinned.rows(pid, sc.pin.row(pm, sc.w(s)), rows0)
   +ids = sc.pinned.ids(pid, ids0)
   +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(t), sc.sel.show(sc.z(s), rows), 1), sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
     [sc.cursor((t + (sc.low.row(low) + 1 : U32) : U32), sc.low.col(low)), "\u{1B}[?25h\u{1B}[?2026l"]]))
-  IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.drawn(s, g, ids, off2, nl, rows, pid)))
+  IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.drawn(s, g, ids, off2, an, nl, rows, pid)))
 
 def sc.with.clean(+s: sc.S) -> sc.S:
   +m = sc.tm(s)
@@ -1112,8 +1187,9 @@ def sc.draw(+s: sc.S) -> IO(sc.S):
 
 def sc.tr.add(t: sc.Tr, +b: sc.Blk) -> sc.Tr:
   match t:
-    case sc.Tr{bs, n, +o, i}:
-      sc.Tr{List.take(&2, sc.Blk, b <> bs, 400n), (n + 1 : U32), Bool.pick(U32, U32.is_eq(o, 0), 0, (o + sc.blk.n(b) : U32)), i}
+    case sc.Tr{bs, n, +o, i, a}:
+      +k = sc.blk.n(b)
+      sc.Tr{List.take(&2, sc.Blk, b <> bs, 400n), (n + 1 : U32), Bool.pick(U32, U32.is_eq(o, 0), 0, (o + k : U32)), i, sc.an.bump(a, o, k)}
 
 # a block more, at the chat's end (the view held where it is if scrolled up)
 def sc.add(+s: sc.S, +who: String, +kind: String, +text: String, +run: Bool) -> sc.S:
@@ -1429,8 +1505,21 @@ def sc.click.at(k: Nat, +s: sc.S, +y: U32) -> sc.S:
     case _:
       sc.click(s, y)
 
-def sc.copied(+n: Nat) -> String:
-  "copied " ++ Nat.show(n) ++ Bool.pick(String, Nat.is_eq(n, 1n), " line", " lines") ++ " \u{b7} Shift-drag selects with the terminal"
+# what a copy says under the chat, from where sc.clip put it (x X's
+# clipboard, t tmux's buffer, none nowhere)
+def sc.copied(+n: Nat, +to: String) -> String:
+  +what = Nat.show(n) ++ Bool.pick(String, Nat.is_eq(n, 1n), " line", " lines")
+  +x = String.contains(to, "x")
+  +t = String.contains(to, "t")
+  Bool.pick(String, Bool.or(x, t),
+    P.pp.paint("1;32", "\u{2713} copied " ++ what ++ Bool.pick(String, x, " to the clipboard", " to tmux's buffer (the terminal's clipboard too, if it takes OSC 52)")),
+    P.pp.paint("1;31", "\u{2717} not copied: no X display for xclip, and no tmux"))
+    ++ P.pp.paint("2", " \u{b7} Shift-drag selects with the terminal")
+
+def sc.copied.of(o: S.mu.Out, +n: Nat) -> String:
+  match o:
+    case S.mu.Out{status, out, err}:
+      sc.copied(n, out)
 
 # the tabs: a click on one (column x, from 1), or M-Left / M-Right
 def sc.tab.click(+s: sc.S, +x: U32) -> sc.S:
@@ -1469,7 +1558,7 @@ def sc.up(k: Nat, +s: sc.S, +x: U32, +y: U32) -> IO(sc.S):
       +text = sc.sel.text(z)
       do IO<sc.S>:
         o : S.mu.Out <- S.mu.run("sh", ["-c", sc.clip()], text, 4096, 5000)
-        return sc.dirty(sc.with.hint(sc.with.z(s, sc.sel.off(z)), sc.copied(List.length(&2, String, P.pp.split(text)))), 2)
+        return sc.dirty(sc.with.hint(sc.with.z(s, sc.sel.off(z)), sc.copied.of(o, List.length(&2, String, P.pp.split(text)))), 2)
 
 def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
   match k:
@@ -1537,14 +1626,40 @@ def sc.size(+s: sc.S, +ws: U32) -> sc.S:
   Bool.pick(sc.S, Bool.or(U32.is_eq(ws, 0), Bool.and(U32.is_eq(w, sc.tm.w(m)), U32.is_eq(h, sc.tm.h(m)))), s,
     sc.with.tm(s, sc.Tm{w, h, 2, sc.tm.mouse(m), sc.tm.low(m)}))
 
-# a tick: the size checked; the spinner and the times on, if anything runs
+# A phone noticed. Conduit (on xterm.dart) answers no XTVERSION, so tmux
+# knows no type for its client (#{client_termtype} empty), where VTE, xterm,
+# kitty and the like each give theirs. There a swipe is the wheel (buttons
+# 68 and 69, Keys.bend), so it scrolls the chat while mugen has the mouse;
+# Conduit's own tmux-scrollback key scrolls tmux instead. Asked when mugen
+# starts and when the width changes (a client of another size took over).
+def sc.phone.ask() -> String:
+  "[ -n \"$TMUX\" ] && tmux display-message -p '#{client_termtype}|#{client_termname}' 2>/dev/null"
+
+def sc.phone.hint(+mouse: Bool) -> String:
+  P.pp.paint("1;36", Bool.pick(String, mouse, "Conduit noticed: swipe to scroll", "Conduit noticed: /mouse, then swipe to scroll"))
+    ++ P.pp.paint("2", " \u{b7} not its tmux-scroll key")
+
+def sc.phone.got(o: S.mu.Out, +s: sc.S) -> sc.S:
+  match o:
+    case S.mu.Out{status, out, err}:
+      Bool.pick(sc.S, String.starts_with(out, "|xterm"), sc.dirty(sc.with.hint(s, sc.phone.hint(sc.tm.mouse(sc.tm(s)))), 1), s)
+
+def sc.phone(go: Bool, +s: sc.S) -> IO(sc.S):
+  match go:
+    case True{}:
+      IO.bind(S.mu.Out, sc.S, S.mu.run("sh", ["-c", sc.phone.ask()], "", 4096, 2000), o => IO.pure(sc.S, sc.phone.got(o, s)))
+    case False{}:
+      IO.pure(sc.S, s)
+
+# a tick: the size checked (a new width: a phone?); the spinner and the
+# times on, if anything runs
 def sc.tick(+s: sc.S) -> IO(sc.S):
   do IO<sc.S>:
     now : Nat <- IO.now()
     ws : U32 <- S.mu.winsize()
     +s1 : sc.S = sc.size(sc.with.now(s, now), ws)
     +live : Bool = Bool.or(Bool.or(sc.st.busy(sc.st(s1)), Maybe.is_some(&2, sc.Blk, sc.running(sc.blks(s1)))), Bool.not(List.is_empty(&2, String, sc.st.agents(sc.st(s1)))))
-    return Bool.pick(sc.S, live, sc.dirty(s1, 1), s1)
+    sc.phone(Bool.not(U32.is_eq(sc.w(s), sc.w(s1))), Bool.pick(sc.S, live, sc.dirty(s1, 1), s1))
 
 # the hub leaves: the terminal as it was, the hub told
 def sc.bye(+s: sc.S, +done: Chan(Unit)) -> IO(sc.S):
@@ -1652,10 +1767,11 @@ def sc.run(+hub: Chan(E.ev.Ev), +me: Chan(sc.In), +home: String, +hfile: String)
     ws : U32 <- S.mu.winsize()
     hist : List<&2, String> <- sc.hist.load(hfile)
     now : Nat <- IO.now()
-    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, []}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([])}, ws)
+    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, [], sc.An{0, 0, 0}}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([])}, ws)
     Unit <- IO.spawn(Unit, sc.reader(me))
     Unit <- IO.spawn(Unit, sc.ticker(sc.fuel(), me, Done{Unit{}}))
-    +s1 : sc.S <- sc.draw(sc.dirty(s0, 2))
+    +s0p : sc.S <- sc.phone(True{}, s0)
+    +s1 : sc.S <- sc.draw(sc.dirty(s0p, 2))
     sc.loop(sc.fuel(), True{}, s1)
 
 # what the hub says (sent, whatever came of it)

@@ -2,6 +2,21 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.6.0 (2026-10-22)
+
+(0.5.0 is the frozen `openai` branch's, never on master.)
+
+- Scrolled up, the view holds: the chat's top row stays put while output
+  comes below it (a result filling in under its call moved it before; a
+  new block did not). At the end, the chat follows as before.
+- A copy by dragging says where it went, in green under the chat (`✓
+  copied 3 lines to the clipboard`, or to tmux's buffer only), or in red
+  that it went nowhere (no X display for xclip, no tmux).
+- Conduit noticed: when mugen starts, or a client of another width takes
+  over, it asks tmux for the client's terminal type; Conduit has none, and
+  mugen says `Conduit noticed: swipe to scroll` (or to turn `/mouse` on
+  first) under the chat.
+
 ## 0.4.0 (2026-10-21)
 
 - `!COMMAND` runs a shell command of the user's, at once, in the directory

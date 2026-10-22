@@ -92,7 +92,9 @@ write the diff, with the file's line numbers, each line taken out on red and
 each one added on green. Blocks come
 open, whole: a click folds or opens one, `M-o` all of them (`C-o` too,
 unless tmux takes it as its prefix). `PgUp`,
-`PgDn` and the wheel scroll (`M->` follows the end again). Under the chat:
+`PgDn` and the wheel scroll; while scrolled up, nothing that comes (a new
+entry, a result under its call) moves what you read, and `M->` follows the
+end again. Under the chat:
 what runs and for how long (the tool too), the messages waiting for mugen,
 the status line (where mugen works, the model, its effort, the context
 left before mugen folds its oldest lines at 128 KB, the mode), and the
@@ -117,7 +119,8 @@ Keys:
   `M-d`), the history (`↑`, `↓`, `C-p`, `C-n`, `C-r`, kept in
   `$MUGEN_DIR/history`), `Tab` completes a command.
 - The mouse is mugen's: drag over the chat to select text (shown reversed;
-  letting go copies it to the clipboard by xclip, and to tmux's buffer).
+  letting go copies it to the clipboard by xclip, and to tmux's buffer, and
+  says so under the chat: `✓ copied 3 lines to the clipboard`).
   `Shift`-drag is the terminal's own selection; `/mouse` hands the mouse
   to the terminal (and back).
 - Agents: while subagents work, tabs follow the status line (`all`,
@@ -219,7 +222,10 @@ that came meanwhile has rung tmux's bell. To land in tmux on every login,
 add to your shell's init: `[ -z "$TMUX" ] && [ -n "$SSH_TTY" ] && exec tmux new -A -s main`.
 A swipe on the screen scrolls the chat (the phone's terminal sends it as the
 wheel; mugen takes Conduit's and other xterm.dart apps' wheel too, which
-comes with a Shift that isn't held).
+comes with a Shift that isn't held). mugen notices Conduit when it starts
+or a client of another width takes over (`Conduit noticed: swipe to
+scroll`); swipe, rather than use Conduit's tmux-scroll key, which scrolls
+tmux's history, not the chat.
 
 `tailscaled` starts at boot and keeps the login; `tailscale down` and
 `tailscale up` take the machine off the network and back.
