@@ -155,7 +155,7 @@ screen: lines as they come, a `λ` prompt, and a message of many lines
 between two lines of `"""`. From a pipe (stdin not a terminal), each line
 is a message, and mugen exits once stdin ends and nothing is running.
 
-[The guide](https://hhefesto.github.io/mugen/guide.html) (GitHub Pages, from
+[The guide](https://blog.hhefesto.com/mugen/guide.html) (GitHub Pages, from
 [docs/guide.html](docs/guide.html)) is a guide to all of it, a page that
 opens in any browser.
 

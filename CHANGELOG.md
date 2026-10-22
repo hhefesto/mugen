@@ -15,7 +15,7 @@ A version changes when surface behavior does (AGENTS.md, Versions).
   status line; a click on one, or `M-←` / `M-→`, shows only its blocks.
 - Docs: `Alt-Enter` is the new line that works everywhere (`Shift-Enter`
   and `C-j` only where the terminal sends them apart from `Enter`). The
-  guide is served by GitHub Pages: https://hhefesto.github.io/mugen/guide.html.
+  guide is served by GitHub Pages: https://blog.hhefesto.com/mugen/guide.html.
 
 ## 0.2.1 (2026-10-21)
 
