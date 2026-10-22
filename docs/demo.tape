@@ -1,14 +1,16 @@
 # The README's demo: a real Claude session, recorded with vhs.
 #   nix run nixpkgs#vhs -- docs/demo.tape
-# It runs mugen in a fresh MUGEN_DIR, its work dir a copy of bend/.
+# It runs mugen in a fresh MUGEN_DIR, its work dir a copy of bend/. mugen
+# launches two agents; their blocks and tabs show while they work, and
+# their reports come back to it.
 Output docs/demo.gif
 Set Shell bash
 Set FontSize 15
 Set Width 1280
 Set Height 760
 Set Padding 16
-Set TypingSpeed 35ms
-Set PlaybackSpeed 1.5
+Set TypingSpeed 30ms
+Set PlaybackSpeed 2
 Set Theme "Catppuccin Mocha"
 
 Hide
@@ -19,14 +21,10 @@ Enter
 Sleep 3s
 Show
 Sleep 1s
-Type "Which of these Bend files is the biggest, and what does it do? Short answer."
+Type "Launch two agents at once: one finds the biggest of these Bend files, the other counts the defs in Hub.bend. Then sum up in one line beginning with 'Together:'"
 Sleep 500ms
 Enter
-Wait+Screen@180s /cache: /
-Sleep 4s
-Type "What did I just ask you?"
-Sleep 500ms
-Enter
-Sleep 2s
-Wait+Screen@120s /(?s)cache: .*cache: /
-Sleep 5s
+Wait+Screen@180s /at work/
+Sleep 3s
+Wait+Screen@400s /Together: [A-Za-z0-9`*]/
+Sleep 6s

@@ -13,7 +13,7 @@ it needs more. The chat runs tools on this computer (`shell`, `read`,
 `write`, `edit`), starts subagents (`spawn`, `tell`), works toward a `/goal`,
 and searches the web.
 
-![mugen in a real session: a question, a tool call, the answer, and a second turn that remembers the first](docs/demo.gif)
+![mugen in a real session: it launches two agents, their tabs show while they work, and their reports come back to one answer](docs/demo.gif)
 
 ## Run
 
