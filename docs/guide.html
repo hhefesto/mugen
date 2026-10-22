@@ -391,7 +391,8 @@ mugen --api</pre>
         <table>
           <thead><tr><th>Type</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>/stop [name]</code></td><td>Stops mugen's turn and the agents, or the one agent named.</td></tr>
+            <tr><td><code>!COMMAND</code></td><td>Runs a shell command of your own, at once, mugen working or not: in the directory you started mugen in, by a fresh <code>$SHELL</code> (a <code>cd</code> doesn't last). Its output shows as a block of yours (<code>[you] shell</code>), and the chat logs it as your message, the command then its output (clipped as mugen's own shell output is), so mugen reads it at its next turn; it starts none. One runs at a time; <code>/stop !</code> (or <code>/stop</code>) kills it.</td></tr>
+            <tr><td><code>/stop [name]</code></td><td>Stops mugen's turn and the agents, or the one agent named; <code>/stop !</code>, your own command.</td></tr>
             <tr><td><code>/now</code></td><td>As <kbd>C-s</kbd>: the waiting messages, sent at once.</td></tr>
             <tr><td><code>/goal TEXT</code></td><td>A goal mugen keeps working toward. After each turn a check asks whether it is met; until it is, mugen is told to keep working. <code>/halt</code> drops it.</td></tr>
             <tr><td><code>/model LABEL</code></td><td><code>opus-5.5</code> (default), <code>sonnet-5.5</code>, <code>haiku-5.5</code>, or a model id.</td></tr>
@@ -599,7 +600,7 @@ mugen --api</pre>
       <div class="path" aria-label="An ssh or mosh app on the phone, over Tailscale, mosh to your computer, tmux main, mugen">
         <span>Blink or Termux on the phone</span><i>→</i><span>Tailscale</span><i>→</i><span>mosh you@HOSTNAME</span><i>→</i><span>tmux "main"</span><i>→</i><span>mugen</span>
       </div>
-      <p>mosh keeps the session alive through sleep and network changes, and tmux keeps mugen running between visits, so you pick up exactly where you left off; a reply that came meanwhile has rung tmux's bell. On the phone, <kbd>Alt-Enter</kbd> (or a <code>\</code> before <kbd>Enter</kbd>) makes a new line.</p>
+      <p>mosh keeps the session alive through sleep and network changes, and tmux keeps mugen running between visits, so you pick up exactly where you left off; a reply that came meanwhile has rung tmux's bell. On the phone, <kbd>Alt-Enter</kbd> (or a <code>\</code> before <kbd>Enter</kbd>) makes a new line, and a swipe on the screen scrolls the chat: the phone's terminal sends it as the mouse wheel (mugen also takes the wheel as Conduit and other xterm.dart apps send it, with a Shift that isn't held). If a swipe recalls old messages into the input instead, the terminal has the mouse: type <code>/mouse</code> to give it back to mugen.</p>
       <ol class="steps">
         <li><div><h3>Run Tailscale, ssh and mosh on the computer</h3><p>On NixOS: <code>services.tailscale.enable</code> (with <code>extraSetFlags = [ "--operator=you" ]</code> to run <code>tailscale</code> without sudo), <code>services.openssh.enable</code> and <code>programs.mosh.enable</code>, with mosh's UDP ports 60000–61000 open on <code>tailscale0</code> only. <a href="https://github.com/hhefesto/mugen#from-your-phone-tailscale-on-nixos">The README</a> has the whole block.</p></div></li>
         <li><div><h3>Sign the computer and the phone in to the same tailnet</h3><p>Run <code>tailscale up</code> on the computer and sign in with the account the phone will use; sign the Tailscale app in with the same one. In the admin console, approve the machine if it asks and disable its key expiry. Its MagicDNS name is its hostname.</p></div></li>

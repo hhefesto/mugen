@@ -109,9 +109,12 @@ def ky.tilde(+n: U32, +ps: List<&2, String>, +rest: String) -> ky.R:
           Bool.pick(ky.Key, U32.is_eq(n, 5), ky.nav(7, ps), Bool.pick(ky.Key, U32.is_eq(n, 6), ky.nav(8, ps),
             Bool.pick(ky.Key, U32.is_eq(n, 27), ky.mod(ky.num(ps, 2n, 0), ky.num(ps, 1n, 1)), ky.Other{}))))))), rest})
 
-# the mouse: <b;x;y, M (pressed) or m (let go)
+# the mouse: <b;x;y, M (pressed) or m (let go). The button's modifier bits
+# (4 Shift, 8 Meta, 16 Ctrl) dropped: some terminals set them where none is
+# held (xterm.dart's, in phone apps such as Conduit, reports a swipe as the
+# wheel with Shift, 68 and 69)
 def ky.mouse(+ps: List<&2, String>, +up: Bool) -> ky.Key:
-  ky.Mouse{ky.num(ps, 0n, 0), ky.num(ps, 1n, 1), ky.num(ps, 2n, 1), up}
+  ky.Mouse{U32.and(ky.num(ps, 0n, 0), 227), ky.num(ps, 1n, 1), ky.num(ps, 2n, 1), up}
 
 # a CSI sequence's end: its parameters' text and its final byte
 def ky.csi.end(+params: String, +f: U32, +rest: String) -> ky.R:

@@ -125,7 +125,13 @@ Keys:
   `M-→`, shows only that one's blocks (`all` is the whole chat again).
 
 Commands:
-- `/stop [name]`: stop the turn, or one agent.
+- `!COMMAND`: run a shell command of your own, at once (mugen working or
+  not), in the directory you started mugen in, by a fresh `$SHELL` (so a
+  `cd` doesn't last). Its output shows as a block of yours (`[you] shell`),
+  and the chat logs it as your message (the command, then its output,
+  clipped as mugen's own shell output is), so mugen reads it at its next
+  turn; it starts none. One runs at a time; `/stop !` (or `/stop`) kills it.
+- `/stop [name]`: stop the turn, or one agent (`/stop !`: your own command).
 - `/now`: as `C-s`.
 - `/goal TEXT`, `/halt`: set a goal, or drop it.
 - `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
@@ -211,6 +217,9 @@ ssh/mosh client (Blink on iOS, Termux on Android) whose public key is in
 next time, the same two commands find mugen where you left it, and a reply
 that came meanwhile has rung tmux's bell. To land in tmux on every login,
 add to your shell's init: `[ -z "$TMUX" ] && [ -n "$SSH_TTY" ] && exec tmux new -A -s main`.
+A swipe on the screen scrolls the chat (the phone's terminal sends it as the
+wheel; mugen takes Conduit's and other xterm.dart apps' wheel too, which
+comes with a Shift that isn't held).
 
 `tailscaled` starts at boot and keeps the login; `tailscale down` and
 `tailscale up` take the machine off the network and back.

@@ -2,6 +2,17 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.4.0 (2026-10-21)
+
+- `!COMMAND` runs a shell command of the user's, at once, in the directory
+  mugen started in. Its output shows as a block of the user's (`[you]
+  shell`), and the chat logs it as the user's message (the command, then
+  its output, clipped as the shell tool's), for mugen to read at its next
+  turn; it starts none. One at a time; `/stop !` (or `/stop`) kills it.
+- A swipe scrolls on phones whose terminal reports the wheel with modifier
+  bits set (Conduit and other xterm.dart apps send 68/69, a Shift-wheel):
+  the mouse's Shift, Meta and Ctrl bits are dropped.
+
 ## 0.3.0 (2026-10-21)
 
 - A message sent while mugen works is held, not logged, until mugen reads

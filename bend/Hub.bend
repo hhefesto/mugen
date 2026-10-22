@@ -84,7 +84,7 @@ type hb.W is Data:
 # with (the rest it was handed as it ran), and the user's messages held,
 # not logged yet, while mugen works (Up takes the newest back to edit).
 type hb.Ui is Data:
-  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>}
+  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>, bang: Bool}
 
 type hb.S is Data:
   hb.S{cfg: hb.Cfg, mem: M.me.Mem, inbox: Chan(E.ev.Ev), junk: Chan(String), pick: A.ap.Pick, turn: hb.T, wait: List<&2, hb.Msg>, sent: List<&2, hb.Msg>, halt: String, agents: List<&2, hb.Ag>, reqs: List<&2, hb.W>, eof: Bool, quit: Bool, shown: String, ui: hb.Ui}
@@ -228,48 +228,49 @@ def hb.with.ui(s: hb.S, ui2: hb.Ui) -> hb.S:
 
 def hb.ui.mode(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       m
 
 def hb.ui.due(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       d
 
 def hb.ui.busy(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       b
 
 def hb.ui.scr(u: hb.Ui) -> Maybe<&2, Chan(Sc.sc.In)>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       sc
 
 def hb.ui.force(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       fo
 
 def hb.ui.what(u: hb.Ui) -> String:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       wh
 
 def hb.ui.t0(u: hb.Ui) -> Nat:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       t0
 
 def hb.ui.set(u: hb.Ui, +k: Nat, +m2: U32, +b2: Bool, +wh2: String, +t2: Nat) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd}:
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg}:
       hb.Ui{Bool.pick(U32, Nat.is_eq(k, 0n), m2, m), Bool.pick(Bool, Nat.is_eq(k, 1n), b2, d), Bool.pick(Bool, Nat.is_eq(k, 2n), b2, b), sc,
-        Bool.pick(Bool, Nat.is_eq(k, 3n), b2, fo), Bool.pick(String, Nat.is_eq(k, 4n), wh2, wh), Bool.pick(Nat, Nat.is_eq(k, 4n), t2, t0), Bool.pick(U32, Nat.is_eq(k, 5n), m2, ld), hd}
+        Bool.pick(Bool, Nat.is_eq(k, 3n), b2, fo), Bool.pick(String, Nat.is_eq(k, 4n), wh2, wh), Bool.pick(Nat, Nat.is_eq(k, 4n), t2, t0), Bool.pick(U32, Nat.is_eq(k, 5n), m2, ld), hd,
+        Bool.pick(Bool, Nat.is_eq(k, 6n), b2, bg)}
 
 def hb.ui.lead(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       ld
 
 def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
@@ -277,16 +278,28 @@ def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
 
 def hb.ui.held(u: hb.Ui) -> List<&2, String>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
       hd
 
 def hb.ui.with.held(u: hb.Ui, +h2: List<&2, String>) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd}:
-      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2}
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd, +bg}:
+      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2, bg}
 
 def hb.held(+s: hb.S) -> List<&2, String>:
   hb.ui.held(hb.ui(s))
+
+# whether the user's own shell command (`!command`) runs
+def hb.ui.bang(u: hb.Ui) -> Bool:
+  match u:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+      bg
+
+def hb.bang.on(+s: hb.S) -> Bool:
+  hb.ui.bang(hb.ui(s))
+
+def hb.with.bang(+s: hb.S, +b: Bool) -> hb.S:
+  hb.with.ui(s, hb.ui.set(hb.ui(s), 6n, 0, b, "", 0n))
 
 def hb.with.held(+s: hb.S, +h: List<&2, String>) -> hb.S:
   hb.with.ui(s, hb.ui.with.held(hb.ui(s), h))
@@ -1651,6 +1664,85 @@ def hb.view.texts(ps: List<&2, R.tr.P>, +nodes: I.im.M<V.vw.Node>) -> List<&2, S
     case p <> t:
       V.vw.text(nodes, p) <> hb.view.texts(t, nodes)
 
+# The user's own shell ---------------------------------------------------------------
+#
+# `!command`: a shell command of the user's, run at once (mugen working or
+# not) in the background, in the directory mugen started in, by a fresh
+# $SHELL, as the shell tool runs mugen's own (its output clipped the same
+# way). The screen shows it as a tool block of the user's ("you"); the chat
+# logs it as the user's message (`!command`, then what it printed), which
+# mugen reads in its next turn: it starts none. One runs at a time; `/stop !`
+# (or a bare `/stop`) kills it.
+
+def hb.bang.call(+cmd: String) -> String:
+  "shell " ++ J.js.write(J.JObj{[J.JKv{"command", J.JStr{cmd}}]})
+
+def hb.out.text(o: E.ev.Out) -> String:
+  match o:
+    case E.ev.Out{t, f}:
+      t
+
+def hb.bang.run(+env: L.tl.Env, +inbox: Chan(E.ev.Ev), +cmd: String) -> IO(Unit):
+  do IO<Unit>:
+    +home : String <- S.mu.env("HOME", "/")
+    +cwd : String <- S.mu.env("PWD", home)
+    o : E.ev.Out <- L.tl.shell(env, cwd, cmd)
+    E.ev.send(inbox, E.ev.Ran{cmd, hb.out.text(o)})
+
+# 0 no command, 1 one runs already, 2 run it
+def hb.bang.go(k: Nat, +s: hb.S, +cmd: String) -> IO(hb.S):
+  match k:
+    case 0n:
+      hb.tell.user(s, "! runs a shell command of yours: !ls")
+    case 1n:
+      hb.tell.user(s, "your command still runs: /stop ! cuts it")
+    case _:
+      do IO<hb.S>:
+        r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(hb.ctl(s, "user") ++ ".stop")
+        Unit <- hb.print(s, "you", "run", hb.bang.call(cmd))
+        Unit <- IO.spawn(Unit, hb.bang.run(hb.tools.env(s, "user"), hb.inbox(s), cmd))
+        return hb.with.bang(s, True{})
+
+def hb.bang(+s: hb.S, +cmd: String) -> IO(hb.S):
+  hb.bang.go(Bool.pick(Nat, String.is_empty(cmd), 0n, Bool.pick(Nat, hb.bang.on(s), 1n, 2n)), s, cmd)
+
+# its end shown: on the screen, its block's result; else written (piped,
+# the log's echo prints it)
+def hb.ran.show(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S, +call: String, +out: String) -> IO(Unit):
+  match m:
+    case Some{+c}:
+      do IO<Unit>:
+        Unit <- Sc.sc.tell(c, Sc.sc.Put{"you", "tool", call})
+        Sc.sc.tell(c, Sc.sc.Put{"you", "echo", out})
+    case None{}:
+      Bool.pick(IO(Unit), hb.tty(s), IO.print(out), IO.pure(Unit, Unit{}))
+
+# its end: shown, logged as the user's
+def hb.ran(+s: hb.S, +cmd: String, +out: String) -> IO(hb.S):
+  do IO<hb.S>:
+    Unit <- hb.ran.show(hb.scr(s), s, hb.bang.call(cmd), out)
+    p : hb.P <- hb.push(hb.with.bang(s, False{}), "user", "!" ++ cmd ++ "\n" ++ out)
+    return hb.p.s(p)
+
+# /stop: 0 as it was, 1 the user's command stopped (all that runs, or `/stop
+# !`), 2 none of theirs runs, 3 it and the rest stopped
+def hb.stop.k(+s: hb.S, +rest: String) -> Nat:
+  +b = hb.bang.on(s)
+  +idle = List.is_empty(&2, String, hb.running(s))
+  Bool.pick(Nat, String.eq(rest, "!"), Bool.pick(Nat, b, 1n, 2n),
+    Bool.pick(Nat, Bool.and(b, String.is_empty(rest)), Bool.pick(Nat, idle, 1n, 3n), 0n))
+
+def hb.stop.cmd(k: Nat, +s: hb.S, +rest: String) -> IO(hb.S):
+  match k:
+    case 0n:
+      hb.stop(s, rest)
+    case 1n:
+      IO.bind(Unit, hb.S, hb.kill(hb.ctl(s, "user")), u => hb.tell.user(s, "your command is stopped"))
+    case 2n:
+      hb.tell.user(s, "no command of yours runs")
+    case _:
+      IO.bind(Unit, hb.S, hb.kill(hb.ctl(s, "user")), u => hb.stop(s, rest))
+
 def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
   match k:
     case 0n:
@@ -1660,7 +1752,7 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
     case 2n:
       IO.bind(hb.S, hb.S, hb.release(s), s2 => IO.pure(hb.S, hb.with.quit(s2)))
     case 3n:
-      hb.stop(s, rest)
+      hb.stop.cmd(hb.stop.k(s, rest), s, rest)
     case 4n:
       IO.bind(hb.S, hb.S, hb.set.goal(s, None{}), s2 => hb.note(s2, "Goal halted by the user."))
     case 5n:
@@ -1691,6 +1783,8 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
       IO.bind(hb.S, hb.S, hb.release(s), s2 => hb.now(s2))
     case 15n:
       hb.back(s)
+    case 16n:
+      hb.bang(s, T.tx.trim(String.drop(t, 1n)))
     case _:
       hb.tell.user(s, w ++ " is no command; nothing was sent. /help lists the commands.")
 
@@ -1698,7 +1792,7 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
 def hb.line(+s: hb.S, +text: String) -> IO(hb.S):
   +t = T.tx.trim(text)
   +w = hb.word.go(t, "")
-  hb.cmd(hb.cmd.code(w), hb.with.due(s, True{}), t, w, T.tx.trim(String.drop(t, String.length(w))))
+  hb.cmd(Bool.pick(Nat, String.starts_with(t, "!"), 16n, hb.cmd.code(w)), hb.with.due(s, True{}), t, w, T.tx.trim(String.drop(t, String.length(w))))
 
 # Events ------------------------------------------------------------------------------
 
@@ -1747,6 +1841,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
         hb.agent.ended(s, hb.ag.find(hb.agents(s), who), ok, text, left))
     case Some{E.ev.Goal{+goal, ok, text}}:
       Bool.pick(IO(hb.S), hb.is.check(hb.turn(s), goal), hb.checked(s, goal, ok, text), IO.pure(hb.S, s))
+    case Some{E.ev.Ran{+cmd, +out}}:
+      hb.ran(s, cmd, out)
 
 def hb.is.idle(t: hb.T) -> Bool:
   match t:
@@ -2160,7 +2256,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     pane : String <- S.mu.env("TMUX_PANE", "")
     Unit <- hb.tmux.keys(Bool.and(hb.cfg.screen(c), Bool.not(String.is_empty(pane))))
     +scr : Maybe<&2, Chan(Sc.sc.In)> <- hb.screen.open(hb.cfg.screen(c), c, inbox)
-    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, []}}
+    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, [], False{}}}
     w : hb.When <- hb.when()
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))
     +s1 : hb.S <- hb.mem.jobs(s0, r)

@@ -29,6 +29,8 @@ type ev.Say is Data:
 #                   doing (Compact.bend cp.End); `left` messages sent to it
 #                   it never took
 #   Goal            a goal check's answer
+#   Ran             the user's own shell command (`!command`) ended: what
+#                   it printed, as the shell tool says it
 type ev.Ev is Data:
   ev.Line{text: String}
   ev.Eof{}
@@ -38,6 +40,7 @@ type ev.Ev is Data:
   ev.Req{who: String, name: String, input: J.Json, reply: Chan(ev.Out)}
   ev.End{who: String, ok: Bool, text: String, stop: U32, left: U32}
   ev.Goal{goal: String, ok: Bool, text: String}
+  ev.Ran{command: String, out: String}
 
 # sent, whatever came of it (a hub gone ends the program anyway)
 def ev.send(+c: Chan(ev.Ev), e: ev.Ev) -> IO(Unit):
