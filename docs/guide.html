@@ -249,13 +249,6 @@ td code { white-space: nowrap; }
 .path { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: var(--s-small); }
 .path span { background: var(--sheet); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 .path i { color: var(--ink-2); font-style: normal; }
-.checks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; max-width: 74ch; }
-.checks li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; align-items: start; margin: 0; }
-.checks .st { font-size: var(--s-cap); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; text-align: center; }
-.checks .st.done { background: var(--hit-soft); color: var(--hit); }
-.checks .st.todo { background: var(--write-soft); color: var(--write); }
-.checks p { margin: 0; }
-.checks .sub { color: var(--ink-2); font-size: var(--s-small); }
 
 dl.faq { margin: 0; display: flex; flex-direction: column; gap: 14px; max-width: 74ch; }
 dl.faq dt { font-weight: 600; }
@@ -289,7 +282,7 @@ footer { color: var(--ink-2); font-size: var(--s-small); border-top: 1px solid v
       <li><a href="#transcripts">Transcripts</a></li>
       <li><a href="#files">Files on disk</a></li>
       <li><a href="#settings">Settings</a></li>
-      <li><a href="#phone">From the iPhone</a></li>
+      <li><a href="#phone">From your phone</a></li>
       <li><a href="#trouble">When it goes wrong</a></li>
     </ol>
   </nav>
@@ -297,17 +290,17 @@ footer { color: var(--ink-2); font-size: var(--s-small); border-top: 1px solid v
   <main>
     <header class="hero">
       <div class="kanji" aria-hidden="true">無限</div>
-      <h1>How mugen works <span>on olimpo</span></h1>
-      <p>mugen is an AI agent in one chat that never ends. It is UniiChat written in Bend 2. It runs in your terminal, full screen, and remembers everything. By default it runs on your Claude Max plan through the official <code>claude</code> command.</p>
+      <h1>How mugen works <span>end to end</span></h1>
+      <p>mugen is an AI agent in one chat that never ends. It is UniiChat written in Bend 2. It runs in your terminal, full screen, and remembers everything. By default it runs on your Claude plan (Pro or Max) through the official <code>claude</code> command.</p>
     </header>
 
     <section id="start">
       <div class="eyebrow">Start it</div>
       <h2>Starting mugen</h2>
-      <p>mugen is installed on olimpo, so <code>mugen</code> works in any shell. Sign Claude Code in once with <code>mugen login</code>; mugen checks the sign-in every time it starts. In a shell that was open before you switched NixOS, run <code>. /etc/set-environment</code> first, since tmux keeps those shells' old environment.</p>
+      <p>mugen comes as a Nix flake: <code>nix run github:hhefesto/mugen</code> runs it once, and adding the flake's <code>mugen</code> package to your system or home packages puts <code>mugen</code> in every shell. It needs Claude Code's <code>claude</code> command. Sign Claude Code in once with <code>mugen login</code>; mugen checks the sign-in every time it starts. On NixOS, a shell that was open before the switch that installed mugen (tmux keeps such shells) has the old environment: run <code>. /etc/set-environment</code> there first.</p>
       <div class="pair">
         <div class="code">
-          <span class="tag">On your Max plan (the default)</span>
+          <span class="tag">On your Claude plan (the default)</span>
           <pre data-copy><span class="c"># once: signs Claude Code in (claude auth login)</span>
 mugen login
 mugen</pre>
@@ -423,9 +416,9 @@ mugen --api</pre>
       <ol class="steps">
         <li><div><h3>Your message is logged</h3><p>It goes into <code>~/.mugen/main/2026-10-21.jsonl</code> word for word, with its number and date. Nothing in the log is ever changed.</p></div></li>
         <li><div><h3>mugen waits for the summaries to catch up</h3><p>Every message before yours needs its one-line summary first. This is usually instant; the line under the chat says when it isn't.</p></div></li>
-        <li><div><h3>It builds the request</h3><p>mugen's prompt, plus your <code>rules.md</code> if you have one. Then the view of the chat: the whole conversation as one-line summaries. Then which devices are open (olimpo) and which agents are at work. Last, your message: <code>Turn: the user's new message:</code> and your text.</p></div></li>
-        <li><div><h3>It starts <code>claude -p</code> in the background</h3><p>One process per turn, in its own process group, signed in with your Max login. The request goes in on its stdin and its events come out as JSON, one per line, thoughts summarized. mugen reads them as they arrive.</p></div></li>
-        <li><div><h3>Claude Code runs the model and calls mugen's tools</h3><p>The tools <code>zoom</code>, <code>date</code>, <code>spawn</code>, <code>tell</code>, <code>shell</code>, <code>read</code>, <code>write</code> and <code>edit</code> come from mugen over MCP. When the model calls one, the screen shows it running; mugen runs it on olimpo in <code>~/.mugen/work/main</code>, logs the call and its result, and hands the result back. Web search is Claude Code's own tool.</p></div></li>
+        <li><div><h3>It builds the request</h3><p>mugen's prompt, plus your <code>rules.md</code> if you have one. Then the view of the chat: the whole conversation as one-line summaries. Then which devices are open (each computer where mugen runs, by host name) and which agents are at work. Last, your message: <code>Turn: the user's new message:</code> and your text.</p></div></li>
+        <li><div><h3>It starts <code>claude -p</code> in the background</h3><p>One process per turn, in its own process group, signed in with your plan's login. The request goes in on its stdin and its events come out as JSON, one per line, thoughts summarized. mugen reads them as they arrive.</p></div></li>
+        <li><div><h3>Claude Code runs the model and calls mugen's tools</h3><p>The tools <code>zoom</code>, <code>date</code>, <code>spawn</code>, <code>tell</code>, <code>shell</code>, <code>read</code>, <code>write</code> and <code>edit</code> come from mugen over MCP. When the model calls one, the screen shows it running; mugen runs it on the device the call names, in its work dir (<code>~/.mugen/work/main</code> for the chat), logs the call and its result, and hands the result back. Web search is Claude Code's own tool.</p></div></li>
         <li><div><h3>Messages you type meanwhile wait their turn</h3><p>The line under the chat shows them. mugen hands them to the running call, which reads them with the next tool result; if no tool call comes, they start the next turn in the same process, so the history is still cached. <kbd>C-s</kbd> doesn't wait: it cuts a running shell command so its result comes at once, or stops the turn and starts one with your messages.</p></div></li>
         <li><div><h3>The answer ends the turn</h3><p>mugen's reply is logged and shown with the cache line, and <code>claude</code> exits. The reply is now part of the chat, and the summaries pick it up.</p></div></li>
       </ol>
@@ -474,7 +467,7 @@ mugen --api</pre>
           <h3>Claude Code</h3>
           <div class="how">mugen</div>
           <ul>
-            <li>Runs the official <code>claude -p</code>, signed in with your Max plan. Anthropic allows plan logins only in its own apps, which is why mugen calls <code>claude</code> instead of using the login itself.</li>
+            <li>Runs the official <code>claude -p</code>, signed in with your Claude plan. Anthropic allows plan logins only in its own apps, which is why mugen calls <code>claude</code> instead of using the login itself.</li>
             <li>Claude Code runs each turn's tool loop and calls mugen's tools over MCP.</li>
             <li>Each summary is one Haiku call through <code>claude</code>, at most 8 at a time.</li>
             <li>Usage counts against your plan's limits, summaries included.</li>
@@ -521,7 +514,7 @@ mugen --api</pre>
       </div>
       <p>The API allows four cache marks per request. Claude Code places three. mugen places one: on the view's last full block of four lines. On the next turn, everything up to that block is still the same, because the view only grows at its end. That whole stretch is read from the cache.</p>
       <div class="measure">
-        <div class="head"><strong>Measured: turn 2 of the live test on your Max plan</strong><span class="big">87%</span></div>
+        <div class="head"><strong>Measured: turn 2 of a live test on a Max plan</strong><span class="big">87%</span></div>
         <div class="bar" role="img" aria-label="3,911 tokens read from the cache, 595 written, 2 new, out of 4,508">
           <div class="r" style="width: 86.76%"></div><div class="w" style="width: 13.20%"></div><div class="n" style="width: 0.04%"></div>
         </div>
@@ -544,12 +537,12 @@ mugen --api</pre>
     <section id="transcripts">
       <div class="eyebrow">Transcripts</div>
       <h2>Where the record goes</h2>
-      <p>mugen's own log is the complete record. On the Claude Code backend there are two more, because mugen does what your <code>claude</code> wrapper does:</p>
+      <p>mugen's own log is the complete record. On the Claude Code backend there can be two more, kept the way Claude Code keeps them:</p>
       <ul>
-        <li><strong>Claude Code sessions.</strong> Each turn, agent call and goal check is saved as a Claude Code session in <code>~/.claude/projects/-home-hhefesto--mugen-work-main/</code>, or a folder per agent. Your user settings are loaded for these calls, so your <code>llm-transcript render</code> hooks run on them like on any other session.</li>
-        <li><strong>Debug logs.</strong> NixOS sets <code>MUGEN_DEBUG_DIR</code> to <code>~/src/llm-transcript</code>. Each of those calls writes a debug log there, named the way the wrapper names them: <code>2026-10-21_1122-mugen-main-0261e97f.debug.log</code>.</li>
+        <li><strong>Claude Code sessions.</strong> Each turn, agent call and goal check is saved as a Claude Code session in <code>~/.claude/projects/-home-<i>you</i>--mugen-work-main/</code> (Claude Code names the folder after the work dir), or a folder per agent. Your user settings are loaded for these calls, so your hooks (a transcript renderer, say) run on them like on any other session.</li>
+        <li><strong>Debug logs.</strong> If <code>MUGEN_DEBUG_DIR</code> names a directory, each of those calls writes Claude Code's debug log there, named like <code>2026-10-21_1122-mugen-main-0261e97f.debug.log</code>. Unset (the default), there are none.</li>
       </ul>
-      <p>Summaries leave no transcript, since there can be hundreds a day. <code>MUGEN_TRANSCRIPTS=all</code> keeps them too, and <code>none</code> turns transcripts off. mugen runs your claude-code package directly rather than the wrapper, so it doesn't write a second debug log per summary.</p>
+      <p>Summaries leave no transcript, since there can be hundreds a day. <code>MUGEN_TRANSCRIPTS=all</code> keeps them too, and <code>none</code> turns transcripts off. If your <code>claude</code> is a wrapper that writes logs of its own, point <code>MUGEN_CLAUDE</code> at the real binary, so summaries don't each leave one.</p>
     </section>
 
     <section id="files">
@@ -582,8 +575,8 @@ mugen --api</pre>
         <table>
           <thead><tr><th>Variable</th><th>Default</th><th>What it sets</th></tr></thead>
           <tbody>
-            <tr><td><code>MUGEN_CLAUDE</code></td><td>set by NixOS</td><td>The <code>claude</code> to run; on olimpo, your claude-code 2.1.304.</td></tr>
-            <tr><td><code>MUGEN_DEBUG_DIR</code></td><td>set by NixOS</td><td>Where chat calls write their debug logs: <code>~/src/llm-transcript</code>.</td></tr>
+            <tr><td><code>MUGEN_CLAUDE</code></td><td><code>claude</code></td><td>The Claude Code CLI to run: a name looked up on <code>PATH</code>, or a path.</td></tr>
+            <tr><td><code>MUGEN_DEBUG_DIR</code></td><td></td><td>Where chat calls write Claude Code's debug logs; unset, they write none.</td></tr>
             <tr><td><code>MUGEN_TRANSCRIPTS</code></td><td><code>chat</code></td><td>Which calls are saved as sessions: <code>chat</code>, <code>all</code>, <code>none</code>.</td></tr>
             <tr><td><code>MUGEN_WIRE</code></td><td></td><td><code>api</code> does the same as <code>--api</code>.</td></tr>
             <tr><td><code>MUGEN_PLAIN</code></td><td></td><td><code>1</code>: no full screen; lines as they come and a <code>λ</code> prompt (also when <code>TERM=dumb</code>, as in Emacs' shell).</td></tr>
@@ -600,18 +593,19 @@ mugen --api</pre>
     </section>
 
     <section id="phone">
-      <div class="eyebrow">From the iPhone</div>
+      <div class="eyebrow">From your phone</div>
       <h2>Using mugen from your phone</h2>
-      <p>mugen needs no web page. The phone connects to the same terminal you use on olimpo:</p>
-      <div class="path" aria-label="Blink on the iPhone, over Tailscale, mosh to olimpo, tmux main, mugen">
-        <span>Blink on the iPhone</span><i>→</i><span>Tailscale</span><i>→</i><span>mosh olimpo</span><i>→</i><span>tmux "main"</span><i>→</i><span>mugen</span>
+      <p>mugen needs no web page. The phone connects to the same terminal you use at your computer, over a private <a href="https://tailscale.com">Tailscale</a> network, so nothing opens to the LAN or the internet:</p>
+      <div class="path" aria-label="An ssh or mosh app on the phone, over Tailscale, mosh to your computer, tmux main, mugen">
+        <span>Blink or Termux on the phone</span><i>→</i><span>Tailscale</span><i>→</i><span>mosh you@HOSTNAME</span><i>→</i><span>tmux "main"</span><i>→</i><span>mugen</span>
       </div>
-      <p>mosh keeps the session alive through sleep and network changes. Every SSH or mosh login on olimpo attaches to tmux "main", so you pick up exactly where you left off. On the phone, <kbd>Alt-Enter</kbd> (or a <code>\</code> before <kbd>Enter</kbd>) makes a new line.</p>
-      <ul class="checks">
-        <li><span class="st done">Done</span><div><p>olimpo runs Tailscale and mosh</p><p class="sub">Switched on 2026-10-21. mosh's ports are open on the tailnet only.</p></div></li>
-        <li><span class="st todo">To do</span><div><p>Sign olimpo and the phone in to the same tailnet</p><p class="sub">The rdataa.com tailnet is waiting for an admin who isn't there. A personal tailnet works now: run <code>tailscale logout</code> then <code>tailscale up</code> on olimpo, sign in with GitHub in a private window, and use the same account in the iPhone app.</p></div></li>
-        <li><span class="st todo">To do</span><div><p>Give olimpo Blink's key</p><p class="sub">Create a key in Blink and send Claude its public key, to add to your authorized keys. Then run <code>mosh olimpo</code> from Blink.</p></div></li>
-      </ul>
+      <p>mosh keeps the session alive through sleep and network changes, and tmux keeps mugen running between visits, so you pick up exactly where you left off; a reply that came meanwhile has rung tmux's bell. On the phone, <kbd>Alt-Enter</kbd> (or a <code>\</code> before <kbd>Enter</kbd>) makes a new line.</p>
+      <ol class="steps">
+        <li><div><h3>Run Tailscale, ssh and mosh on the computer</h3><p>On NixOS: <code>services.tailscale.enable</code> (with <code>extraSetFlags = [ "--operator=you" ]</code> to run <code>tailscale</code> without sudo), <code>services.openssh.enable</code> and <code>programs.mosh.enable</code>, with mosh's UDP ports 60000–61000 open on <code>tailscale0</code> only. <a href="https://github.com/hhefesto/mugen#from-your-phone-tailscale-on-nixos">The README</a> has the whole block.</p></div></li>
+        <li><div><h3>Sign the computer and the phone in to the same tailnet</h3><p>Run <code>tailscale up</code> on the computer and sign in with the account the phone will use; sign the Tailscale app in with the same one. In the admin console, approve the machine if it asks and disable its key expiry. Its MagicDNS name is its hostname.</p></div></li>
+        <li><div><h3>Give the computer the phone's key</h3><p>Create a key in the ssh app (Blink on iOS, Termux on Android) and add its public key to your <code>authorizedKeys</code>.</p></div></li>
+        <li><div><h3>Connect</h3><p><code>mosh you@HOSTNAME</code>, <code>tmux new -A -s main</code>, <code>mugen</code>. To land in tmux on every login, add to your shell's init: <code>[ -z "$TMUX" ] &amp;&amp; [ -n "$SSH_TTY" ] &amp;&amp; exec tmux new -A -s main</code>.</p></div></li>
+      </ol>
     </section>
 
     <section id="trouble">
@@ -625,7 +619,7 @@ mugen --api</pre>
         <dt><kbd>Shift-Enter</kbd> sends instead of making a new line</dt>
         <dd>The terminal sends it as a plain Enter (GNOME Terminal and other VTE terminals do). Use <kbd>Alt-Enter</kbd>.</dd>
         <dt>"mugen: cannot run claude (MUGEN_CLAUDE)"</dt>
-        <dd>The shell doesn't have the new variables. Run <code>. /etc/set-environment</code>, or check that <code>claude --version</code> works.</dd>
+        <dd>mugen can't find Claude Code. Install it and check that <code>claude --version</code> works, or set <code>MUGEN_CLAUDE</code> to its path. On NixOS, a shell from before the switch may lack the new <code>PATH</code>: run <code>. /etc/set-environment</code>.</dd>
         <dt>"Claude Code is not signed in"</dt>
         <dd>Run <code>mugen login</code>. At startup, mugen stops and tells you to. During a chat, run it in another window; the chat goes on with your next message.</dd>
         <dt>"The AI service is busy: asking again in N s."</dt>
@@ -637,7 +631,7 @@ mugen --api</pre>
       </dl>
     </section>
 
-    <footer>mugen lives at <code>~/src/mugen</code> and <a href="https://github.com/hhefesto/mugen">github.com/hhefesto/mugen</a>; this page is <code>docs/guide.html</code> there. Its README covers the same ground in brief, and AGENTS.md describes the code.</footer>
+    <footer>mugen's source is at <a href="https://github.com/hhefesto/mugen">github.com/hhefesto/mugen</a>; this page is <code>docs/guide.html</code> there. Its README covers the same ground in brief, and AGENTS.md describes the code.</footer>
   </main>
 </div>
 <script>
