@@ -66,6 +66,7 @@ type sc.In is Data:
   sc.Tick{}
   sc.Eof{}
   sc.Bye{done: Chan(Unit)}
+  sc.Back{text: String}
 
 # what never changes: the hub's inbox, our own, home (~ in paths), the
 # history's file
@@ -84,9 +85,10 @@ type sc.Tm is Data:
   sc.Tm{w: U32, h: U32, draw: U32, mouse: Bool, low: U32}
 
 # the moment: now (IO.now), the last Esc (0 none), a word for the user
-# under the chat, leaving asked, the terminal given back
+# under the chat, leaving asked, the terminal given back, whose blocks the
+# chat shows ("" all, "mugen" its own, else an agent's name)
 type sc.U is Data:
-  sc.U{now: Nat, esc: Nat, hint: String, quit: Bool, done: Bool}
+  sc.U{now: Nat, esc: Nat, hint: String, quit: Bool, done: Bool, focus: String}
 
 # a selection by the mouse: on (the left button is down), moved (dragged),
 # where it began and where it is (column, row; from 1), and the chat's rows
@@ -332,28 +334,33 @@ def sc.dirty(+s: sc.S, +k: U32) -> sc.S:
 
 def sc.u.now(u: sc.U) -> Nat:
   match u:
-    case sc.U{n, e, h, q, d}:
+    case sc.U{n, e, h, q, d, f}:
       n
 
 def sc.u.esc(u: sc.U) -> Nat:
   match u:
-    case sc.U{n, e, h, q, d}:
+    case sc.U{n, e, h, q, d, f}:
       e
 
 def sc.u.hint(u: sc.U) -> String:
   match u:
-    case sc.U{n, e, h, q, d}:
+    case sc.U{n, e, h, q, d, f}:
       h
 
 def sc.u.quit(u: sc.U) -> Bool:
   match u:
-    case sc.U{n, e, h, q, d}:
+    case sc.U{n, e, h, q, d, f}:
       q
 
 def sc.u.done(u: sc.U) -> Bool:
   match u:
-    case sc.U{n, e, h, q, d}:
+    case sc.U{n, e, h, q, d, f}:
       d
+
+def sc.u.focus(u: sc.U) -> String:
+  match u:
+    case sc.U{n, e, h, q, d, f}:
+      f
 
 def sc.now(+s: sc.S) -> Nat:
   sc.u.now(sc.u(s))
@@ -363,23 +370,103 @@ def sc.hint(+s: sc.S) -> String:
 
 def sc.with.now(+s: sc.S, +n2: Nat) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{n2, sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), sc.u.done(u)})
+  sc.with.u(s, sc.U{n2, sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), sc.u.done(u), sc.u.focus(u)})
 
 def sc.with.esc(+s: sc.S, +e2: Nat) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), e2, sc.u.hint(u), sc.u.quit(u), sc.u.done(u)})
+  sc.with.u(s, sc.U{sc.u.now(u), e2, sc.u.hint(u), sc.u.quit(u), sc.u.done(u), sc.u.focus(u)})
 
 def sc.with.hint(+s: sc.S, +h2: String) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), h2, sc.u.quit(u), sc.u.done(u)})
+  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), h2, sc.u.quit(u), sc.u.done(u), sc.u.focus(u)})
 
 def sc.with.quit(+s: sc.S) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), True{}, sc.u.done(u)})
+  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), True{}, sc.u.done(u), sc.u.focus(u)})
 
 def sc.with.done(+s: sc.S) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), True{}})
+  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), True{}, sc.u.focus(u)})
+
+def sc.focus(+s: sc.S) -> String:
+  sc.u.focus(sc.u(s))
+
+# Views ----------------------------------------------------------------------------
+#
+# The chat shows every block (focus "": all), or mugen's own ("mugen"), or
+# one agent's (its name). Once agents work, tabs follow the status line:
+# all, mugen, each agent at work (and the one in view); a click on one, or
+# M-Left / M-Right, switches to it, at the chat's end.
+
+def sc.blk.who(b: sc.Blk) -> String:
+  match b:
+    case sc.Blk{i, who, k, t, r, o, ru, t0, bw, rs, n}:
+      who
+
+def sc.shows(+focus: String, +who: String) -> Bool:
+  Bool.or(String.is_empty(focus), String.eq(Bool.pick(String, String.is_empty(who), "mugen", who), focus))
+
+# whether the chat shows the first block
+def sc.shows.head(bs: List<&2, sc.Blk>, +focus: String) -> Bool:
+  match bs:
+    case []:
+      True{}
+    case +b <> rest:
+      sc.shows(focus, sc.blk.who(b))
+
+def sc.has(xs: List<&2, String>, +x: String) -> Bool:
+  match xs:
+    case []:
+      False{}
+    case +y <> rest:
+      Bool.or(String.eq(x, y), sc.has(rest, x))
+
+def sc.tab.of(+focus: String) -> String:
+  Bool.pick(String, String.is_empty(focus), "all", focus)
+
+# the tabs: none while no agent works and the chat shows all, or mugen's own
+def sc.tabs(+ags: List<&2, String>, +focus: String) -> List<&2, String>:
+  +mine = Bool.or(String.is_empty(focus), String.eq(focus, "mugen"))
+  +extra = Bool.pick(List<&2, String>, Bool.or(mine, sc.has(ags, focus)), [], [focus])
+  +all = List.concat(&2, String, [["all", "mugen"], ags, extra])
+  Bool.pick(List<&2, String>, Bool.and(List.is_empty(&2, String, ags), List.is_empty(&2, String, extra)), Bool.pick(List<&2, String>, String.is_empty(focus), [], all), all)
+
+def sc.tab.paint(+t: String, +on: Bool, +ags: List<&2, String>) -> String:
+  +dot = Bool.pick(String, sc.has(ags, t), " \u{25cf}", "")
+  Bool.pick(String, on, P.pp.paint("1;7", " " ++ t ++ dot ++ " "), P.pp.paint("2", " " ++ t ++ dot ++ " "))
+
+def sc.tabs.paint(ts: List<&2, String>, +focus: String, +ags: List<&2, String>) -> String:
+  match ts:
+    case []:
+      ""
+    case +t <> rest:
+      sc.tab.paint(t, String.eq(t, sc.tab.of(focus)), ags) ++ sc.tabs.paint(rest, focus, ags)
+
+# a tab's width on the screen
+def sc.tab.w(+t: String, +ags: List<&2, String>) -> U32:
+  (U32.from_nat(String.length(t)) + Bool.pick(U32, sc.has(ags, t), 4, 2) : U32)
+
+# the tab at column x (from 0, past the status line): "" none
+def sc.tab.at(ts: List<&2, String>, +x: U32, +ags: List<&2, String>) -> Maybe<&2, String>:
+  match ts:
+    case []:
+      None{}
+    case +t <> rest:
+      +tw = sc.tab.w(t, ags)
+      Bool.pick(Maybe<&2, String>, U32.is_lt(x, tw), Some{t}, sc.tab.at(rest, (x - tw : U32), ags))
+
+def sc.tab.index(ts: List<&2, String>, +t: String, +i: Nat) -> Nat:
+  match ts:
+    case []:
+      0n
+    case +y <> rest:
+      Bool.pick(Nat, String.eq(y, t), i, sc.tab.index(rest, t, Nat.add(i, 1n)))
+
+# the chat on tab t, at its end
+def sc.with.focus(+s: sc.S, +t: String) -> sc.S:
+  +u = sc.u(s)
+  +f = Bool.pick(String, String.eq(t, "all"), "", t)
+  sc.dirty(sc.with.off(sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), "", sc.u.quit(u), sc.u.done(u), f}), 0), 2)
 
 def sc.st.busy(t: sc.St) -> Bool:
   match t:
@@ -619,16 +706,19 @@ def sc.take.rows(rs: List<&2, String>, more: Bool, +id: U32, +need: U32, +k: U32
     case _ _:
       sc.G{[], rows, ids, k}
 
-def sc.gather(bs: List<&2, sc.Blk>, more: Bool, +need: U32, +k: U32, +rows: List<&2, String>, +ids: List<&2, U32>, +w: U32, +home: String) -> sc.G:
-  match bs more:
-    case b <> +rest True{}:
+def sc.gather(bs: List<&2, sc.Blk>, more: Bool, show: Bool, +need: U32, +k: U32, +rows: List<&2, String>, +ids: List<&2, U32>, +w: U32, +home: String, +focus: String) -> sc.G:
+  match bs more show:
+    case b <> +rest True{} True{}:
       +b2 = sc.blk.fresh(b, w, home)
       +g = sc.take.rows(sc.blk.rows(b2), U32.is_lt(k, need), sc.blk.id(b2), need, k, rows, ids)
-      +g2 = sc.gather(rest, U32.is_lt(sc.g.k(g), need), need, sc.g.k(g), sc.g.rows(g), sc.g.ids(g), w, home)
+      +g2 = sc.gather(rest, U32.is_lt(sc.g.k(g), need), sc.shows.head(rest, focus), need, sc.g.k(g), sc.g.rows(g), sc.g.ids(g), w, home, focus)
       sc.g.with.bs(g2, b2 <> sc.g.bs(g2))
-    case +b <> +rest False{}:
+    case b <> +rest True{} False{}:
+      +g2 = sc.gather(rest, True{}, sc.shows.head(rest, focus), need, k, rows, ids, w, home, focus)
+      sc.g.with.bs(g2, b <> sc.g.bs(g2))
+    case +b <> +rest False{} _:
       sc.G{b <> rest, rows, ids, k}
-    case _ _:
+    case _ _ _:
       sc.G{[], rows, ids, k}
 
 def sc.at(+r: U32) -> String:
@@ -710,7 +800,7 @@ def sc.queue(+s: sc.S) -> List<&2, String>:
   +w = sc.w(s)
   List.append(&2, String,
     Bool.pick(List<&2, String>, List.is_empty(&2, String, wa), [],
-      [P.pp.sgr.cut(P.pp.paint("33", "\u{29d7} " ++ Nat.show(List.length(&2, String, wa)) ++ " waiting: ") ++ "\u{ab}" ++ sc.first(wa) ++ "\u{bb}" ++ sc.more(wa) ++ P.pp.paint("2", " \u{b7} C-s sends now"), w)]),
+      [P.pp.sgr.cut(P.pp.paint("33", "\u{29d7} " ++ Nat.show(List.length(&2, String, wa)) ++ " waiting: ") ++ "\u{ab}" ++ sc.first(wa) ++ "\u{bb}" ++ sc.more(wa) ++ P.pp.paint("2", " \u{b7} Up edits \u{b7} C-s sends now"), w)]),
     Bool.pick(List<&2, String>, List.is_empty(&2, String, se), [],
       [P.pp.sgr.cut(P.pp.paint("36", "\u{2192} handed to mugen: ") ++ "\u{ab}" ++ sc.first(se) ++ "\u{bb}" ++ sc.more(se) ++ P.pp.paint("2", " \u{b7} read after its running tool \u{b7} C-s cuts the tool"), w)]))
 
@@ -722,26 +812,42 @@ def sc.find.row(m: Maybe<&2, String>) -> List<&2, String>:
       []
 
 def sc.placeholder() -> String:
-  "Enter sends \u{b7} Shift- or Alt-Enter: a new line \u{b7} C-s sends waiting now \u{b7} C-g stops mugen \u{b7} Esc Esc leaves"
+  "Enter sends \u{b7} Alt-Enter: a new line \u{b7} C-s sends waiting now \u{b7} C-g stops mugen \u{b7} Esc Esc leaves"
 
 # The lines under the chat, top down, and where the cursor is among them
 type sc.Low is Data:
-  sc.Low{rows: List<&2, String>, row: U32, col: U32}
+  sc.Low{rows: List<&2, String>, row: U32, col: U32, stat: U32}
 
 def sc.low.rows(l: sc.Low) -> List<&2, String>:
   match l:
-    case sc.Low{r, y, x}:
+    case sc.Low{r, y, x, st}:
       r
 
 def sc.low.row(l: sc.Low) -> U32:
   match l:
-    case sc.Low{r, y, x}:
+    case sc.Low{r, y, x, st}:
       y
 
 def sc.low.col(l: sc.Low) -> U32:
   match l:
-    case sc.Low{r, y, x}:
+    case sc.Low{r, y, x, st}:
       x
+
+# the status line's row among them
+def sc.low.stat(l: sc.Low) -> U32:
+  match l:
+    case sc.Low{r, y, x, st}:
+      st
+
+# the status line: the hub's (mugen's name till it comes), then the tabs
+def sc.status.base(+s: sc.S) -> String:
+  +line = sc.st.line(sc.st(s))
+  Bool.pick(String, String.is_empty(line), P.pp.paint("1;35", "\u{7121}\u{9650} mugen"), line)
+
+def sc.status(+s: sc.S) -> String:
+  +ags = sc.st.agents(sc.st(s))
+  +ts = sc.tabs(ags, sc.focus(s))
+  sc.status.base(s) ++ Bool.pick(String, List.is_empty(&2, String, ts), "", P.pp.paint("2", " \u{b7} ") ++ sc.tabs.paint(ts, sc.focus(s), ags))
 
 def sc.prompt(rs: List<&2, String>, +first: Bool) -> List<&2, String>:
   match rs:
@@ -762,11 +868,11 @@ def sc.low(+s: sc.S) -> sc.Low:
   +hint = sc.hint(s)
   +matches = D.ed.matches(e)
   +info = Bool.pick(List<&2, String>, Bool.not(String.is_empty(hint)), [P.pp.sgr.cut(P.pp.paint("2", hint), w)], sc.find.row(D.ed.find(e)))
-  +line = sc.st.line(sc.st(s))
   +empty = D.ed.is.empty(e)
   +input = Bool.pick(List<&2, String>, empty, [P.pp.paint("2", P.pp.fit(sc.placeholder(), (w - 2 : U32)))], shown)
-  +head = List.concat(&2, String, [[sc.rule(w, sc.off(s))], sc.act(s), sc.queue(s), info, [P.pp.sgr.cut(Bool.pick(String, String.is_empty(line), P.pp.paint("1;35", "\u{7121}\u{9650} mugen"), line), w)]])
-  sc.Low{List.append(&2, String, head, sc.prompt(input, True{})), (U32.from_nat(List.length(&2, String, head)) + (cy - top : U32) : U32), (D.ed.lay.col(lay) + 2 : U32)}
+  +head = List.concat(&2, String, [[sc.rule(w, sc.off(s))], sc.act(s), sc.queue(s), info, [P.pp.sgr.cut(sc.status(s), w)]])
+  +nh = U32.from_nat(List.length(&2, String, head))
+  sc.Low{List.append(&2, String, head, sc.prompt(input, True{})), (nh + (cy - top : U32) : U32), (D.ed.lay.col(lay) + 2 : U32), (nh - 1 : U32)}
 
 # Selecting -----------------------------------------------------------------------
 #
@@ -936,17 +1042,18 @@ def sc.pinned.ids(+pid: U32, +ids: List<&2, U32>) -> List<&2, U32>:
   Bool.pick(List<&2, U32>, U32.is_eq(pid, 0), ids, 0 <> List.drop(&2, U32, ids, 1n))
 
 # the rows from the newest block up to block id's, inclusive (each drawn at w)
-def sc.rows.to(bs: List<&2, sc.Blk>, go: Bool, +id: U32, +w: U32, +home: String, +acc: U32) -> U32:
+def sc.rows.to(bs: List<&2, sc.Blk>, go: Bool, +id: U32, +w: U32, +home: String, +acc: U32, +focus: String) -> U32:
   match bs go:
     case b <> rest True{}:
       +b2 = sc.blk.fresh(b, w, home)
-      sc.rows.to(rest, Bool.not(U32.is_eq(sc.blk.id(b2), id)), id, w, home, (acc + sc.blk.n(b2) : U32))
+      +n = Bool.pick(U32, sc.shows(focus, sc.blk.who(b2)), sc.blk.n(b2), 0)
+      sc.rows.to(rest, Bool.not(U32.is_eq(sc.blk.id(b2), id)), id, w, home, (acc + n : U32), focus)
     case _ _:
       acc
 
 # a click on the pinned prompt: the chat scrolled to put it on top
 def sc.to.pin(+s: sc.S) -> sc.S:
-  +total = sc.rows.to(sc.blks(s), True{}, sc.sel.pin(sc.z(s)), sc.w(s), sc.home(s), 0)
+  +total = sc.rows.to(sc.blks(s), True{}, sc.sel.pin(sc.z(s)), sc.w(s), sc.home(s), 0, sc.focus(s))
   +h = sc.h(s)
   +t = (h - U32.min(h, sc.tm.low(sc.tm(s))) : U32)
   sc.dirty(sc.with.off(s, (total - U32.min(total, t) : U32)), 2)
@@ -960,13 +1067,14 @@ def sc.draw.all(+s: sc.S) -> IO(sc.S):
   +t = Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0)
   +off = sc.off(s)
   +need = (off + t : U32)
-  +g = sc.gather(sc.blks(s), U32.is_gt(need, 0), need, 0, [], [], sc.w(s), sc.home(s))
+  +focus = sc.focus(s)
+  +g = sc.gather(sc.blks(s), U32.is_gt(need, 0), sc.shows.head(sc.blks(s), focus), need, 0, [], [], sc.w(s), sc.home(s), focus)
   +k = sc.g.k(g)
   +off2 = U32.min(off, (k - U32.min(k, t) : U32))
   +rows0 = List.take(&2, String, sc.g.rows(g), U32.to_nat(t))
   +ids0 = List.take(&2, U32, sc.g.ids(g), U32.to_nat(t))
   +pm = sc.pin.go(sc.g.bs(g), sc.pin.v(sc.g.bs(g), Maybe.default(&2, U32, List.get(&2, U32, ids0, 0n), 0)), Maybe.default(&2, U32, List.get(&2, U32, ids0, 0n), 0))
-  +pid = Bool.pick(U32, U32.is_ge(t, 4), sc.pin.id(pm), 0)
+  +pid = Bool.pick(U32, Bool.and(U32.is_ge(t, 4), Bool.or(String.is_empty(focus), String.eq(focus, "mugen"))), sc.pin.id(pm), 0)
   +rows = sc.pinned.rows(pid, sc.pin.row(pm, sc.w(s)), rows0)
   +ids = sc.pinned.ids(pid, ids0)
   +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(t), sc.sel.show(sc.z(s), rows), 1), sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
@@ -1114,14 +1222,16 @@ def sc.mouse(+s: sc.S) -> IO(sc.S):
 def sc.cmd.word(+t: String) -> String:
   Maybe.default(&2, String, List.get(&2, String, String.split(String.trim(t), ' '), 0n), "")
 
-# a message or a command, sent: shown, kept in the history, the chat followed
+# a message or a command, sent: kept in the history, the chat followed; a
+# command shown, a message once the hub logs it (it holds one sent while
+# mugen works, which Up can take back)
 def sc.sent(+s: sc.S, +t: String) -> IO(sc.S):
   +cmd = String.starts_with(String.trim(t), "/")
   +s1 = sc.with.off(sc.with.hint(sc.with.ed(s, D.ed.sent(sc.ed(s))), ""), 0)
   do IO<sc.S>:
     Unit <- sc.send(s, t)
     a : Result<&1, &1, U32 & String, Nat> <- S.mu.append(sc.cf.hfile(sc.cf(s)), sc.hist.enc(t) ++ "\n", 0)
-    return Bool.pick(sc.S, cmd, sc.add(s1, "", "say", "\u{203a} " ++ String.trim(t), False{}), sc.add(s1, "", "user", t, False{}))
+    return Bool.pick(sc.S, cmd, sc.add(s1, "", "say", "\u{203a} " ++ String.trim(t), False{}), sc.dirty(s1, 1))
 
 # /image [path] on the draft's last line: the image (or the clipboard's)
 # kept in the mugen dir (Pic.bend), a line naming it in its place, for the
@@ -1228,10 +1338,17 @@ def sc.all(+s: sc.S) -> sc.S:
 # tmux's prefix where it is set so),
 # 7 C-l, 8 Esc, 9 Tab, 10 PgUp, 11 PgDn, 12 M-<, 13 M-> or End on an empty
 # input, 14 the wheel up, 15 down, 16 a press, 17 nothing, 18 a drag, 19 a
-# let go. While searching,
+# let go, 20 Up on an empty input with messages waiting, 21 M-Left and 22
+# M-Right with tabs shown. While searching,
 # Enter, C-g and Esc are the search's.
-def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool) -> Nat:
+def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool) -> Nat:
   match key:
+    case K.ky.Nav{1, m}:
+      Bool.pick(Nat, Bool.and(back, Bool.and(empty, Bool.not(find))), 20n, 0n)
+    case K.ky.Nav{4, 2}:
+      Bool.pick(Nat, tabs, 21n, 0n)
+    case K.ky.Nav{3, 2}:
+      Bool.pick(Nat, tabs, 22n, 0n)
     case K.ky.Enter{}:
       Bool.pick(Nat, find, 0n, 1n)
     case K.ky.Ctrl{99}:
@@ -1315,13 +1432,38 @@ def sc.click.at(k: Nat, +s: sc.S, +y: U32) -> sc.S:
 def sc.copied(+n: Nat) -> String:
   "copied " ++ Nat.show(n) ++ Bool.pick(String, Nat.is_eq(n, 1n), " line", " lines") ++ " \u{b7} Shift-drag selects with the terminal"
 
-def sc.up(k: Nat, +s: sc.S, +y: U32) -> IO(sc.S):
+# the tabs: a click on one (column x, from 1), or M-Left / M-Right
+def sc.tab.click(+s: sc.S, +x: U32) -> sc.S:
+  +ags = sc.st.agents(sc.st(s))
+  +ts = sc.tabs(ags, sc.focus(s))
+  +x0 = (P.pp.vis(sc.status.base(s)) + 3 : U32)
+  +c = (x - U32.min(x, 1) : U32)
+  +m = Bool.pick(Maybe<&2, String>, U32.is_lt(c, x0), None{}, sc.tab.at(ts, (c - x0 : U32), ags))
+  Bool.pick(sc.S, Maybe.is_none(&2, String, m), s, sc.with.focus(s, Maybe.default(&2, String, m, "all")))
+
+def sc.tab.step(+s: sc.S, +fwd: Bool) -> sc.S:
+  +ts = sc.tabs(sc.st.agents(sc.st(s)), sc.focus(s))
+  +n = List.length(&2, String, ts)
+  +i = sc.tab.index(ts, sc.tab.of(sc.focus(s)), 0n)
+  +j = Bool.pick(Nat, fwd, Bool.pick(Nat, Nat.is_ge(Nat.add(i, 1n), n), 0n, Nat.add(i, 1n)), Bool.pick(Nat, Nat.is_eq(i, 0n), Nat.sub(n, 1n), Nat.sub(i, 1n)))
+  Bool.pick(sc.S, Nat.is_eq(n, 0n), s, sc.with.focus(s, Maybe.default(&2, String, List.get(&2, String, ts, j), "all")))
+
+# the screen row (from 1) of the status line, as drawn now
+def sc.status.y(+s: sc.S) -> U32:
+  +low = sc.low(s)
+  +nl = U32.from_nat(List.length(&2, String, sc.low.rows(low)))
+  +h = sc.h(s)
+  +t = Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0)
+  (t + (sc.low.stat(low) + 1 : U32) : U32)
+
+def sc.up(k: Nat, +s: sc.S, +x: U32, +y: U32) -> IO(sc.S):
   match k:
     case 0n:
       IO.pure(sc.S, s)
     case 1n:
       +s1 = sc.with.z(s, sc.sel.off(sc.z(s)))
-      IO.pure(sc.S, sc.click.at(Bool.pick(Nat, Bool.and(U32.is_eq(y, 1), Bool.not(U32.is_eq(sc.sel.pin(sc.z(s1)), 0))), 1n, 0n), s1, y))
+      Bool.pick(IO(sc.S), U32.is_eq(y, sc.status.y(s1)), IO.pure(sc.S, sc.dirty(sc.tab.click(s1, x), 2)),
+        IO.pure(sc.S, sc.click.at(Bool.pick(Nat, Bool.and(U32.is_eq(y, 1), Bool.not(U32.is_eq(sc.sel.pin(sc.z(s1)), 0))), 1n, 0n), s1, y)))
     case _:
       +z = sc.z(s)
       +text = sc.sel.text(z)
@@ -1368,14 +1510,23 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
     case 18n:
       IO.pure(sc.S, sc.drag(s, sc.mouse.x(key), sc.mouse.y(key)))
     case 19n:
-      sc.up(sc.up.k(sc.z(s)), s, sc.mouse.y(key))
+      sc.up(sc.up.k(sc.z(s)), s, sc.mouse.x(key), sc.mouse.y(key))
+    case 20n:
+      IO.bind(Unit, sc.S, sc.send(s, "/back"), u => IO.pure(sc.S, s))
+    case 21n:
+      IO.pure(sc.S, sc.tab.step(s, False{}))
+    case 22n:
+      IO.pure(sc.S, sc.tab.step(s, True{}))
     case _:
       IO.pure(sc.S, s)
 
 def sc.key(+s: sc.S, +key: K.ky.Key) -> IO(sc.S):
   +e = sc.ed(s)
-  +s1 = Bool.pick(sc.S, Nat.is_eq(sc.key.k(key, Maybe.is_some(&2, String, D.ed.find(e)), D.ed.is.empty(e)), 8n), s, sc.with.esc(s, 0n))
-  sc.key.go(sc.key.k(key, Maybe.is_some(&2, String, D.ed.find(e)), D.ed.is.empty(e)), s1, key)
+  +back = Bool.not(List.is_empty(&2, String, sc.st.wait(sc.st(s))))
+  +tabs = Bool.not(List.is_empty(&2, String, sc.tabs(sc.st.agents(sc.st(s)), sc.focus(s))))
+  +k = sc.key.k(key, Maybe.is_some(&2, String, D.ed.find(e)), D.ed.is.empty(e), back, tabs)
+  +s1 = Bool.pick(sc.S, Nat.is_eq(k, 8n), s, sc.with.esc(s, 0n))
+  sc.key.go(k, s1, key)
 
 # Events ------------------------------------------------------------------------
 
@@ -1419,6 +1570,8 @@ def sc.on(+s: sc.S, m: Maybe<&1, sc.In>) -> IO(sc.S):
       sc.quit(s)
     case Some{sc.Bye{+done}}:
       sc.bye(s, done)
+    case Some{sc.Back{+text}}:
+      IO.pure(sc.S, sc.dirty(sc.with.hint(sc.with.ed(s, D.ed.taken(sc.ed(s), text)), "taken back from the queue: edit it, Enter sends it"), 1))
 
 # what more came meanwhile, taken before drawing
 def sc.drain(n: Nat, p: Poll<&1, &1, Maybe<&1, sc.In>, Unit>, +s: sc.S) -> IO(sc.S):
@@ -1499,7 +1652,7 @@ def sc.run(+hub: Chan(E.ev.Ev), +me: Chan(sc.In), +home: String, +hfile: String)
     ws : U32 <- S.mu.winsize()
     hist : List<&2, String> <- sc.hist.load(hfile)
     now : Nat <- IO.now()
-    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, []}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}}, sc.sel.none([])}, ws)
+    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, []}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([])}, ws)
     Unit <- IO.spawn(Unit, sc.reader(me))
     Unit <- IO.spawn(Unit, sc.ticker(sc.fuel(), me, Done{Unit{}}))
     +s1 : sc.S <- sc.draw(sc.dirty(s0, 2))

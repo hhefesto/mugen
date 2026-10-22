@@ -84,7 +84,8 @@ Each entry is a block: your message (`❯`), mugen's reply (`●`, with a
 little markdown), its summarized thinking (`✻`), and each tool call with
 its result: the command or path asked, how it went (`✓ 0.4 s`,
 `✗ exit 1`, `✂ cut`), its first lines of output, and for an edit or a
-write the diff, with the file's line numbers, red and green. Blocks come
+write the diff, with the file's line numbers, each line taken out on red and
+each one added on green. Blocks come
 open, whole: a click folds or opens one, `M-o` all of them (`C-o` too,
 unless tmux takes it as its prefix). `PgUp`,
 `PgDn` and the wheel scroll (`M->` follows the end again). Under the chat:
@@ -94,9 +95,14 @@ left before mugen folds its oldest lines at 128 KB, the mode), and the
 input.
 
 Keys:
-- `Enter` sends. While mugen works, the message waits, and says so.
-- `Shift-Enter`, `Alt-Enter`, `C-j` (or a `\` at the end): a new line. A
-  paste comes whole, as one message.
+- `Enter` sends. While mugen works, the message waits, and says so, and
+  `↑` on an empty input takes it back to edit (until mugen reads it, at
+  its next tool call or its turn's end): only the version you send at last
+  is logged and shown.
+- `Alt-Enter`: a new line. That is the one that works everywhere;
+  `Shift-Enter` and `C-j` reach mugen only where the terminal sends them
+  apart from `Enter`, and many send them as a plain `Enter`. A paste comes
+  whole, as one message.
 - `C-s` (`/now`): send the waiting messages now. A shell command mugen is
   running is cut, and mugen gets its output and your messages; else its
   turn stops and one starts with them.
@@ -110,6 +116,9 @@ Keys:
   letting go copies it to the clipboard by xclip, and to tmux's buffer).
   `Shift`-drag is the terminal's own selection; `/mouse` hands the mouse
   to the terminal (and back).
+- Agents: while subagents work, tabs follow the status line (`all`,
+  `mugen`, each agent, `●` while it works). A click on one, or `M-←` /
+  `M-→`, shows only that one's blocks (`all` is the whole chat again).
 
 Commands:
 - `/stop [name]`: stop the turn, or one agent.
@@ -132,9 +141,8 @@ one left, so no command outlives it.
 
 In tmux it all works as is (the mouse and `PgUp` reach mugen whether
 tmux's `mouse` is on or off). mugen turns tmux's `extended-keys` on as it
-starts, unless set, so `Shift-Enter` can come apart from `Enter` (if the
-terminal under tmux sends it apart: VTE terminals such as GNOME Terminal
-don't, so use `Alt-Enter` there). It names its window `mugen`, shows
+starts, unless set, so `Shift-Enter` can come apart from `Enter` if the
+terminal under tmux sends it apart (many don't: use `Alt-Enter`). It names its window `mugen`, shows
 `mugen …` while mugen works, and rings the window's bell when a reply comes
 while you look at another window.
 
@@ -147,7 +155,8 @@ screen: lines as they come, a `λ` prompt, and a message of many lines
 between two lines of `"""`. From a pipe (stdin not a terminal), each line
 is a message, and mugen exits once stdin ends and nothing is running.
 
-[docs/guide.html](docs/guide.html) is a guide to all of it, a page that
+[The guide](https://hhefesto.github.io/mugen/guide.html) (GitHub Pages, from
+[docs/guide.html](docs/guide.html)) is a guide to all of it, a page that
 opens in any browser.
 
 ## From your phone: Tailscale on NixOS

@@ -272,6 +272,17 @@ def ed.up(+e: ed.Ed) -> ed.Ed:
 def ed.down(+e: ed.Ed) -> ed.Ed:
   Bool.pick(ed.Ed, ed.has.nl(ed.post(e)), ed.line.down(e), ed.newer(e))
 
+# a message taken back from the queue: the text to edit (before whatever was
+# typed since), and out of the history, so only the version sent at last is
+# kept there
+def ed.taken(e: ed.Ed, +t: String) -> ed.Ed:
+  match e:
+    case ed.Ed{+p, +q, c, +h, a, d, f}:
+      +now = String.reverse(p) ++ q
+      +text = Bool.pick(String, String.is_empty(now), t, t ++ "\n" ++ now)
+      +h2 = Bool.pick(List<&2, String>, String.eq(Maybe.default(&2, String, List.get(&2, String, h, 0n), ""), t), List.drop(&2, String, h, 1n), h)
+      ed.Ed{String.reverse(text), "", c, h2, 0n, "", None{}}
+
 # the text sent: the input empty, the text the history's newest
 def ed.sent(e: ed.Ed) -> ed.Ed:
   match e:

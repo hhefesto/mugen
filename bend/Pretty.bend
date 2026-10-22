@@ -462,6 +462,39 @@ def pp.inl.go(n: Nat, s: String, v: Nat, +st: U32, +cur: String, +acc: List<&2, 
 def pp.inline(+s: String) -> List<&2, pp.Sp>:
   pp.inl.go(pp.fuel(), s, pp.inl.v(s, 0), 0, "", [])
 
+# A row on a background (SGR's, as "48;5;236"): every reset in it keeps
+# the background, and the row is filled out to w columns
+def pp.bg.go(s: String, +bg: String, +acc: String) -> String:
+  match s:
+    case SNil{}:
+      String.reverse(acc)
+    case SCon{Chr{27}, SCon{Chr{91}, SCon{Chr{48}, SCon{Chr{109}, +t}}}}:
+      pp.bg.go(t, bg, String.reverse("\u{1B}[0;" ++ bg ++ "m") ++ acc)
+    case SCon{+c, +t}:
+      pp.bg.go(t, bg, SCon{c, acc})
+
+def pp.bg(+bg: String, +w: U32, +r: String) -> String:
+  "\u{1B}[" ++ bg ++ "m" ++ pp.bg.go(r, bg, "") ++ pp.spaces((w - U32.min(pp.vis(r), w) : U32)) ++ "\u{1B}[0m"
+
+def pp.bg.rows(rs: List<&2, String>, +bg: String, +w: U32) -> List<&2, String>:
+  match rs:
+    case []:
+      []
+    case r <> rest:
+      pp.bg(bg, w, r) <> pp.bg.rows(rest, bg, w)
+
+# the backgrounds of a line added and of one taken out (dark green, dark red)
+def pp.added.bg() -> String:
+  "48;5;22"
+
+def pp.removed.bg() -> String:
+  "48;5;52"
+
+# a diff's line in a reply's code: added or taken out, on its background
+def pp.diff.bg(+l: String) -> String:
+  +head = Bool.or(String.starts_with(l, "+++"), String.starts_with(l, "---"))
+  Bool.pick(String, head, "", Bool.pick(String, String.starts_with(l, "+"), pp.added.bg(), Bool.pick(String, String.starts_with(l, "-"), pp.removed.bg(), "")))
+
 def pp.diff.st(+l: String) -> String:
   Bool.pick(String, String.starts_with(l, "@@"), "36", Bool.pick(String, String.starts_with(l, "+"), "32", Bool.pick(String, String.starts_with(l, "-"), "31", "")))
 
@@ -483,7 +516,10 @@ def pp.md.line(k: Nat, +l: String, +tl: String, +lang: String, +p1: String, +w: 
       [p1 ++ pp.paint("2", pp.fit(l, (w - 2 : U32)))]
     case 1n:
       +bar = pp.paint("2", "\u{2502} ")
-      pp.pre(pp.rows([pp.Sp{Bool.pick(String, String.eq(lang, "diff"), pp.diff.st(l), ""), l}], (w - 4 : U32), False{}), p1 ++ bar, "  " ++ bar)
+      +diff = String.eq(lang, "diff")
+      +bg = Bool.pick(String, diff, pp.diff.bg(l), "")
+      +rs = pp.rows([pp.Sp{Bool.pick(String, Bool.and(diff, String.is_empty(bg)), pp.diff.st(l), ""), l}], (w - 4 : U32), False{})
+      pp.pre(Bool.pick(List<&2, String>, String.is_empty(bg), rs, pp.bg.rows(rs, bg, (w - 4 : U32))), p1 ++ bar, "  " ++ bar)
     case 2n:
       pp.pre(pp.rows([pp.Sp{"1", pp.hashes(tl)}], (w - 2 : U32), True{}), p1, "  ")
     case 3n:
@@ -624,8 +660,11 @@ def pp.diff.k(+l: String) -> Nat:
   Bool.pick(Nat, String.starts_with(l, "--- "), 0n, Bool.pick(Nat, String.starts_with(l, "+++ "), 1n, Bool.pick(Nat, String.starts_with(l, "@@"), 2n,
     Bool.pick(Nat, String.starts_with(l, "+"), 3n, Bool.pick(Nat, String.starts_with(l, "-"), 4n, Bool.pick(Nat, String.starts_with(l, " "), 5n, 6n))))))
 
-def pp.diff.code(+num: U32, +sign: String, +st: String, +text: String, +w: U32) -> List<&2, String>:
-  pp.pre(pp.rows([pp.Sp{st, text}], (w - 12 : U32), False{}), pp.gut() ++ pp.paint("2", pp.pad.left(U32.show(num), 5)) ++ pp.paint(st, sign), pp.gut() ++ pp.spaces(8))
+# a line kept as is; one added on green, one taken out on red (bg), as wide
+# as the block
+def pp.diff.code(+num: U32, +sign: String, +st: String, +bg: String, +text: String, +w: U32) -> List<&2, String>:
+  +rs = pp.pre(pp.rows([pp.Sp{"", text}], (w - 12 : U32), False{}), pp.paint("2", pp.pad.left(U32.show(num), 5)) ++ pp.paint(st, sign), pp.spaces(8))
+  pp.pre(Bool.pick(List<&2, String>, String.is_empty(bg), rs, pp.bg.rows(rs, bg, (w - 4 : U32))), pp.gut(), pp.gut())
 
 def pp.diff.line(k: Nat, +l: String, +old: U32, +new: U32, +w: U32, +home: String) -> List<&2, String>:
   match k:
@@ -636,11 +675,11 @@ def pp.diff.line(k: Nat, +l: String, +old: U32, +new: U32, +w: U32, +home: Strin
     case 2n:
       [pp.gut() ++ pp.paint("36", pp.fit(l, (w - 4 : U32)))]
     case 3n:
-      pp.diff.code(new, " + ", "32", String.drop(l, 1n), w)
+      pp.diff.code(new, " + ", "1;32", pp.added.bg(), String.drop(l, 1n), w)
     case 4n:
-      pp.diff.code(old, " - ", "31", String.drop(l, 1n), w)
+      pp.diff.code(old, " - ", "1;31", pp.removed.bg(), String.drop(l, 1n), w)
     case 5n:
-      pp.diff.code(new, "   ", "", String.drop(l, 1n), w)
+      pp.diff.code(new, "   ", "", "", String.drop(l, 1n), w)
     case _:
       [pp.gut() ++ pp.paint("2", pp.fit(l, (w - 4 : U32)))]
 
@@ -733,27 +772,6 @@ def pp.work(+text: String, +open: Bool, +w: U32) -> List<&2, String>:
   +ls = pp.lines(pp.clean(text))
   +name = Maybe.default(&2, String, List.get(&2, String, ls, 0n), "")
   (pp.paint("36", "\u{25c6} ") ++ pp.paint("1;36", name) ++ pp.paint("2", " reports")) <> pp.fold(pp.md(List.drop(&2, String, ls, 1n), False{}, "", "  ", w), open, 8n, "  ")
-
-# A row on a background (SGR's, as "48;5;236"): every reset in it keeps
-# the background, and the row is filled out to w columns
-def pp.bg.go(s: String, +bg: String, +acc: String) -> String:
-  match s:
-    case SNil{}:
-      String.reverse(acc)
-    case SCon{Chr{27}, SCon{Chr{91}, SCon{Chr{48}, SCon{Chr{109}, +t}}}}:
-      pp.bg.go(t, bg, String.reverse("\u{1B}[0;" ++ bg ++ "m") ++ acc)
-    case SCon{+c, +t}:
-      pp.bg.go(t, bg, SCon{c, acc})
-
-def pp.bg(+bg: String, +w: U32, +r: String) -> String:
-  "\u{1B}[" ++ bg ++ "m" ++ pp.bg.go(r, bg, "") ++ pp.spaces((w - U32.min(pp.vis(r), w) : U32)) ++ "\u{1B}[0m"
-
-def pp.bg.rows(rs: List<&2, String>, +bg: String, +w: U32) -> List<&2, String>:
-  match rs:
-    case []:
-      []
-    case r <> rest:
-      pp.bg(bg, w, r) <> pp.bg.rows(rest, bg, w)
 
 # the user's messages' background
 def pp.user.bg() -> String:
