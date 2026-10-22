@@ -46,9 +46,10 @@ def hb.searches() -> U32:
 # Settings: the API's, the data dir, the work dir, this device's name, the
 # user's shell, their instructions (MUGEN_RULES' text), the compactor,
 # whether this is a terminal (stdin and stdout), the jobs at once, fsync,
-# home, the account, whether the terminal is a full screen (Screen.bend).
+# home, the account, whether the terminal is a full screen (Screen.bend),
+# the agents' pick (MUGEN_AGENTS; a model "": the chat's).
 type hb.Cfg is Data:
-  hb.Cfg{api: A.ap.Cfg, dir: String, work: String, host: String, shell: String, rules: String, compactor: A.ap.Pick, tty: Bool, jobs: U32, sync: U32, home: String, acct: String, screen: Bool}
+  hb.Cfg{api: A.ap.Cfg, dir: String, work: String, host: String, shell: String, rules: String, compactor: A.ap.Pick, tty: Bool, jobs: U32, sync: U32, home: String, acct: String, screen: Bool, agents: A.ap.Pick}
 
 # a message logged: its pages [id, end), and a line of it for the screen
 type hb.Msg is Data:
@@ -331,53 +332,58 @@ def hb.plan(+s: hb.S) -> Bool:
 
 def hb.cfg.api(c: hb.Cfg) -> A.ap.Cfg:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       a
 
 def hb.cfg.dir(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       d
 
 def hb.cfg.work(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       w
 
 def hb.cfg.host(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       h
 
 def hb.cfg.shell(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       sh
 
 def hb.cfg.rules(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       r
 
 def hb.cfg.compactor(c: hb.Cfg) -> A.ap.Pick:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       cp
 
 def hb.cfg.tty(c: hb.Cfg) -> Bool:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       t
 
 def hb.cfg.home(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       ho
 
 def hb.cfg.acct(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       ac
+
+def hb.cfg.agents(c: hb.Cfg) -> A.ap.Pick:
+  match c:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
+      ag
 
 def hb.dir(+s: hb.S) -> String:
   hb.cfg.dir(hb.cfg(s))
@@ -1019,13 +1025,20 @@ def hb.pick.effort(p: A.ap.Pick, +e: String) -> A.ap.Pick:
     case A.ap.Pick{m, +e0, sp}:
       A.ap.Pick{m, Bool.pick(String, String.is_empty(e), e0, e), sp}
 
+# what an agent runs on: the agents' pick (MUGEN_AGENTS), else the chat's,
+# at the effort its spawn asked, if any (Tools.ts: config.AGENTS, else
+# the chat's pick)
+def hb.agent.pick(+s: hb.S, +effort: String) -> A.ap.Pick:
+  +p = hb.cfg.agents(hb.cfg(s))
+  hb.pick.effort(Bool.pick(A.ap.Pick, String.is_empty(A.ap.pick.id(p)), hb.pick(s), p), effort)
+
 # an agent's call: the view it was given, the devices, its whole log (Tools.ask)
 def hb.agent.call(+s: hb.S, +a: hb.Ag) -> IO(hb.S):
   +name = hb.ag.name(a)
   do IO<hb.S>:
     log : String <- M.me.agent.show(hb.dir(s), name)
     +says : Chan(E.ev.Say) <- Chan.new(E.ev.Say, 256)
-    +ask : A.ap.Ask = A.ap.Ask{hb.pick.effort(hb.pick(s), hb.ag.effort(a)), hb.system(s, hb.sub()),
+    +ask : A.ap.Ask = A.ap.Ask{hb.agent.pick(s, hb.ag.effort(a)), hb.system(s, hb.sub()),
       List.append(&2, V.vw.B, hb.ag.view(a), [V.vw.B{hb.devices(s), False{}}, V.vw.B{log, True{}}]), L.tl.sub(name), hb.searches(), False{}}
     Unit <- hb.fresh(hb.ctl(s, name))
     Unit <- S.mu.must(Unit, "mkdir work", S.mu.mkdirs(hb.cfg.work(hb.cfg(s)) ++ "/" ++ name))
@@ -1422,19 +1435,26 @@ def hb.cmd.code(+w: String) -> Nat:
 
 def hb.pick.json(p: A.ap.Pick) -> J.Json:
   match p:
-    case A.ap.Pick{m, e, sp}:
-      J.JObj{[J.JKv{"vendor", J.JStr{"claude-api"}}, J.JKv{"model", J.JStr{m}}, J.JKv{"effort", J.JStr{e}}, J.JKv{"speed", J.JStr{sp}}]}
+    case A.ap.Pick{+m, e, sp}:
+      J.JObj{[J.JKv{"vendor", J.JStr{A.ap.vendor(m)}}, J.JKv{"model", J.JStr{m}}, J.JKv{"effort", J.JStr{e}}, J.JKv{"speed", J.JStr{sp}}]}
 
 def hb.pick.label(p: A.ap.Pick) -> String:
   match p:
     case A.ap.Pick{m, e, sp}:
       m ++ ":" ++ e ++ ":" ++ sp
 
+# an OpenAI model's note: its API, and where its key comes from ("": none)
+def hb.vendor.note(+p: A.ap.Pick, +kf: String, +cfg: A.ap.Cfg) -> String:
+  Bool.pick(String, Bool.not(A.ap.oai(A.ap.pick.id(p))), "",
+    Bool.pick(String, String.is_empty(kf), ", on OpenAI's API, but there is " ++ A.ap.oai.nokey(cfg), ", on OpenAI's API (the key: " ++ kf ++ ")"))
+
 def hb.set.pick(+s: hb.S, +p: A.ap.Pick) -> IO(hb.S):
   +m = M.me.with.kept(hb.mem(s), hb.kept.pick(M.me.kept(hb.mem(s)), hb.pick.json(p)))
+  +cfg = hb.cfg.api(hb.cfg(s))
   do IO<hb.S>:
     Unit <- M.me.save(m)
-    hb.tell.user(hb.with.pick(hb.with.mem(s, m), p), "the chat now runs on " ++ hb.pick.label(p))
+    +kf : String <- A.ap.oai.key.from(cfg)
+    hb.tell.user(hb.with.pick(hb.with.mem(s, m), p), "the chat now runs on " ++ hb.pick.label(p) ++ hb.vendor.note(p, kf, cfg))
 
 def hb.set.goal(+s: hb.S, g: Maybe<&2, String>) -> IO(hb.S):
   +m = M.me.with.kept(hb.mem(s), hb.kept.goal(M.me.kept(hb.mem(s)), g))
@@ -1544,6 +1564,18 @@ def hb.pick.model(p: A.ap.Pick) -> String:
     case A.ap.Pick{m, e, sp}:
       m
 
+# a pick on OpenAI's API, said so
+def hb.on.vendor(+p: A.ap.Pick) -> String:
+  Bool.pick(String, A.ap.oai(A.ap.pick.id(p)), " (OpenAI API)", "")
+
+# a pick's model and effort (and OpenAI's API, if on it)
+def hb.pick.short(+p: A.ap.Pick) -> String:
+  hb.pick.model(p) ++ " (" ++ A.ap.pick.effort(p) ++ Bool.pick(String, A.ap.oai(A.ap.pick.id(p)), ", OpenAI API", "") ++ ")"
+
+# the agents' pick, if not the chat's
+def hb.agents.note(+p: A.ap.Pick) -> String:
+  Bool.pick(String, String.is_empty(hb.pick.model(p)), "", " · agents on " ++ hb.pick.short(p))
+
 def hb.tilde(+home: String, +path: String) -> String:
   Bool.pick(String, Bool.and(Bool.not(String.is_empty(home)), String.starts_with(path, home)), "~" ++ String.drop(path, String.length(home)), path)
 
@@ -1558,7 +1590,8 @@ def hb.status.lines(+s: hb.S, +lim: String) -> String:
   hb.row(s, "account", hb.cfg.acct(hb.cfg(s)))
     ++ hb.row(s, "limits", lim)
     ++ hb.row(s, "chat", U32.show(M.me.count(m)) ++ " messages · view " ++ U32.show(U32.div(M.me.v.size(M.me.view(m)), 1000)) ++ " KB, " ++ U32.show(hb.left(s)) ++ "% left before it folds · " ++ U32.show(M.me.nbusy(m)) ++ " summarizing")
-    ++ hb.row(s, "model", hb.paint(hb.tty(s), "36", hb.pick.model(p)) ++ " · effort " ++ A.ap.pick.effort(p) ++ " · summaries on " ++ hb.pick.model(cp) ++ " (" ++ A.ap.pick.effort(cp) ++ ")")
+    ++ hb.row(s, "model", hb.paint(hb.tty(s), "36", hb.pick.model(p)) ++ hb.on.vendor(p) ++ " · effort " ++ A.ap.pick.effort(p) ++ hb.agents.note(hb.cfg.agents(hb.cfg(s)))
+      ++ " · summaries on " ++ hb.pick.short(cp))
     ++ hb.row(s, "mode", Bool.pick(String, hb.plan(s), hb.paint(hb.tty(s), "33", "plan") ++ ": mugen reads and proposes; /auto lets it act", hb.paint(hb.tty(s), "32", "auto") ++ ": mugen runs its tools as it needs them; /plan to plan first"))
     ++ hb.row(s, "work dir", hb.workdir(s))
     ++ hb.row(s, "goal", hb.goal.text(hb.goal(s)))
@@ -2139,12 +2172,12 @@ def hb.pick.of(+j: J.Json, +d: A.ap.Pick) -> A.ap.Pick:
 
 def hb.cfg.jobs(c: hb.Cfg) -> U32:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       j
 
 def hb.cfg.sync(c: hb.Cfg) -> U32:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       sy
 
 # A data dir is one chat, and one mugen holds it (flock on lock, which
@@ -2212,7 +2245,7 @@ def hb.screen.open(on: Bool, +c: hb.Cfg, +inbox: Chan(E.ev.Ev)) -> IO(Maybe<&2, 
 
 def hb.cfg.screen(c: hb.Cfg) -> Bool:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ag}:
       sr
 
 def hb.tmux.keys.set(off: Bool) -> IO(Unit):

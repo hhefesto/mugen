@@ -32,8 +32,12 @@ mugen                                # or `nix run github:hhefesto/mugen`
 export ANTHROPIC_API_KEY=...         # curl reads it; it never appears in argv
 mugen --api                          # or `nix run github:hhefesto/mugen -- --api`
 
-mugen --version                      # e.g. `mugen 0.1.0`
+mugen --version                      # e.g. `mugen 0.5.0`
 ```
+
+OpenAI's models run too, on either backend (see [OpenAI](#openai)): `/model
+gpt-6.1-sol` in a chat, or `MUGEN_PICK=gpt-6.1-sol:high mugen`, with an
+OpenAI API key.
 
 mugen checks that Claude Code is signed in when it starts, and if it isn't,
 says to run `mugen login`. If the sign-in lapses during a chat, run
@@ -47,6 +51,37 @@ says to run `mugen login`. If the sign-in lapses during a chat, run
   apply, including to the summaries (one Haiku call each).
 - **API (`--api`, or `MUGEN_WIRE=api`).** mugen calls the Messages API with
   curl and runs the tool loop itself, as UniiChat does.
+
+### OpenAI
+
+A pick of an OpenAI model runs on OpenAI's
+[Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create)
+with curl, on either backend, and mugen runs the tool loop itself (its
+tools are functions there, web search the API's own), as UniiChat's
+`openai-api` does. Claude's picks run as before.
+
+- **Models.** `gpt-6-astra` (OpenAI's flagship), `gpt-6.1-sol`, `gpt-6-luna`,
+  or any OpenAI model id (`gpt-…`, `o3…`, `codex-…`). Efforts are
+  `low`..`max`, as for Claude; the speed `fast` (`MUGEN_PICK=gpt-6-astra:high:fast`)
+  asks for OpenAI's fast (priority) tier, which costs more.
+- **Picking.** `/model gpt-6.1-sol` (saved with the chat, as a Claude pick
+  is; `/model opus-5.5` goes back), or `MUGEN_PICK` for a chat that never
+  picked. Agents run on the chat's pick unless `MUGEN_AGENTS` names another
+  (`MUGEN_AGENTS=gpt-6-luna:medium`: Claude chats, GPT agents, or the other
+  way round); the summaries on `MUGEN_COMPACTOR`, which may be OpenAI's too
+  (`gpt-6-luna:low`). `/status` says which model runs where.
+- **The key.** An OpenAI API key (platform.openai.com, billed per token; a
+  ChatGPT or Codex sign-in is not one): `OPENAI_API_KEY` in the environment,
+  or the key alone in `~/.mugen/openai.key` (`MUGEN_OPENAI_KEY_FILE` names
+  another file). curl reads it from either, at each call, so it never
+  appears in argv, and a key file written while mugen runs works at once.
+  The file keeps the key out of the environment of the shell commands mugen
+  runs. With no key, a call on an OpenAI model says so and makes none.
+- **The wire.** Store off (each call sends the whole view, as on Claude);
+  reasoning kept across turns (its encrypted items sent back as they came);
+  the view's cache mark an explicit prompt-cache breakpoint. Calls are not
+  streamed: a reply shows once its step is done, and a step may think for
+  up to 30 minutes.
 
 **Caching.** Both backends send the same request layout: the system prompt,
 then the view with one cache mark on its last whole 4-line block, then the
@@ -63,7 +98,8 @@ writes a Claude Code debug log there.
 Status: the tests run offline, against stand-ins for both backends (see
 Develop). A short live chat has run on a Max plan through `claude -p`, with a
 tool call and cache reads. The `--api` backend has not yet run against the
-live API.
+live API, nor has OpenAI's (it has run with the real curl against a local
+stand-in of the Responses API).
 
 On a terminal mugen takes the whole screen (and gives it back as it was
 when you leave). It opens with a status (the account, the plan's limits,
@@ -134,7 +170,9 @@ Commands:
 - `/stop [name]`: stop the turn, or one agent (`/stop !`: your own command).
 - `/now`: as `C-s`.
 - `/goal TEXT`, `/halt`: set a goal, or drop it.
-- `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
+- `/model opus-5.5|sonnet-5.5|haiku-5.5|gpt-6-astra|gpt-6.1-sol|gpt-6-luna`
+  (or a model id), `/effort low..max`. An OpenAI model runs on OpenAI's API
+  (see [OpenAI](#openai)).
 - `/plan`: mugen reads and proposes, changing nothing. `/auto` lets it act.
 - `/image PATH` (or `/image` alone, for the clipboard's image, by xclip): the
   image goes with the message being written, as a line `[image
@@ -230,8 +268,11 @@ comes with a Shift that isn't held).
 |---|---|---|
 | `MUGEN_DIR` | `~/.mugen` | the chat: `main/`, `tree/`, `view.json`, agents' logs |
 | `MUGEN_WORK` | `$MUGEN_DIR/work` | the tools' work dir, a dir per agent |
-| `MUGEN_PICK` | `opus-5.5:medium:slow` | the chat's model, effort and speed |
+| `MUGEN_PICK` | `opus-5.5:medium:slow` | the chat's model, effort and speed (an OpenAI model's too: `gpt-6.1-sol:high`) |
 | `MUGEN_COMPACTOR` | `haiku-5.5:high:slow` | the summaries' model |
+| `MUGEN_AGENTS` | | the agents' model, effort and speed (unset: the chat's, at the effort a spawn asks) |
+| `OPENAI_API_KEY` | | the key for OpenAI's models (curl reads it) |
+| `MUGEN_OPENAI_KEY_FILE` | `$MUGEN_DIR/openai.key` | else, a file holding that key (curl reads it at each call) |
 | `MUGEN_RULES` | `$MUGEN_DIR/rules.md` | your instructions, appended to the system prompt |
 | `MUGEN_JOBS` | `8` (`48` with `--api`) | summaries at once (each is a `claude` process on Claude Code) |
 | `MUGEN_SYNC` | `1` | fsync each log write |

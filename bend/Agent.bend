@@ -977,6 +977,7 @@ def ag.wire(on: Bool, +env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO
     case False{}:
       ag.api.run(env, ask, says)
 
-# a call run to its end, told to the hub, on its wire
+# a call run to its end, told to the hub, on its wire: an OpenAI model's
+# always in our own loop (Api.bend ap.wire)
 def ag.run(+env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
-  ag.wire(C.cc.on(A.ap.cfg.cc(ag.cfg(env))), env, ask, says)
+  ag.wire(Nat.is_eq(A.ap.wire(ag.cfg(env), A.ap.pick.id(A.ap.ask.pick(ask))), 1n), env, ask, says)

@@ -1,0 +1,2 @@
+user: hi
+note: No reply: no OpenAI API key: set OPENAI_API_KEY, or write the key to /nonexistent/openai.key (MUGEN_OPENAI_KEY_FILE names another file). Send a message to try again.

@@ -1,0 +1,14 @@
+#!/bin/sh
+# the agent ran on gpt-6-luna at effort low, on the Responses API; the
+# chat's own calls stayed on Claude
+set -e
+d="$1"
+name=$(ls "$d/docs/agent" | head -1 | sed "s/.jsonl$//")
+test -n "$name"
+jq -s -e 'map(.kind) == ["note","user","unii"] and .[1].text == "count to three" and .[2].text == "one, two, three"' "$d/docs/agent/$name.jsonl" > /dev/null
+a=$(grep -l '"input":\[{"role":"developer","content":\[{"type":"input_text","text":"You are a subagent of mugen' log/*.json | head -1)
+test -n "$a"
+jq -e '.body.model == "gpt-6-luna" and .body.reasoning.effort == "low" and .argv[-1] == "https://api.openai.com/v1/responses"' "$a" > /dev/null
+jq -e '.body.input[1].content[-1].text | startswith("0|note: subagent")' "$a" > /dev/null
+test "$(grep -L '"input":\[{"role":"developer"' log/*.json | xargs grep -l 'You are mugen' | wc -l)" -ge 2
+grep -q "The helper counted." "$d/main/"*.jsonl

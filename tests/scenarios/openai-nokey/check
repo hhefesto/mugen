@@ -1,0 +1,4 @@
+#!/bin/sh
+# no request was made
+set -e
+test ! -d log || test "$(ls log | wc -l)" -eq 0

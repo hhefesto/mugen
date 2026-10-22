@@ -395,7 +395,7 @@ mugen --api</pre>
             <tr><td><code>/stop [name]</code></td><td>Stops mugen's turn and the agents, or the one agent named; <code>/stop !</code>, your own command.</td></tr>
             <tr><td><code>/now</code></td><td>As <kbd>C-s</kbd>: the waiting messages, sent at once.</td></tr>
             <tr><td><code>/goal TEXT</code></td><td>A goal mugen keeps working toward. After each turn a check asks whether it is met; until it is, mugen is told to keep working. <code>/halt</code> drops it.</td></tr>
-            <tr><td><code>/model LABEL</code></td><td><code>opus-5.5</code> (default), <code>sonnet-5.5</code>, <code>haiku-5.5</code>, or a model id.</td></tr>
+            <tr><td><code>/model LABEL</code></td><td><code>opus-5.5</code> (default), <code>sonnet-5.5</code>, <code>haiku-5.5</code>; OpenAI's <code>gpt-6-astra</code>, <code>gpt-6.1-sol</code>, <code>gpt-6-luna</code> (on <a href="#openai">OpenAI's API</a>); or a model id.</td></tr>
             <tr><td><code>/effort LEVEL</code></td><td><code>low</code>, <code>medium</code> (default), <code>high</code>, <code>xhigh</code>, <code>max</code>.</td></tr>
             <tr><td><code>/plan</code>, <code>/auto</code></td><td>Plan mode: mugen reads and proposes a plan, and runs no shell, writes and edits nothing, starts no agents. Auto mode (the default) lets it act. The mode shows on the status line.</td></tr>
             <tr><td><code>/status</code></td><td>The opening status again: account, limits, chat and view, models, mode, work dir, goal, agents.</td></tr>
@@ -407,7 +407,8 @@ mugen --api</pre>
         </table>
       </div>
       <h3>Subagents</h3>
-      <p>mugen can <code>spawn</code> subagents, one per task, which run in parallel. Each one is its own <code>claude -p</code> call. It sees the view as it was at the spawn, plus its own log, and works in <code>~/.mugen/work/&lt;Name&gt;</code>. Its tool calls show in the chat, marked <code>[Name]</code>. When it finishes, its report arrives as a <code>◆</code> block, and that starts a turn. mugen can <code>tell</code> an agent more, and <code>zoom("Name")</code> opens an agent's whole chat.</p>
+      <p>mugen can <code>spawn</code> subagents, one per task, which run in parallel. Each one is its own <code>claude -p</code> call (on an OpenAI model, its own loop of API calls). They run on the chat's model, unless <code>MUGEN_AGENTS</code> names another (<code>gpt-6-luna:medium</code>).</p>
+      <p>A subagent sees the view as it was at the spawn, plus its own log, and works in <code>~/.mugen/work/&lt;Name&gt;</code>. Its tool calls show in the chat, marked <code>[Name]</code>. When it finishes, its report arrives as a <code>◆</code> block, and that starts a turn. mugen can <code>tell</code> an agent more, and <code>zoom("Name")</code> opens an agent's whole chat.</p>
     </section>
 
     <section id="turn">
@@ -491,6 +492,16 @@ mugen --api</pre>
         </div>
       </div>
       <p><code>MUGEN_WIRE=api</code> does the same as <code>--api</code>.</p>
+      <h3 id="openai">OpenAI's models</h3>
+      <p>A pick of an OpenAI model runs on OpenAI's Responses API, on either backend: <code>/model gpt-6.1-sol</code> (kept with the chat; <code>/model opus-5.5</code> goes back), <code>MUGEN_PICK=gpt-6.1-sol:high</code>, <code>MUGEN_AGENTS</code> for the agents, even <code>MUGEN_COMPACTOR=gpt-6-luna:low</code> for the summaries. Claude's picks run as before.</p>
+      <ul>
+        <li>The models: <code>gpt-6-astra</code> (OpenAI's flagship), <code>gpt-6.1-sol</code>, <code>gpt-6-luna</code>, or any OpenAI id (<code>gpt-…</code>, <code>o3…</code>, <code>codex-…</code>). Efforts <code>low</code> to <code>max</code>; the speed <code>fast</code> asks for OpenAI's priority tier.</li>
+        <li>mugen calls the API with curl and runs the tool loop itself, as on <code>--api</code> (and as UniiChat's <code>openai-api</code>). Its tools are functions there; web search is the API's own.</li>
+        <li>It needs an OpenAI API key, billed per token (a ChatGPT or Codex sign-in is not one): <code>OPENAI_API_KEY</code>, or the key alone in <code>~/.mugen/openai.key</code>. curl reads either at each call; the key never appears in a command line, and the file keeps it out of the environment of the commands mugen runs.</li>
+        <li>Store is off: each call sends the whole view, its reasoning items sent back as they came, and the view's mark is an explicit prompt-cache breakpoint.</li>
+        <li>Calls are not streamed: a step shows when it is done, after up to 30 minutes of thought.</li>
+        <li>Not yet tried against the live API.</li>
+      </ul>
     </section>
 
     <section id="cache">
@@ -585,6 +596,9 @@ mugen --api</pre>
             <tr><td><code>MUGEN_WORK</code></td><td><code>~/.mugen/work</code></td><td>Where the tools run, a dir per agent.</td></tr>
             <tr><td><code>MUGEN_PICK</code></td><td><code>opus-5.5:medium:slow</code></td><td>The chat's model, effort and speed, until <code>/model</code> or <code>/effort</code>.</td></tr>
             <tr><td><code>MUGEN_COMPACTOR</code></td><td><code>haiku-5.5:high:slow</code></td><td>The summaries' model and effort.</td></tr>
+            <tr><td><code>MUGEN_AGENTS</code></td><td></td><td>The agents' model, effort and speed; unset, the chat's (at the effort a spawn asks).</td></tr>
+            <tr><td><code>OPENAI_API_KEY</code></td><td></td><td>The key for OpenAI's models, read by curl.</td></tr>
+            <tr><td><code>MUGEN_OPENAI_KEY_FILE</code></td><td><code>~/.mugen/openai.key</code></td><td>Else, a file holding that key, read by curl at each call.</td></tr>
             <tr><td><code>MUGEN_JOBS</code></td><td><code>8</code> / <code>48</code></td><td>Summaries at once: 8 on Claude Code, 48 with <code>--api</code>.</td></tr>
             <tr><td><code>MUGEN_RULES</code></td><td><code>~/.mugen/rules.md</code></td><td>Your instructions, added to mugen's prompt.</td></tr>
             <tr><td><code>MUGEN_SYNC</code></td><td><code>1</code></td><td>Flush each log write to disk.</td></tr>

@@ -15,7 +15,7 @@ first: each says what it owns.
 | `Text`, `Json`, `Clock` | JS semantics: UTF-16 units, `\s`, `JSON.stringify`/`parse`, dates |
 | `IMap`, `Tree`, `View` | U32 trie, tree arithmetic, views and their merge (pure) |
 | `Store`, `Memory` | the logs and indexes; Memory.ts one to one |
-| `Api`, `Compact` | a call's step, by curl (`--api`) or Claude Code's CLI (one turn); compaction jobs |
+| `Api`, `Compact` | a call's step, by curl (`--api`), Claude Code's CLI (one turn), or (an OpenAI model's, either wire) OpenAI's Responses API by curl; compaction jobs |
 | `Code`, `Mcp` | Claude Code's CLI (`claude -p`, the default wire): argv, stream-json, the launch; our tools as an MCP server |
 | `Ev`, `Tools`, `Diff`, `Agent` | events to the hub; local tools; unified diffs; the tool loop (`ag.api.run`), or Claude Code's call (`ag.cc.run`) |
 | `Hub`, `Term`, `Main` | the chat (Server.ts Chat); the terminal off the full screen (lines, pipes); settings from the environment |
@@ -30,7 +30,8 @@ first: each says what it owns.
   Tree, Text or Json.
 - `merge`: View.merge against Memory.merge on random views.
 - `goldens`: Text/Json/Diff and the local tools against UniiChat's own code.
-- `api`: Api/Compact against `tools/fakeapi.ts` (a stand-in for curl).
+- `api`: Api/Compact against `tools/fakeapi.ts` (a stand-in for curl; it
+  answers OpenAI's Responses API too, a body with `input`).
 - The full screen has no flake check (it needs a terminal); drive it in a
   tmux server of its own: `tmux -L t new-session -d -x 110 -y 40 "MUGEN_DIR=...
   MUGEN_CLAUDE=... run/mugen"`, then `send-keys` (`S-Enter`, `-H` bytes for

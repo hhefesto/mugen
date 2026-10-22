@@ -11,11 +11,16 @@ import ./Code.bend as C
 # mugen: one chat with an AI that never ends, in the terminal (UniiChat, in
 # Bend). It runs on Claude Code's CLI (`claude -p`, the login of a Claude
 # plan), or with --api on the Messages API (an API key); `mugen login` signs
-# Claude Code in (claude auth login). Its settings come from the
-# environment:
+# Claude Code in (claude auth login). A pick of an OpenAI model (gpt-6.1-sol,
+# gpt-6-astra, gpt-6-luna, or an id of theirs: /model, MUGEN_PICK,
+# MUGEN_AGENTS, MUGEN_COMPACTOR) runs on OpenAI's Responses API, with an
+# OpenAI API key, on either wire. Its settings come from the environment:
 #
 #   ANTHROPIC_API_KEY     with --api, the API key (curl reads it; it is never
 #                         in argv); Claude Code's calls never see it
+#   OPENAI_API_KEY     an OpenAI model's key (curl reads it), else the file
+#                         MUGEN_OPENAI_KEY_FILE names (DIR/openai.key), read
+#                         by curl at each call
 #   MUGEN_WIRE         api: as --api
 #   MUGEN_CLAUDE       the claude to run (claude)
 #   MUGEN_DEBUG_DIR    where a chat call's Claude Code debug log goes (none)
@@ -26,6 +31,8 @@ import ./Code.bend as C
 #   MUGEN_PICK         the chat's model:effort[:speed] (opus-5.5:medium:slow),
 #                         till /model or /effort picks another
 #   MUGEN_COMPACTOR    the summaries' (haiku-5.5:high:slow)
+#   MUGEN_AGENTS       the agents' model:effort[:speed] (none: the chat's,
+#                         at the effort a spawn asks)
 #   MUGEN_RULES        a file of the user's instructions (DIR/rules.md)
 #   MUGEN_JOBS         summaries at once (8 on Claude Code, 48 with --api)
 #   MUGEN_SYNC         1 (default): each log write is fsynced; 0: not
@@ -33,8 +40,9 @@ import ./Code.bend as C
 #   MUGEN_PLAIN        1: on a terminal, lines as they come and a prompt,
 #                         not the full screen (Screen.bend); so for TERM=dumb
 #   MUGEN_WEB_SEARCH   the web search tool's type (web_search_20260209)
-#   MUGEN_CURL, MUGEN_API_URL, MUGEN_UNIT   for tests: the curl to
-#                         run, the endpoint, the ms a second of waiting takes
+#   MUGEN_CURL, MUGEN_API_URL, MUGEN_OPENAI_URL, MUGEN_UNIT   for tests:
+#                         the curl to run, the endpoints, the ms a second
+#                         of waiting takes
 #
 # Every def is prefixed `mn.`.
 
@@ -57,6 +65,10 @@ def mn.text.of(r: Result<&1, &1, U32 & String, String>) -> String:
     case Fail{e}:
       ""
 
+# the agents' pick: none (a model "") runs them on the chat's
+def mn.agents(+s: String) -> A.ap.Pick:
+  Bool.pick(A.ap.Pick, String.is_empty(s), A.ap.Pick{"", "", ""}, mn.pick(s))
+
 # no key, no call: said at once (with a curl of its own, a test's, none is
 # needed; on Claude Code, none is)
 def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -> IO(Unit):
@@ -71,10 +83,10 @@ def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -
 # and prompts the model sees, the files under ~/.mugen, the wires to the
 # API or Claude Code), and only then; see AGENTS.md, Versions
 def mn.version() -> String:
-  "0.4.0"
+  "0.5.0"
 
 def mn.usage() -> String:
-  "usage: mugen [--api | login | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login)\n  mugen --version  says mugen's version"
+  "usage: mugen [--api | login | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login)\n  mugen --version  says mugen's version\nOpenAI's models (/model gpt-6.1-sol, or MUGEN_PICK=gpt-6.1-sol:high) run on OpenAI's API either way, with OPENAI_API_KEY (or the key in ~/.mugen/openai.key)."
 
 # what the arguments ask: 0 Claude Code, 1 the API (--api), 2 the usage
 # (anything else), 3 a sign-in (login, alone), 4 the version (--version or
@@ -142,6 +154,7 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     +work : String <- S.mu.env("MUGEN_WORK", dir ++ "/work")
     pick : String <- S.mu.env("MUGEN_PICK", "opus-5.5:medium:slow")
     comp : String <- S.mu.env("MUGEN_COMPACTOR", "haiku-5.5:high:slow")
+    agents : String <- S.mu.env("MUGEN_AGENTS", "")
     rpath : String <- S.mu.env("MUGEN_RULES", dir ++ "/rules.md")
     rules : Result<&1, &1, U32 & String, String> <- S.mu.read_file(rpath)
     jobs : String <- S.mu.env("MUGEN_JOBS", Bool.pick(String, api, "48", "8"))
@@ -156,6 +169,9 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     debug : String <- S.mu.env("MUGEN_DEBUG_DIR", "")
     trans : String <- S.mu.env("MUGEN_TRANSCRIPTS", "chat")
     url : String <- S.mu.env("MUGEN_API_URL", "https://api.anthropic.com/v1/messages")
+    ourl : String <- S.mu.env("MUGEN_OPENAI_URL", "https://api.openai.com/v1/responses")
+    okey : Result<&1, &1, U32 & String, String> <- IO.get_env("OPENAI_API_KEY")
+    ofile : String <- S.mu.env("MUGEN_OPENAI_KEY_FILE", dir ++ "/openai.key")
     unit : String <- S.mu.env("MUGEN_UNIT", "1000")
     shell : String <- S.mu.env("SHELL", "/bin/sh")
     plain : String <- S.mu.env("MUGEN_PLAIN", "")
@@ -164,10 +180,10 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     i : U32 <- S.mu.isatty(0)
     o : U32 <- S.mu.isatty(1)
     +cc : C.cc.Cfg = C.cc.Cfg{Bool.pick(U32, api, 0, 1), claude, debug, mn.trans(trans), dir ++ "/run", work}
-    +wire : A.ap.Cfg = A.ap.Cfg{curl, url, mn.nat(max, 16000), web, mn.nat(unit, 1000), cc}
+    +wire : A.ap.Cfg = A.ap.Cfg{curl, url, mn.nat(max, 16000), web, mn.nat(unit, 1000), cc, ourl, Bool.not(String.is_empty(T.tx.trim(mn.text.of(okey)))), ofile}
     +tty : Bool = Bool.and(U32.is_eq(i, 1), U32.is_eq(o, 1))
     +screen : Bool = Bool.and(tty, Bool.not(Bool.or(String.eq(plain, "1"), String.eq(term, "dumb"))))
-    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), tty, mn.nat(jobs, 48), mn.nat(sync, 1), home, acct, screen}
+    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), tty, mn.nat(jobs, 48), mn.nat(sync, 1), home, acct, screen, mn.agents(agents)}
     H.hb.start(cfg, mn.pick(pick))
 
 # `mugen login`: this process becomes Claude Code's sign-in, on the

@@ -84,7 +84,7 @@ def ac.run(k: Nat, +cfg: A.ap.Cfg, +a: A.ap.Ask, +text: String, +notes: Chan(Str
       IO.bind(Maybe<&2, String>, J.Json, P.cp.build(cfg, A.ap.ask.pick(a), "system", notes, M.me.Job{0, 0, A.ap.ask.blocks(a), text}), m => IO.pure(J.Json, ac.line.json(m)))
 
 def ac.spec(+curl: String, +j: J.Json) -> IO(Unit):
-  +cfg = {A.ap.Cfg{curl, "https://api.anthropic.com/v1/messages", 16000, "web_search_20260209", 1, C.cc.Cfg{0, "claude", "", 1, "/tmp", "/tmp"}} : A.ap.Cfg}
+  +cfg = {A.ap.Cfg{curl, "https://api.anthropic.com/v1/messages", 16000, "web_search_20260209", 1, C.cc.Cfg{0, "claude", "", 1, "/tmp", "/tmp"}, "https://api.openai.com/v1/responses", False{}, "/nonexistent/openai.key"} : A.ap.Cfg}
   +a = {A.ap.Ask{A.ap.Pick{ac.s(j, "model"), ac.s(j, "effort"), "slow"}, ac.s(j, "system"), ac.blocks(J.js.arr(j, "blocks")), [], U32.from_nat(Maybe.default(&2, Nat, J.js.num(j, "searches"), 0n)), True{}} : A.ap.Ask}
   do IO<Unit>:
     +notes : Chan(String) <- Chan.new(String, 64)

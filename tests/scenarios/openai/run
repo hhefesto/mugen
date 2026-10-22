@@ -1,0 +1,5 @@
+#!/bin/sh
+# a turn on an OpenAI model (/model): the Responses API by curl, whatever
+# the wire, our own tool loop; its key from the environment (a dummy: the
+# fake curl never sends it)
+OPENAI_API_KEY=sk-test-dummy timeout 120 "$MUGEN" < "$(dirname "$0")/input"
