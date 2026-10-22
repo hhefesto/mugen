@@ -13,9 +13,9 @@ it needs more. The chat runs tools on this computer (`shell`, `read`,
 `write`, `edit`), starts subagents (`spawn`, `tell`), works toward a `/goal`,
 and searches the web.
 
-**[Read the guide](https://blog.hhefesto.com/mugen/guide.html)**: every key,
-command and setting on one page, served by GitHub Pages from
-[docs/guide.html](docs/guide.html).
+**[Read the guide](https://blog.hhefesto.com/mugen/guide.html)**
+(https://blog.hhefesto.com/mugen/guide.html): every key, command and
+setting on one page, a live site served by GitHub Pages.
 
 ![mugen in a real session: it launches two agents, their tabs show while they work, and their reports come back to one answer](docs/demo.gif)
 
@@ -159,9 +159,9 @@ screen: lines as they come, a `λ` prompt, and a message of many lines
 between two lines of `"""`. From a pipe (stdin not a terminal), each line
 is a message, and mugen exits once stdin ends and nothing is running.
 
-[The guide](https://blog.hhefesto.com/mugen/guide.html) (GitHub Pages, from
-[docs/guide.html](docs/guide.html)) is a guide to all of it, a page that
-opens in any browser.
+[The guide](https://blog.hhefesto.com/mugen/guide.html), a live page on
+GitHub Pages, covers all of it. Its source is `docs/guide.html`: edit
+that, push, and the page follows.
 
 ## From your phone: Tailscale on NixOS
 
