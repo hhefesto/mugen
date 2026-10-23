@@ -4,11 +4,9 @@ A version changes when surface behavior does (AGENTS.md, Versions).
 
 ## Unreleased (2026-10-22)
 
-- Built on ekapkgs, as Telomare is: corepkgs.lib.mkFlake over corepkgs
-  (cache: ekala-corepkgs.cachix.org) instead of nixpkgs, the project in
-  nix/, and default.nix and shell.nix for use without flakes. Bend is
-  upstream's (bendlang/bend 2.0.38) instead of the ft-kernels fork. Every
-  check passes; the app is unchanged, so the version is too.
+- Bend is upstream's (bendlang/bend 2.0.38) instead of the ft-kernels fork,
+  behind a wrapper that turns telemetry off. The app is unchanged, so the
+  version is too. (A move to ekapkgs, 93835a8, was reverted: too green yet.)
 
 ## 0.6.0 (2026-10-22)
 
