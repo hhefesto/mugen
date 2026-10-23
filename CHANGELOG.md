@@ -2,7 +2,7 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
-## Unreleased (2026-10-23)
+## 0.7.0 (2026-10-23)
 
 - The input is spellchecked as you write: a word hunspell (en_US) doesn't
   know is underlined in red (curly where the terminal draws it). Not
