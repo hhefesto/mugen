@@ -1989,7 +1989,7 @@ def hb.state.send(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S) -> IO(Unit):
   match m:
     case Some{+c}:
       +what = hb.ui.what(hb.ui(s))
-      Sc.sc.tell(c, Sc.sc.State{Sc.sc.St{Bool.not(String.is_empty(what)), what, hb.ui.t0(hb.ui(s)), List.append(&2, String, hb.peeks(hb.wait(s)), hb.held.peeks(hb.held(s))), List.drop(&2, String, hb.peeks(hb.sent(s)), U32.to_nat(hb.ui.lead(hb.ui(s)))), hb.status.line(s), hb.working(hb.agents(s))}})
+      Sc.sc.tell(c, Sc.sc.State{Sc.sc.St{Bool.not(String.is_empty(what)), what, hb.ui.t0(hb.ui(s)), List.append(&2, String, hb.peeks(hb.wait(s)), hb.held.peeks(hb.held(s))), List.drop(&2, String, hb.peeks(hb.sent(s)), U32.to_nat(hb.ui.lead(hb.ui(s)))), hb.status.line(s), hb.working(hb.agents(s)), hb.plan(s)}})
     case None{}:
       IO.pure(Unit, Unit{})
 

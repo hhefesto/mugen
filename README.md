@@ -92,9 +92,10 @@ write the diff, with the file's line numbers, each line taken out on red and
 each one added on green. Blocks come
 open, whole: a click folds or opens one, `M-o` all of them (`C-o` too,
 unless tmux takes it as its prefix). `PgUp`,
-`PgDn` and the wheel scroll; while scrolled up, nothing that comes (a new
-entry, a result under its call) moves what you read, and `M->` follows the
-end again. Under the chat:
+`PgDn` and the wheel scroll; `Home` on an empty input (or `M-<`) goes to
+the top, `End` (or `M->`) back to the end. While scrolled up, nothing that
+comes (a new entry, a result under its call) moves what you read, and `M->`
+follows the end again. Under the chat:
 what runs and for how long (the tool too), the messages waiting for mugen,
 the status line (where mugen works, the model, its effort, the context
 left before mugen folds its oldest lines at 128 KB, the mode), and the
@@ -113,11 +114,27 @@ Keys:
   running is cut, and mugen gets its output and your messages; else its
   turn stops and one starts with them.
 - `C-g` (`/stop`): stop mugen's turn.
+- `Shift-Tab`: plan mode, or back to auto mode (as `/plan` and `/auto`),
+  as in Claude Code; the status line and a line under the chat say which.
 - `Esc Esc`, `C-d`, `C-c` on an empty input (`/quit`): leave. `C-c` on
   text clears it (`C-y` brings it back).
 - Emacs keys (`C-a`, `C-e`, `C-k`, `C-u`, `C-w`, `C-y`, `M-b`, `M-f`,
-  `M-d`), the history (`↑`, `↓`, `C-p`, `C-n`, `C-r`, kept in
-  `$MUGEN_DIR/history`), `Tab` completes a command.
+  `M-d`; `Home` and `End` in a text: its line's start and end), the
+  history (`↑`, `↓`, `C-p`, `C-n`, `C-r`, kept in `$MUGEN_DIR/history`),
+  `Tab` completes a command.
+- `Home` and `End` on an empty input: the chat's top and end (`M-<`,
+  `M->` anywhere).
+- The spellcheck: as you write, a word hunspell (en_US) doesn't know is
+  underlined in red. Left alone: the word being written (the one the
+  cursor ends), code in backticks, a `!` command, paths, URLs and
+  addresses, and words with a digit, a `_` or camelCase. Point at a red
+  word with the mouse, or put the cursor in it, and its suggestions show in
+  a box over it, the first lit: `M-s` takes that one, `M-1`..`M-5` (or a
+  click) the one numbered, `Esc` closes the box (and is no first `Esc` of
+  the two that leave). `M-S` replaces every red word with its first
+  suggestion. `/spell off` and `/spell on` turn it off and on. mugen's
+  package brings hunspell and its dictionary; run any other way it needs
+  `hunspell` and `en_US` on the PATH, and says once if it can't run it.
 - The mouse is mugen's: drag over the chat to select text (shown reversed;
   letting go copies it to the clipboard by xclip, and to tmux's buffer, and
   says so under the chat: `✓ copied 3 lines to the clipboard`).
@@ -125,7 +142,10 @@ Keys:
   to the terminal (and back).
 - Agents: while subagents work, tabs follow the status line (`all`,
   `mugen`, each agent, `●` while it works). A click on one, or `M-←` /
-  `M-→`, shows only that one's blocks (`all` is the whole chat again).
+  `M-→`, shows only that one's blocks (`all` is the whole chat again). An
+  agent's tab shows its whole log, read from `docs/agent/NAME.jsonl` as
+  the tab opens: `Home` there reaches its first message, however long it
+  ran (the chat itself keeps its last 400 blocks).
 
 Commands:
 - `!COMMAND`: run a shell command of your own, at once (mugen working or
@@ -139,6 +159,9 @@ Commands:
 - `/goal TEXT`, `/halt`: set a goal, or drop it.
 - `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
 - `/plan`: mugen reads and proposes, changing nothing. `/auto` lets it act.
+  `Shift-Tab` switches between them.
+- `/spell on|off`: the spellcheck (on as mugen starts); `/spell` alone
+  switches it.
 - `/image PATH` (or `/image` alone, for the clipboard's image, by xclip): the
   image goes with the message being written, as a line `[image
   docs/images/NAME]` in it (kept in `~/.mugen/docs/images/`). The turn's
@@ -153,7 +176,11 @@ kills them within a second, and the next start kills whatever an earlier
 one left, so no command outlives it.
 
 In tmux it all works as is (the mouse and `PgUp` reach mugen whether
-tmux's `mouse` is on or off). mugen turns tmux's `extended-keys` on as it
+tmux's `mouse` is on or off; mugen asks for the mouse's moves too, mode
+1003, for the spellcheck's box). The spellcheck's underline is curly and
+red where tmux knows the terminal under it draws such (its `usstyle`
+feature, e.g. `set -as terminal-features ',xterm-256color:usstyle'`), else
+plain. mugen turns tmux's `extended-keys` on as it
 starts, unless set, so `Shift-Enter` can come apart from `Enter` if the
 terminal under tmux sends it apart (many don't: use `Alt-Enter`). It names its window `mugen`, shows
 `mugen …` while mugen works, and rings the window's bell when a reply comes

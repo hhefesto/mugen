@@ -69,7 +69,9 @@ def ky.lower(+c: U32) -> U32:
   Bool.pick(U32, Bool.and(U32.is_ge(c, 65), U32.is_le(c, 90)), (c + 32 : U32), c)
 
 # a key told by its code and modifiers (modifyOtherKeys, CSI u): m as the
-# terminal sends it (1 none, then 1 + Shift 1, Alt 2, Ctrl 4)
+# terminal sends it (1 none, then 1 + Shift 1, Alt 2, Ctrl 4). Alt with
+# Shift on a letter is Alt and the upper one (kitty sends M-S as s, Shift
+# and Alt), as ESC S says it plain.
 def ky.mod(+code: U32, +m0: U32) -> ky.Key:
   +m = (U32.max(m0, 1) - 1 : U32)
   +alt = U32.is_ne(U32.and(m, 2), 0)
@@ -80,7 +82,7 @@ def ky.mod(+code: U32, +m0: U32) -> ky.Key:
       Bool.pick(ky.Key, U32.is_eq(code, 27), ky.Esc{},
         Bool.pick(ky.Key, Bool.or(U32.is_eq(code, 127), U32.is_eq(code, 8)), Bool.pick(ky.Key, alt, ky.MetaBack{}, ky.Back{}),
           Bool.pick(ky.Key, Bool.and(ctrl, ky.letter(code)), ky.Ctrl{ky.lower(code)},
-            Bool.pick(ky.Key, Bool.and(alt, U32.is_ge(code, 32)), ky.Meta{code},
+            Bool.pick(ky.Key, Bool.and(alt, U32.is_ge(code, 32)), ky.Meta{Bool.pick(U32, Bool.and(shift, Bool.and(U32.is_ge(code, 97), U32.is_le(code, 122))), (code - 32 : U32), code)},
               Bool.pick(ky.Key, Bool.and(U32.is_ge(code, 32), U32.is_lt(code, 57344)), ky.Char{code}, ky.Other{})))))))
 
 # Sequences ---------------------------------------------------------------------

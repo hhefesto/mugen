@@ -44,6 +44,9 @@
           export BEND_NO_TELEMETRY=1
           exec ${bend2.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/bend "$@"
         '';
+      # hunspell and its en_US dictionary, for the input's spellcheck
+      # (bend/Spell.bend runs `hunspell -a -d en_US`)
+      hunspellFor = pkgs: pkgs.hunspell.withDicts (d: [ d.en_US ]);
       # A Bend 2 program compiled to a native binary (C via clang).
       bendBinary =
         pkgs: name: entry:
@@ -64,12 +67,13 @@
         {
           bend = bendFor pkgs;
           mugen-unwrapped = bendBinary pkgs "mugen" "Main.bend";
-          # the app: curl (>= 8.3, for --variable) and coreutils on its PATH.
-          # The terminal is all mugen's own (bend/Screen.bend: the input, its
-          # keys and history, the screen), so the wrapper only sets PATH.
+          # the app: curl (>= 8.3, for --variable), coreutils and hunspell
+          # (with en_US, for the spellcheck) on its PATH. The terminal is all
+          # mugen's own (bend/Screen.bend: the input, its keys and history, the
+          # screen), so the wrapper only sets PATH.
           mugen = pkgs.runCommand "mugen" { nativeBuildInputs = [ pkgs.makeWrapper ]; } ''
             makeWrapper ${self.packages.${system}.mugen-unwrapped}/bin/mugen $out/bin/mugen \
-              --prefix PATH : ${lib.makeBinPath [ pkgs.curl pkgs.coreutils ]}
+              --prefix PATH : ${lib.makeBinPath [ pkgs.curl pkgs.coreutils (hunspellFor pkgs) ]}
           '';
           default = self.packages.${system}.mugen;
           # the Bend sides of the differential tests (tools/memdiff)
@@ -78,6 +82,7 @@
           apicheck = bendBinary pkgs "apicheck" "tests/ApiCheck.bend";
           golden = bendBinary pkgs "golden" "tests/Golden.bend";
           toolcheck = bendBinary pkgs "toolcheck" "tests/ToolCheck.bend";
+          spellcheck = bendBinary pkgs "spellcheck" "tests/SpellCheck.bend";
         }
       );
 
@@ -185,6 +190,14 @@
                 grep -qx 'PASS: 300 / 300' result
                 touch $out
               '';
+          # the spellcheck (Spell.bend: words, hunspell's answer, the fixes,
+          # the underline), the keys it, Shift-Tab and Home take, and the real
+          # hunspell asked about a few words
+          spell = pkgs.runCommand "spell" { nativeBuildInputs = [ (hunspellFor pkgs) ]; } ''
+            ${self.packages.${system}.spellcheck}/bin/spellcheck | tee result
+            grep -qx "PASS: \([0-9]*\) / \1" result
+            touch $out
+          '';
           # `mugen --version` says a MAJOR.MINOR.PATCH, and -V the same
           version = pkgs.runCommand "version" { } ''
             m=${self.packages.${system}.mugen-unwrapped}/bin/mugen
@@ -223,6 +236,7 @@
             UNIICHAT = "${uniichat}";
             packages = [
               (bendFor pkgs)
+              (hunspellFor pkgs)
               pkgs.bun
               pkgs.curl
               pkgs.jq

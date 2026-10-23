@@ -462,8 +462,8 @@ def ed.key(+e: ed.Ed, +key: K.ky.Key) -> ed.Ed:
 # Completing ---------------------------------------------------------------------
 
 def ed.words() -> List<&2, String>:
-  ["/help", "/quit", "/stop", "/now", "/goal", "/halt", "/model", "/effort", "/status", "/tree", "/export", "/plan", "/auto", "/mouse", "/image",
-    "/model opus-5.5", "/model sonnet-5.5", "/model haiku-5.5", "/effort low", "/effort medium", "/effort high", "/effort xhigh", "/effort max"]
+  ["/help", "/quit", "/stop", "/now", "/goal", "/halt", "/model", "/effort", "/status", "/tree", "/export", "/plan", "/auto", "/mouse", "/image", "/spell",
+    "/model opus-5.5", "/model sonnet-5.5", "/model haiku-5.5", "/effort low", "/effort medium", "/effort high", "/effort xhigh", "/effort max", "/spell on", "/spell off"]
 
 def ed.starting(ws: List<&2, String>, +p: String) -> List<&2, String>:
   match ws:

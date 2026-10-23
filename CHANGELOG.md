@@ -2,7 +2,27 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
-## Unreleased (2026-10-22)
+## Unreleased (2026-10-23)
+
+- The input is spellchecked as you write: a word hunspell (en_US) doesn't
+  know is underlined in red (curly where the terminal draws it). Not
+  checked: the word being written, code in backticks, `!` commands, paths,
+  URLs, addresses, words with digits, `_` or camelCase. The mouse on a red
+  word (or the cursor in it) shows up to five suggestions in a box over it:
+  `M-s` takes the first, `M-1`..`M-5` or a click the one numbered, `Esc`
+  closes the box; `M-S` replaces every red word with its first suggestion.
+  `/spell on|off`. The package brings hunspell and its dictionary; without
+  them the spellcheck turns itself off and says so once. mugen now asks the
+  terminal for the mouse's moves (mode 1003) too.
+- `Shift-Tab` switches plan and auto mode (`/plan`, `/auto`), as in Claude
+  Code.
+- `Home` on an empty input goes to the chat's top (as `M-<`), the mirror of
+  `End`; in a text it is still its line's start. `M-<` reached the top no
+  more (the rows scrolled up wrapped a U32); it does again. An agent's tab
+  shows the agent's whole log, read as the tab opens, so `Home` there
+  reaches its first message however long it ran.
+- Alt-Shift and a letter in kitty's keys (CSI u) is `M-` and the upper
+  letter, as `ESC S` says it plain.
 
 - Bend is upstream's (bendlang/bend 2.0.38) instead of the ft-kernels fork,
   behind a wrapper that turns telemetry off. The app is unchanged, so the

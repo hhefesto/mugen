@@ -7,21 +7,25 @@ import ./Keys.bend as K
 import ./Edit.bend as D
 import ./Pretty.bend as P
 import ./Pic.bend as Pc
+import ./Spell.bend as Sp
+import ./Store.bend as St
 
 # Screen: mugen on a terminal, full screen. One computation owns the
 # terminal: it reads the keys (raw mode), draws the chat, and sends the
 # hub (Hub.bend) the lines typed; the hub tells it what to show (sc.Put, as
 # it logs) and how it is (sc.State: mugen's work, the messages waiting, the
-# status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel,
-# each tool call one block, open (a click folds or opens it, M-o all; a
-# drag selects text and copies it, see Selecting);
-# then a rule, what runs (with a spinner and its time), the messages waiting
-# for mugen, the status line, and the input (Edit.bend) after the lambda.
+# status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel
+# (Home and End on an empty input: its top and end), each tool call one
+# block, open (a click folds or opens it, M-o all; a drag selects text and
+# copies it, see Selecting); then a rule, what runs (with a spinner and its
+# time), the messages waiting for mugen, the status line, and the input
+# (Edit.bend) after the lambda, spellchecked (Spell.bend; see The
+# spellcheck).
 #
 # Keys: Enter sends; Shift-, Alt-, Ctrl-Enter or C-j make a new line (so
 # does a "\" ending the text); C-s sends the waiting messages now (Hub's
-# /now); C-g stops mugen's turn; Esc twice, C-c on an empty input or C-d
-# leave. The terminal comes back as it was on every way out, a signal's
+# /now); C-g stops mugen's turn; Shift-Tab switches plan and auto mode;
+# Esc twice, C-c on an empty input or C-d leave. The terminal comes back as it was on every way out, a signal's
 # too (Sys.bend mu.raw).
 #
 # Every def is prefixed `sc.` (a program's defs share one namespace).
@@ -32,14 +36,15 @@ def sc.fuel() -> Nat:
 def sc.csi() -> String:
   "\u{1B}["
 
-# the alternate screen, no wrap at the margin, the mouse (SGR reports),
+# the alternate screen, no wrap at the margin, the mouse (SGR reports, its
+# moves too: the spellcheck's box opens where it points),
 # bracketed paste, modifyOtherKeys and kitty's disambiguated keys (each a
 # way for Shift-Enter to be told from Enter)
 def sc.init() -> String:
-  "\u{1B}[?1049h\u{1B}[?7l\u{1B}[?1000h\u{1B}[?1002h\u{1B}[?1006h\u{1B}[?2004h\u{1B}[>4;1m\u{1B}[>1u\u{1B}[H\u{1B}[2J"
+  "\u{1B}[?1049h\u{1B}[?7l\u{1B}[?1000h\u{1B}[?1002h\u{1B}[?1003h\u{1B}[?1006h\u{1B}[?2004h\u{1B}[>4;1m\u{1B}[>1u\u{1B}[H\u{1B}[2J"
 
 def sc.back() -> String:
-  "\u{1B}[<u\u{1B}[>4;0m\u{1B}[?2004l\u{1B}[?1006l\u{1B}[?1002l\u{1B}[?1000l\u{1B}[?7h\u{1B}[?25h\u{1B}[?1049l"
+  "\u{1B}[<u\u{1B}[>4;0m\u{1B}[?2004l\u{1B}[?1006l\u{1B}[?1003l\u{1B}[?1002l\u{1B}[?1000l\u{1B}[?7h\u{1B}[?25h\u{1B}[?1049l"
 
 # Types --------------------------------------------------------------------------
 
@@ -54,11 +59,12 @@ type sc.Blk is Data:
 # waiting for it, and those handed to its running call (each a line);
 # the status line (SGR in it); the agents at work
 type sc.St is Data:
-  sc.St{busy: Bool, what: String, since: Nat, wait: List<&2, String>, sent: List<&2, String>, line: String, agents: List<&2, String>}
+  sc.St{busy: Bool, what: String, since: Nat, wait: List<&2, String>, sent: List<&2, String>, line: String, agents: List<&2, String>, plan: Bool}
 
 # what the screen hears: a key (and when, IO.now), an entry to show, the
 # hub's state, a tick (5 a second), stdin's end, and the hub leaving (the
-# terminal given back, then `done` told)
+# terminal given back, then `done` told); a message taken back from the
+# queue; hunspell's answer about the words asked (Spell.bend)
 type sc.In is Data:
   sc.Key{key: K.ky.Key, at: Nat}
   sc.Put{who: String, kind: String, text: String}
@@ -67,6 +73,7 @@ type sc.In is Data:
   sc.Eof{}
   sc.Bye{done: Chan(Unit)}
   sc.Back{text: String}
+  sc.Spelt{words: List<&2, String>, out: S.mu.Out}
 
 # what never changes: the hub's inbox, our own, home (~ in paths), the
 # history's file
@@ -81,11 +88,12 @@ type sc.Cf is Data:
 type sc.An is Data:
   sc.An{id: U32, row: U32, off: U32}
 
-# the chat: its blocks (newest first), the next id, the rows scrolled up
-# from its end, the ids of the blocks on its rows as drawn (top down), and
-# where its top row was
+# the chat: its blocks (newest first; the last 400), the next id, the rows
+# scrolled up from its end, the ids of the blocks on its rows as drawn (top
+# down), and where its top row was; the agent whose tab shows ("" none) and
+# its blocks, all of its log's (Store.bend st.agent) and those since
 type sc.Tr is Data:
-  sc.Tr{blks: List<&2, sc.Blk>, next: U32, off: U32, ids: List<&2, U32>, an: sc.An}
+  sc.Tr{blks: List<&2, sc.Blk>, next: U32, off: U32, ids: List<&2, U32>, an: sc.An, ag: String, abs: List<&2, sc.Blk>}
 
 # the terminal: its columns and rows, what to draw (0 nothing, 1 the lines
 # under the chat, 2 all), the mouse's reports on, the rows under the chat as
@@ -114,77 +122,88 @@ type sc.Three is Data:
   sc.Three{a: String, b: String, c: String}
 
 type sc.S is Data:
-  sc.S{cf: sc.Cf, ed: D.ed.Ed, tr: sc.Tr, tm: sc.Tm, st: sc.St, u: sc.U, z: sc.Sel}
+  sc.S{cf: sc.Cf, ed: D.ed.Ed, tr: sc.Tr, tm: sc.Tm, st: sc.St, u: sc.U, z: sc.Sel, k: Sp.sp.Sp}
 
 def sc.idle() -> sc.St:
-  sc.St{False{}, "", 0n, [], [], "", []}
+  sc.St{False{}, "", 0n, [], [], "", [], False{}}
 
 # Fields -------------------------------------------------------------------------
 
 def sc.cf(s: sc.S) -> sc.Cf:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
+    case sc.S{c, e, t, m, st, u, z, k}:
       c
 
 def sc.ed(s: sc.S) -> D.ed.Ed:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
+    case sc.S{c, e, t, m, st, u, z, k}:
       e
 
 def sc.tr(s: sc.S) -> sc.Tr:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
+    case sc.S{c, e, t, m, st, u, z, k}:
       t
 
 def sc.tm(s: sc.S) -> sc.Tm:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
+    case sc.S{c, e, t, m, st, u, z, k}:
       m
 
 def sc.st(s: sc.S) -> sc.St:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
+    case sc.S{c, e, t, m, st, u, z, k}:
       st
 
 def sc.u(s: sc.S) -> sc.U:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
+    case sc.S{c, e, t, m, st, u, z, k}:
       u
 
 def sc.with.ed(s: sc.S, +e2: D.ed.Ed) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
-      sc.S{c, e2, t, m, st, u, z}
+    case sc.S{c, e, t, m, st, u, z, k}:
+      sc.S{c, e2, t, m, st, u, z, k}
 
 def sc.with.tr(s: sc.S, +t2: sc.Tr) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
-      sc.S{c, e, t2, m, st, u, z}
+    case sc.S{c, e, t, m, st, u, z, k}:
+      sc.S{c, e, t2, m, st, u, z, k}
 
 def sc.with.tm(s: sc.S, +m2: sc.Tm) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
-      sc.S{c, e, t, m2, st, u, z}
+    case sc.S{c, e, t, m, st, u, z, k}:
+      sc.S{c, e, t, m2, st, u, z, k}
 
 def sc.with.st(s: sc.S, +st2: sc.St) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
-      sc.S{c, e, t, m, st2, u, z}
+    case sc.S{c, e, t, m, st, u, z, k}:
+      sc.S{c, e, t, m, st2, u, z, k}
 
 def sc.with.u(s: sc.S, +u2: sc.U) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
-      sc.S{c, e, t, m, st, u2, z}
+    case sc.S{c, e, t, m, st, u, z, k}:
+      sc.S{c, e, t, m, st, u2, z, k}
 
 def sc.z(s: sc.S) -> sc.Sel:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
+    case sc.S{c, e, t, m, st, u, z, k}:
       z
 
 def sc.with.z(s: sc.S, +z2: sc.Sel) -> sc.S:
   match s:
-    case sc.S{c, e, t, m, st, u, z}:
-      sc.S{c, e, t, m, st, u, z2}
+    case sc.S{c, e, t, m, st, u, z, k}:
+      sc.S{c, e, t, m, st, u, z2, k}
+
+# the spellcheck's state (Spell.bend)
+def sc.sp(s: sc.S) -> Sp.sp.Sp:
+  match s:
+    case sc.S{c, e, t, m, st, u, z, k}:
+      k
+
+def sc.with.sp(s: sc.S, +k2: Sp.sp.Sp) -> sc.S:
+  match s:
+    case sc.S{c, e, t, m, st, u, z, k}:
+      sc.S{c, e, t, m, st, u, z, k2}
 
 def sc.sel.none(+rows: List<&2, String>) -> sc.Sel:
   sc.Sel{False{}, False{}, 0, 0, 0, 0, rows, 0}
@@ -269,28 +288,50 @@ def sc.home(+s: sc.S) -> String:
 
 def sc.tr.blks(t: sc.Tr) -> List<&2, sc.Blk>:
   match t:
-    case sc.Tr{b, n, o, i, a}:
+    case sc.Tr{b, n, o, i, a, g, x}:
       b
 
 def sc.tr.next(t: sc.Tr) -> U32:
   match t:
-    case sc.Tr{b, n, o, i, a}:
+    case sc.Tr{b, n, o, i, a, g, x}:
       n
 
 def sc.tr.off(t: sc.Tr) -> U32:
   match t:
-    case sc.Tr{b, n, o, i, a}:
+    case sc.Tr{b, n, o, i, a, g, x}:
       o
 
 def sc.tr.ids(t: sc.Tr) -> List<&2, U32>:
   match t:
-    case sc.Tr{b, n, o, i, a}:
+    case sc.Tr{b, n, o, i, a, g, x}:
       i
 
 def sc.tr.an(t: sc.Tr) -> sc.An:
   match t:
-    case sc.Tr{b, n, o, i, a}:
+    case sc.Tr{b, n, o, i, a, g, x}:
       a
+
+def sc.tr.ag(t: sc.Tr) -> String:
+  match t:
+    case sc.Tr{b, n, o, i, a, g, x}:
+      g
+
+def sc.tr.abs(t: sc.Tr) -> List<&2, sc.Blk>:
+  match t:
+    case sc.Tr{b, n, o, i, a, g, x}:
+      x
+
+# the agent whose log is loaded, and its blocks
+def sc.tr.with.ag(t: sc.Tr, +g2: String, +x2: List<&2, sc.Blk>) -> sc.Tr:
+  match t:
+    case sc.Tr{b, n, o, i, a, g, x}:
+      sc.Tr{b, n, o, i, a, g2, x2}
+
+# the next id, past k taken
+def sc.tr.took(t: sc.Tr, +k: U32) -> sc.Tr:
+  match t:
+    case sc.Tr{b, n, o, i, a, g, x}:
+      sc.Tr{b, (n + k : U32), o, i, a, g, x}
 
 def sc.an.id(a: sc.An) -> U32:
   match a:
@@ -322,11 +363,40 @@ def sc.off(+s: sc.S) -> U32:
 
 def sc.with.blks(+s: sc.S, +bs: List<&2, sc.Blk>) -> sc.S:
   +t = sc.tr(s)
-  sc.with.tr(s, sc.Tr{bs, sc.tr.next(t), sc.tr.off(t), sc.tr.ids(t), sc.tr.an(t)})
+  sc.with.tr(s, sc.Tr{bs, sc.tr.next(t), sc.tr.off(t), sc.tr.ids(t), sc.tr.an(t), sc.tr.ag(t), sc.tr.abs(t)})
 
 def sc.with.off(+s: sc.S, +o: U32) -> sc.S:
   +t = sc.tr(s)
-  sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), o, sc.tr.ids(t), sc.tr.an(t)})
+  sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), o, sc.tr.ids(t), sc.tr.an(t), sc.tr.ag(t), sc.tr.abs(t)})
+
+def sc.u.focus(u: sc.U) -> String:
+  match u:
+    case sc.U{n, e, h, q, d, f}:
+      f
+
+def sc.focus(+s: sc.S) -> String:
+  sc.u.focus(sc.u(s))
+
+# whether the chat shows the loaded agent's tab (its whole log)
+def sc.ag.on(+s: sc.S) -> Bool:
+  +f = sc.focus(s)
+  Bool.and(Bool.not(Bool.or(String.is_empty(f), String.eq(f, "mugen"))), String.eq(f, sc.tr.ag(sc.tr(s))))
+
+# the blocks the chat shows: the loaded agent's on its tab, else the chat's
+def sc.vw(+s: sc.S) -> List<&2, sc.Blk>:
+  +t = sc.tr(s)
+  Bool.pick(List<&2, sc.Blk>, sc.ag.on(s), sc.tr.abs(t), sc.tr.blks(t))
+
+def sc.with.vw.go(on: Bool, +s: sc.S, +bs: List<&2, sc.Blk>) -> sc.S:
+  match on:
+    case True{}:
+      +t = sc.tr(s)
+      sc.with.tr(s, sc.tr.with.ag(t, sc.tr.ag(t), bs))
+    case False{}:
+      sc.with.blks(s, bs)
+
+def sc.with.vw(+s: sc.S, +bs: List<&2, sc.Blk>) -> sc.S:
+  sc.with.vw.go(sc.ag.on(s), s, bs)
 
 def sc.tm.w(t: sc.Tm) -> U32:
   match t:
@@ -393,11 +463,6 @@ def sc.u.done(u: sc.U) -> Bool:
     case sc.U{n, e, h, q, d, f}:
       d
 
-def sc.u.focus(u: sc.U) -> String:
-  match u:
-    case sc.U{n, e, h, q, d, f}:
-      f
-
 def sc.now(+s: sc.S) -> Nat:
   sc.u.now(sc.u(s))
 
@@ -423,9 +488,6 @@ def sc.with.quit(+s: sc.S) -> sc.S:
 def sc.with.done(+s: sc.S) -> sc.S:
   +u = sc.u(s)
   sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), True{}, sc.u.focus(u)})
-
-def sc.focus(+s: sc.S) -> String:
-  sc.u.focus(sc.u(s))
 
 # Views ----------------------------------------------------------------------------
 #
@@ -506,38 +568,49 @@ def sc.with.focus(+s: sc.S, +t: String) -> sc.S:
 
 def sc.st.busy(t: sc.St) -> Bool:
   match t:
-    case sc.St{b, w, si, wa, se, l, a}:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
       b
 
 def sc.st.what(t: sc.St) -> String:
   match t:
-    case sc.St{b, w, si, wa, se, l, a}:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
       w
 
 def sc.st.since(t: sc.St) -> Nat:
   match t:
-    case sc.St{b, w, si, wa, se, l, a}:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
       si
 
 def sc.st.wait(t: sc.St) -> List<&2, String>:
   match t:
-    case sc.St{b, w, si, wa, se, l, a}:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
       wa
 
 def sc.st.sent(t: sc.St) -> List<&2, String>:
   match t:
-    case sc.St{b, w, si, wa, se, l, a}:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
       se
 
 def sc.st.line(t: sc.St) -> String:
   match t:
-    case sc.St{b, w, si, wa, se, l, a}:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
       l
 
 def sc.st.agents(t: sc.St) -> List<&2, String>:
   match t:
-    case sc.St{b, w, si, wa, se, l, a}:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
       a
+
+# whether mugen is in plan mode (Hub's /plan), else auto
+def sc.st.plan(t: sc.St) -> Bool:
+  match t:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
+      pl
+
+def sc.st.with.plan(t: sc.St, +p2: Bool) -> sc.St:
+  match t:
+    case sc.St{b, w, si, wa, se, l, a, pl}:
+      sc.St{b, w, si, wa, se, l, a, p2}
 
 # Blocks -------------------------------------------------------------------------
 
@@ -850,30 +923,169 @@ def sc.find.row(m: Maybe<&2, String>) -> List<&2, String>:
 def sc.placeholder() -> String:
   "Enter sends \u{b7} Alt-Enter: a new line \u{b7} C-s sends waiting now \u{b7} C-g stops mugen \u{b7} Esc Esc leaves"
 
-# The lines under the chat, top down, and where the cursor is among them
+# The spellcheck's box as laid out: its rows (none: no box), its column and
+# row on the screen (from 1), its width
+type sc.Bx is Data:
+  sc.Bx{rows: List<&2, String>, x: U32, y: U32, w: U32}
+
+def sc.bx.none() -> sc.Bx:
+  sc.Bx{[], 0, 0, 0}
+
+def sc.bx.rows(b: sc.Bx) -> List<&2, String>:
+  match b:
+    case sc.Bx{r, x, y, w}:
+      r
+
+def sc.bx.x(b: sc.Bx) -> U32:
+  match b:
+    case sc.Bx{r, x, y, w}:
+      x
+
+def sc.bx.y(b: sc.Bx) -> U32:
+  match b:
+    case sc.Bx{r, x, y, w}:
+      y
+
+def sc.bx.w(b: sc.Bx) -> U32:
+  match b:
+    case sc.Bx{r, x, y, w}:
+      w
+
+def sc.bx.n(+b: sc.Bx) -> U32:
+  U32.from_nat(List.length(&2, String, sc.bx.rows(b)))
+
+# what it is drawn as, to tell a box moved or gone (its place and rows)
+def sc.bx.key(+b: sc.Bx) -> String:
+  U32.show(sc.bx.x(b)) ++ ";" ++ U32.show(sc.bx.y(b)) ++ ";" ++ String.join(sc.bx.rows(b), "|")
+
+def sc.bx.paint(rs: List<&2, String>, +x: U32, +y: U32) -> String:
+  match rs:
+    case []:
+      ""
+    case +r <> rest:
+      "\u{1B}[" ++ U32.show(y) ++ ";" ++ U32.show(x) ++ "H" ++ r ++ sc.bx.paint(rest, x, (y + 1 : U32))
+
+# drawn over what is on the screen
+def sc.bx.out(+b: sc.Bx) -> String:
+  sc.bx.paint(sc.bx.rows(b), sc.bx.x(b), sc.bx.y(b))
+
+# whether column x, row y is on it
+def sc.bx.on(+b: sc.Bx, +x: U32, +y: U32) -> Bool:
+  +bx = sc.bx.x(b)
+  +by = sc.bx.y(b)
+  Bool.and(Bool.and(U32.is_gt(by, 0), Bool.and(U32.is_ge(y, by), U32.is_lt(y, (by + sc.bx.n(b) : U32)))), Bool.and(U32.is_ge(x, bx), U32.is_lt(x, (bx + sc.bx.w(b) : U32))))
+
+# The input as the spellcheck sees it: the bad words, the one the keys fix
+# (the mouse's, else the cursor's), the box over it (if open), the rows as
+# laid out (plain) and where each starts in the text, the first row shown,
+# how many show, and the screen row (from 1) of the first shown
+type sc.Sl is Data:
+  sc.Sl{fs: List<&2, Sp.sp.F>, tgt: Maybe<&2, Sp.sp.F>, box: sc.Bx, rows: List<&2, String>, sts: List<&2, Nat>, top: U32, n: U32, y0: U32}
+
+def sc.sl.fs(l: sc.Sl) -> List<&2, Sp.sp.F>:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      f
+
+def sc.sl.tgt(l: sc.Sl) -> Maybe<&2, Sp.sp.F>:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      g
+
+def sc.sl.box(l: sc.Sl) -> sc.Bx:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      b
+
+def sc.sl.rows(l: sc.Sl) -> List<&2, String>:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      r
+
+def sc.sl.sts(l: sc.Sl) -> List<&2, Nat>:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      st
+
+def sc.sl.top(l: sc.Sl) -> U32:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      t
+
+def sc.sl.n(l: sc.Sl) -> U32:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      n
+
+def sc.sl.y0(l: sc.Sl) -> U32:
+  match l:
+    case sc.Sl{f, g, b, r, st, t, n, y}:
+      y
+
+# The lines under the chat, top down, where the cursor is among them, the
+# status line's row among them, and the spellcheck's view of the input
 type sc.Low is Data:
-  sc.Low{rows: List<&2, String>, row: U32, col: U32, stat: U32}
+  sc.Low{rows: List<&2, String>, row: U32, col: U32, stat: U32, sl: sc.Sl}
 
 def sc.low.rows(l: sc.Low) -> List<&2, String>:
   match l:
-    case sc.Low{r, y, x, st}:
+    case sc.Low{r, y, x, st, sl}:
       r
 
 def sc.low.row(l: sc.Low) -> U32:
   match l:
-    case sc.Low{r, y, x, st}:
+    case sc.Low{r, y, x, st, sl}:
       y
 
 def sc.low.col(l: sc.Low) -> U32:
   match l:
-    case sc.Low{r, y, x, st}:
+    case sc.Low{r, y, x, st, sl}:
       x
 
 # the status line's row among them
 def sc.low.stat(l: sc.Low) -> U32:
   match l:
-    case sc.Low{r, y, x, st}:
+    case sc.Low{r, y, x, st, sl}:
       st
+
+def sc.low.sl(l: sc.Low) -> sc.Sl:
+  match l:
+    case sc.Low{r, y, x, st, sl}:
+      sl
+
+def sc.low.box(+l: sc.Low) -> sc.Bx:
+  sc.sl.box(sc.low.sl(l))
+
+# the input's bad words (none while the spellcheck is off)
+def sc.flags.go(on: Bool, +s: sc.S) -> List<&2, Sp.sp.F>:
+  match on:
+    case False{}:
+      []
+    case True{}:
+      +e = sc.ed(s)
+      Sp.sp.flag(Sp.sp.words(D.ed.text(e), String.length(D.ed.pre(e))), Sp.sp.bad(sc.sp(s)))
+
+def sc.flags(+s: sc.S) -> List<&2, Sp.sp.F>:
+  sc.flags.go(Sp.sp.on(sc.sp(s)), s)
+
+# the box for the word the keys fix, over it, if it shows (open, and its
+# row among those shown); w the screen's width
+def sc.box.at(m: Maybe<&2, Sp.sp.F>, +open: Bool, +rows: List<&2, String>, +sts: List<&2, Nat>, +top: U32, +n: U32, +y0: U32, +w: U32) -> sc.Bx:
+  match m:
+    case None{}:
+      sc.bx.none()
+    case Some{+f}:
+      +p = Sp.sp.place(rows, sts, Sp.sp.f.at(f), 0)
+      +r = Sp.sp.pt.row(p)
+      +vis = Bool.and(open, Bool.and(U32.is_ge(r, top), U32.is_lt(r, (top + n : U32))))
+      +wy = (y0 + (r - U32.min(r, top) : U32) : U32)
+      +brows = Sp.sp.box.rows(f)
+      +nb = U32.from_nat(List.length(&2, String, brows))
+      +bw = Sp.sp.box.width(f)
+      +by = Bool.pick(U32, U32.is_gt(wy, nb), (wy - nb : U32), 1)
+      +wx = (Sp.sp.pt.col(p) + 3 : U32)
+      +bx = U32.max(1, U32.min(wx, ((w - U32.min(w, bw) : U32) + 1 : U32)))
+      Bool.pick(sc.Bx, vis, sc.Bx{brows, bx, by, bw}, sc.bx.none())
 
 # the status line: the hub's (mugen's name till it comes), then the tabs
 def sc.status.base(+s: sc.S) -> String:
@@ -897,18 +1109,30 @@ def sc.low(+s: sc.S) -> sc.Low:
   +e = sc.ed(s)
   +lay = D.ed.lay(e, (w - 2 : U32))
   +max = U32.max(1, U32.div(sc.h(s), 3))
-  +n = U32.from_nat(List.length(&2, String, D.ed.lay.rows(lay)))
   +cy = D.ed.lay.row(lay)
   +top = Bool.pick(U32, U32.is_lt(cy, max), 0, ((cy - max : U32) + 1 : U32))
-  +shown = List.take(&2, String, List.drop(&2, String, D.ed.lay.rows(lay), U32.to_nat(top)), U32.to_nat(max))
+  +text = D.ed.text(e)
+  +lrows = D.ed.lay.rows(lay)
+  +fs = sc.flags(s)
+  +painted = Sp.sp.paint(lrows, text, Sp.sp.mask(fs, 0n, String.length(text)))
+  +shown = List.take(&2, String, List.drop(&2, String, painted, U32.to_nat(top)), U32.to_nat(max))
   +hint = sc.hint(s)
-  +matches = D.ed.matches(e)
   +info = Bool.pick(List<&2, String>, Bool.not(String.is_empty(hint)), [P.pp.sgr.cut(P.pp.paint("2", hint), w)], sc.find.row(D.ed.find(e)))
   +empty = D.ed.is.empty(e)
   +input = Bool.pick(List<&2, String>, empty, [P.pp.paint("2", P.pp.fit(sc.placeholder(), (w - 2 : U32)))], shown)
   +head = List.concat(&2, String, [[sc.rule(w, sc.off(s))], sc.act(s), sc.queue(s), info, [P.pp.sgr.cut(sc.status(s), w)]])
   +nh = U32.from_nat(List.length(&2, String, head))
-  sc.Low{List.append(&2, String, head, sc.prompt(input, True{})), (nh + (cy - top : U32) : U32), (D.ed.lay.col(lay) + 2 : U32), (nh - 1 : U32)}
+  +rows = List.append(&2, String, head, sc.prompt(input, True{}))
+  +nl = U32.from_nat(List.length(&2, String, rows))
+  +h = sc.h(s)
+  +y0 = (Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0) + (nh + 1 : U32) : U32)
+  +nsh = U32.from_nat(List.length(&2, String, shown))
+  +sp = sc.sp(s)
+  +tgt = Sp.sp.target(fs, String.length(D.ed.pre(e)), Sp.sp.mx(sp))
+  +open = Bool.and(Bool.not(Nat.is_eq(Sp.sp.key.of(tgt), Sp.sp.shut(sp))), Maybe.is_none(&2, String, D.ed.find(e)))
+  +sts = Sp.sp.starts(lrows, text, 0n)
+  +box = sc.box.at(tgt, open, lrows, sts, top, nsh, y0, w)
+  sc.Low{rows, (nh + (cy - top : U32) : U32), (D.ed.lay.col(lay) + 2 : U32), (nh - 1 : U32), sc.Sl{fs, tgt, box, lrows, sts, top, nsh, y0}}
 
 # Selecting -----------------------------------------------------------------------
 #
@@ -1023,7 +1247,8 @@ def sc.cursor(+r: U32, +c: U32) -> String:
 def sc.with.drawn(+s: sc.S, +g: sc.G, +ids: List<&2, U32>, +off: U32, +an: sc.An, +low: U32, +rows: List<&2, String>, +pin: U32) -> sc.S:
   +t = sc.tr(s)
   +m = sc.tm(s)
-  sc.with.z(sc.with.tm(sc.with.tr(s, sc.Tr{sc.g.bs(g), sc.tr.next(t), off, ids, an}), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low}), sc.sel.with.drawn(sc.z(s), rows, pin))
+  +s1 = sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), off, ids, an, sc.tr.ag(t), sc.tr.abs(t)})
+  sc.with.z(sc.with.tm(sc.with.vw(s1, sc.g.bs(g)), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low}), sc.sel.with.drawn(sc.z(s), rows, pin))
 
 # The prompt pinned on top: the newest of the user's messages above the
 # chat's top row (its block's id under it) stays on the first row, on its
@@ -1119,7 +1344,7 @@ def sc.an.go(k: Nat, +a: sc.An, bs: List<&2, sc.Blk>, +off: U32, +t: U32, +w: U3
 def sc.an.held(+s: sc.S, +off: U32, +t: U32) -> U32:
   +a = sc.tr.an(sc.tr(s))
   +id = sc.an.id(a)
-  +bs = sc.blks(s)
+  +bs = sc.vw(s)
   +same = Bool.and(U32.is_gt(off, 0), U32.is_eq(sc.an.off(a), off))
   +k = Bool.pick(Nat, Bool.and(same, Bool.and(Bool.not(U32.is_eq(id, 0)), sc.blk.has(bs, id))), 1n, 0n)
   sc.an.go(k, a, bs, off, t, sc.w(s), sc.home(s), sc.focus(s))
@@ -1140,7 +1365,7 @@ def sc.draw.all(+s: sc.S) -> IO(sc.S):
   +off = sc.an.held(s, sc.off(s), t)
   +need = (off + t : U32)
   +focus = sc.focus(s)
-  +g = sc.gather(sc.blks(s), U32.is_gt(need, 0), sc.shows.head(sc.blks(s), focus), need, 0, [], [], sc.w(s), sc.home(s), focus)
+  +g = sc.gather(sc.vw(s), U32.is_gt(need, 0), sc.shows.head(sc.vw(s), focus), need, 0, [], [], sc.w(s), sc.home(s), focus)
   +k = sc.g.k(g)
   +off2 = U32.min(off, (k - U32.min(k, t) : U32))
   +low = sc.low(sc.with.off(s, off2))
@@ -1153,23 +1378,34 @@ def sc.draw.all(+s: sc.S) -> IO(sc.S):
   +rows = sc.pinned.rows(pid, sc.pin.row(pm, sc.w(s)), rows0)
   +ids = sc.pinned.ids(pid, ids0)
   +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(t), sc.sel.show(sc.z(s), rows), 1), sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
-    [sc.cursor((t + (sc.low.row(low) + 1 : U32) : U32), sc.low.col(low)), "\u{1B}[?25h\u{1B}[?2026l"]]))
-  IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.drawn(s, g, ids, off2, an, nl, rows, pid)))
+    [sc.bx.out(sc.low.box(low)), sc.cursor((t + (sc.low.row(low) + 1 : U32) : U32), sc.low.col(low)), "\u{1B}[?25h\u{1B}[?2026l"]]))
+  +s2 = sc.with.sp(s, Sp.sp.with.drawn(sc.sp(s), sc.bx.key(sc.low.box(low))))
+  IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.drawn(s2, g, ids, off2, an, nl, rows, pid)))
 
 def sc.with.clean(+s: sc.S) -> sc.S:
   +m = sc.tm(s)
   sc.with.tm(s, sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), sc.tm.low(m)})
 
-# the lines under the chat only; all if their number changed
+# the lines under the chat only; all if their number changed, or the
+# spellcheck's box did (what it covered drawn again)
+def sc.draw.low.go(same: Bool, +s: sc.S, +low: sc.Low) -> IO(sc.S):
+  match same:
+    case True{}:
+      +lrows = sc.low.rows(low)
+      +nl = U32.from_nat(List.length(&2, String, lrows))
+      +h = sc.h(s)
+      +t = Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0)
+      +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
+        [sc.bx.out(sc.low.box(low)), sc.cursor((t + (sc.low.row(low) + 1 : U32) : U32), sc.low.col(low)), "\u{1B}[?25h\u{1B}[?2026l"]]))
+      IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.clean(s)))
+    case False{}:
+      sc.draw.all(s)
+
 def sc.draw.low(+s: sc.S) -> IO(sc.S):
   +low = sc.low(s)
-  +lrows = sc.low.rows(low)
-  +nl = U32.from_nat(List.length(&2, String, lrows))
-  +h = sc.h(s)
-  +t = Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0)
-  +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
-    [sc.cursor((t + (sc.low.row(low) + 1 : U32) : U32), sc.low.col(low)), "\u{1B}[?25h\u{1B}[?2026l"]]))
-  Bool.pick(IO(sc.S), U32.is_eq(nl, sc.tm.low(sc.tm(s))), IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.clean(s))), sc.draw.all(s))
+  +nl = U32.from_nat(List.length(&2, String, sc.low.rows(low)))
+  +same = Bool.and(U32.is_eq(nl, sc.tm.low(sc.tm(s))), String.eq(sc.bx.key(sc.low.box(low)), Sp.sp.drawn(sc.sp(s))))
+  sc.draw.low.go(same, s, low)
 
 def sc.draw.go(k: U32, +s: sc.S) -> IO(sc.S):
   match k:
@@ -1187,9 +1423,9 @@ def sc.draw(+s: sc.S) -> IO(sc.S):
 
 def sc.tr.add(t: sc.Tr, +b: sc.Blk) -> sc.Tr:
   match t:
-    case sc.Tr{bs, n, +o, i, a}:
+    case sc.Tr{bs, n, +o, i, a, g, x}:
       +k = sc.blk.n(b)
-      sc.Tr{List.take(&2, sc.Blk, b <> bs, 400n), (n + 1 : U32), Bool.pick(U32, U32.is_eq(o, 0), 0, (o + k : U32)), i, sc.an.bump(a, o, k)}
+      sc.Tr{List.take(&2, sc.Blk, b <> bs, 400n), (n + 1 : U32), Bool.pick(U32, U32.is_eq(o, 0), 0, (o + k : U32)), i, sc.an.bump(a, o, k), g, x}
 
 # a block more, at the chat's end (the view held where it is if scrolled up)
 def sc.add(+s: sc.S, +who: String, +kind: String, +text: String, +run: Bool) -> sc.S:
@@ -1208,18 +1444,127 @@ def sc.put.k(+kind: String) -> Nat:
   Bool.pick(Nat, String.eq(kind, "bell"), 0n, Bool.pick(Nat, String.eq(kind, "run"), 1n,
     Bool.pick(Nat, String.eq(kind, "tool"), 2n, Bool.pick(Nat, String.eq(kind, "echo"), 3n, 4n))))
 
-def sc.put(k: Nat, +s: sc.S, +who: String, +kind: String, +text: String) -> IO(sc.S):
+def sc.put.chat(k: Nat, +s: sc.S, +who: String, +kind: String, +text: String) -> sc.S:
+  match k:
+    case 1n:
+      sc.add(s, who, "tool", text, True{})
+    case 2n:
+      sc.attached(sc.attach(sc.blks(s), sc.attach.v(sc.blks(s), who, text), who, text, "", sc.w(s), sc.home(s)), s, who, "tool", text)
+    case 3n:
+      sc.attached(sc.attach(sc.blks(s), sc.attach.v(sc.blks(s), who, ""), who, "", text, sc.w(s), sc.home(s)), s, who, "echo", text)
+    case _:
+      sc.add(s, who, kind, text, False{})
+
+# The agent's tab --------------------------------------------------------------
+#
+# An agent's tab shows its whole log: as the tab opens, the agent's log
+# (docs/agent/NAME.jsonl, Store.bend st.agent) is read into blocks of the
+# tab's own (drawn as the chat reaches them), and what the agent does after
+# joins them too; so Home there reaches its first message, however long it
+# ran (the chat keeps only its last 400 blocks).
+
+# a block not drawn yet
+def sc.blk.raw(+id: U32, +who: String, +kind: String, +text: String, +run: Bool, +now: Nat) -> sc.Blk:
+  sc.Blk{id, who, kind, text, "", True{}, run, now, 0, [], 0}
+
+def sc.blk.got(b: sc.Blk, +res: String) -> sc.Blk:
+  match b:
+    case sc.Blk{i, who, k, t, r, o, ru, t0, bw, rs, n}:
+      sc.Blk{i, who, k, t, res, o, False{}, t0, 0, [], 0}
+
+# sc.attach, the block not drawn
+def sc.attach.raw(bs: List<&2, sc.Blk>, hit: Bool, +who: String, +text: String, +res: String) -> Maybe<&2, List<&2, sc.Blk>>:
+  match bs hit:
+    case Nil{} _:
+      None{}
+    case +b <> +rest True{}:
+      Some{sc.blk.got(b, res) <> rest}
+    case +b <> +rest False{}:
+      sc.attach.more(sc.attach.raw(rest, sc.attach.v(rest, who, text), who, text, res), b)
+
+def sc.ag.or(m: Maybe<&2, List<&2, sc.Blk>>, +b: sc.Blk, +bs: List<&2, sc.Blk>) -> List<&2, sc.Blk>:
+  match m:
+    case Some{+x}:
+      x
+    case None{}:
+      b <> bs
+
+# an entry of the agent's onto its blocks, as sc.put takes it (k: sc.put.k)
+def sc.ag.step(k: Nat, +bs: List<&2, sc.Blk>, +id: U32, +who: String, +kind: String, +text: String, +now: Nat) -> List<&2, sc.Blk>:
   match k:
     case 0n:
-      IO.bind(Unit, sc.S, IO.write("\u{7}"), u => IO.pure(sc.S, s))
+      bs
     case 1n:
-      IO.pure(sc.S, sc.add(s, who, "tool", text, True{}))
+      sc.blk.raw(id, who, "tool", text, True{}, now) <> bs
     case 2n:
-      IO.pure(sc.S, sc.attached(sc.attach(sc.blks(s), sc.attach.v(sc.blks(s), who, text), who, text, "", sc.w(s), sc.home(s)), s, who, "tool", text))
+      sc.ag.or(sc.attach.raw(bs, sc.attach.v(bs, who, text), who, text, ""), sc.blk.raw(id, who, "tool", text, False{}, now), bs)
     case 3n:
-      IO.pure(sc.S, sc.attached(sc.attach(sc.blks(s), sc.attach.v(sc.blks(s), who, ""), who, "", text, sc.w(s), sc.home(s)), s, who, "echo", text))
+      sc.ag.or(sc.attach.raw(bs, sc.attach.v(bs, who, ""), who, "", text), sc.blk.raw(id, who, "echo", text, False{}, now), bs)
     case _:
-      IO.pure(sc.S, sc.add(s, who, kind, text, False{}))
+      sc.blk.raw(id, who, kind, text, False{}, now) <> bs
+
+# the log's entries (oldest first) onto blocks (newest first), their ids
+# from id on
+def sc.ag.blks(rs: List<&2, St.st.Root>, +who: String, +id: U32, +bs: List<&2, sc.Blk>) -> List<&2, sc.Blk>:
+  match rs:
+    case []:
+      bs
+    case +r <> rest:
+      +kind = St.st.root.kind(r)
+      sc.ag.blks(rest, who, (id + 1 : U32), sc.ag.step(sc.put.k(kind), bs, id, who, kind, St.st.root.text(r), 0n))
+
+def sc.ag.most() -> Nat:
+  20000n
+
+# an entry of the loaded agent's: onto its tab's blocks too
+def sc.ag.put(go: Bool, +k: Nat, +s: sc.S, +who: String, +kind: String, +text: String) -> sc.S:
+  match go:
+    case False{}:
+      s
+    case True{}:
+      +t = sc.tr(s)
+      +bs = sc.ag.step(k, sc.tr.abs(t), sc.tr.next(t), who, kind, text, sc.now(s))
+      sc.dirty(sc.with.tr(s, sc.tr.took(sc.tr.with.ag(t, sc.tr.ag(t), List.take(&2, sc.Blk, bs, sc.ag.most())), 1)), 2)
+
+def sc.put.go(bell: Bool, +k: Nat, +s: sc.S, +who: String, +kind: String, +text: String) -> IO(sc.S):
+  match bell:
+    case True{}:
+      IO.bind(Unit, sc.S, IO.write("\u{7}"), u => IO.pure(sc.S, s))
+    case False{}:
+      +ag = sc.tr.ag(sc.tr(s))
+      IO.pure(sc.S, sc.ag.put(Bool.and(Bool.not(String.is_empty(ag)), String.eq(who, ag)), k, sc.put.chat(k, s, who, kind, text), who, kind, text))
+
+def sc.put(+k: Nat, +s: sc.S, +who: String, +kind: String, +text: String) -> IO(sc.S):
+  sc.put.go(Nat.is_eq(k, 0n), k, s, who, kind, text)
+
+# what the agent's tab needs before a draw: 0 nothing, 1 the log of the
+# agent whose tab shows loaded (none or another's is), 2 the loaded one
+# dropped (no agent's tab shows)
+def sc.ag.want(+s: sc.S) -> Nat:
+  +f = sc.focus(s)
+  +ag = sc.tr.ag(sc.tr(s))
+  +agent = Bool.not(Bool.or(String.is_empty(f), String.eq(f, "mugen")))
+  Bool.pick(Nat, agent, Bool.pick(Nat, String.eq(f, ag), 0n, 1n), Bool.pick(Nat, String.is_empty(ag), 0n, 2n))
+
+def sc.ag.got(m: Maybe<&2, List<&2, St.st.Root>>, +s: sc.S, +name: String) -> sc.S:
+  +rs = Maybe.default(&2, List<&2, St.st.Root>, m, [])
+  +t = sc.tr(s)
+  +bs = sc.ag.blks(rs, name, sc.tr.next(t), [])
+  sc.dirty(sc.with.tr(s, sc.tr.took(sc.tr.with.ag(t, name, List.take(&2, sc.Blk, bs, sc.ag.most())), U32.from_nat(List.length(&2, St.st.Root, rs)))), 2)
+
+# the mugen dir (the history's file's)
+def sc.mugen(+s: sc.S) -> String:
+  String.reverse(String.drop(String.reverse(sc.cf.hfile(sc.cf(s))), 8n))
+
+def sc.ag.load(k: Nat, +s: sc.S) -> IO(sc.S):
+  match k:
+    case 1n:
+      +name = sc.focus(s)
+      IO.bind(Maybe<&2, List<&2, St.st.Root>>, sc.S, St.st.agent(sc.mugen(s), name), m => IO.pure(sc.S, sc.ag.got(m, s, name)))
+    case 2n:
+      IO.pure(sc.S, sc.with.tr(s, sc.tr.with.ag(sc.tr(s), "", [])))
+    case _:
+      IO.pure(sc.S, s)
 
 # History -------------------------------------------------------------------------
 #
@@ -1267,24 +1612,37 @@ def sc.page(+s: sc.S) -> U32:
   +low = sc.tm.low(sc.tm(s))
   U32.max(1, Bool.pick(U32, U32.is_gt(h, (low + 2 : U32)), ((h - low : U32) - 2 : U32), 1))
 
+# the most rows scrolled up (the top, whatever the chat's length: the
+# drawing adds the screen's rows to it, which must not wrap a U32)
+def sc.top() -> U32:
+  1073741824
+
 def sc.scroll(+s: sc.S, +up: Bool, +n: U32) -> sc.S:
   +o = sc.off(s)
-  sc.dirty(sc.with.off(s, Bool.pick(U32, up, Bool.pick(U32, U32.is_gt(o, (4294967295 - n : U32)), o, (o + n : U32)), (o - U32.min(o, n) : U32))), 2)
+  sc.dirty(sc.with.off(s, Bool.pick(U32, up, U32.min(sc.top(), Bool.pick(U32, U32.is_gt(o, (4294967295 - n : U32)), o, (o + n : U32))), (o - U32.min(o, n) : U32))), 2)
 
 # leaving: asked of the hub, which says Bye once all is cut
 def sc.quit(+s: sc.S) -> IO(sc.S):
   Bool.pick(IO(sc.S), sc.u.quit(sc.u(s)), IO.pure(sc.S, s),
     IO.bind(Unit, sc.S, sc.send(s, "/quit"), u => IO.pure(sc.S, sc.dirty(sc.with.hint(sc.with.quit(s), "leaving \u{2026}"), 1))))
 
+# after an edit: the word the mouse pointed at forgotten (the box follows
+# the cursor), the box Esc closed kept closed only while on the same word
+def sc.sp.moved(+s: sc.S) -> sc.S:
+  +sp = sc.sp(s)
+  +e = sc.ed(s)
+  +k = Sp.sp.key.of(Sp.sp.target(sc.flags(s), String.length(D.ed.pre(e)), 0n))
+  sc.with.sp(s, Sp.sp.with.shut(Sp.sp.with.mx(sp, 0n), Bool.pick(Nat, Nat.is_eq(k, Sp.sp.shut(sp)), k, 0n)))
+
 def sc.edit(+s: sc.S, +key: K.ky.Key) -> sc.S:
-  sc.dirty(sc.with.hint(sc.with.ed(s, D.ed.key(sc.ed(s), key)), ""), 1)
+  sc.dirty(sc.with.hint(sc.sp.moved(sc.with.ed(s, D.ed.key(sc.ed(s), key))), ""), 1)
 
 def sc.mouse.say(on: Bool) -> String:
   match on:
     case True{}:
-      "\u{1B}[?1000h\u{1B}[?1002h\u{1B}[?1006h"
+      "\u{1B}[?1000h\u{1B}[?1002h\u{1B}[?1003h\u{1B}[?1006h"
     case False{}:
-      "\u{1B}[?1006l\u{1B}[?1002l\u{1B}[?1000l"
+      "\u{1B}[?1006l\u{1B}[?1003l\u{1B}[?1002l\u{1B}[?1000l"
 
 # /mouse: the mouse's reports off (the terminal selects text) or on
 def sc.mouse(+s: sc.S) -> IO(sc.S):
@@ -1312,9 +1670,6 @@ def sc.sent(+s: sc.S, +t: String) -> IO(sc.S):
 # /image [path] on the draft's last line: the image (or the clipboard's)
 # kept in the mugen dir (Pic.bend), a line naming it in its place, for the
 # message being written to take; the rest of the draft kept
-def sc.mugen(+s: sc.S) -> String:
-  String.reverse(String.drop(String.reverse(sc.cf.hfile(sc.cf(s))), 8n))
-
 def sc.last.line(+t: String) -> String:
   Maybe.default(&2, String, List.get(&2, String, List.reverse(&2, String, String.lines(t)), 0n), "")
 
@@ -1337,12 +1692,21 @@ def sc.img.attach(+s: sc.S) -> IO(sc.S):
   IO.bind(Pc.pc.Got, sc.S, Pc.pc.attach(sc.mugen(s), sc.cf.home(sc.cf(s)), String.drop(String.trim(sc.last.line(t)), 6n)), g => IO.pure(sc.S, sc.img.got(s, t, g)))
 
 # Enter: a "\" before the cursor at the text's end is a new line; an empty
-# text, nothing; /mouse and /image are the screen's; else sent
+# text, nothing; /mouse, /image and /spell are the screen's; else sent
 def sc.enter.k(+s: sc.S) -> Nat:
   +e = sc.ed(s)
   +t = D.ed.text(e)
   Bool.pick(Nat, Bool.and(String.is_empty(D.ed.post(e)), String.starts_with(D.ed.pre(e), "\\")), 0n,
-    Bool.pick(Nat, String.is_empty(String.trim(t)), 1n, Bool.pick(Nat, String.eq(String.trim(t), "/mouse"), 2n, Bool.pick(Nat, sc.img.is(t), 4n, 3n))))
+    Bool.pick(Nat, String.is_empty(String.trim(t)), 1n, Bool.pick(Nat, String.eq(String.trim(t), "/mouse"), 2n, Bool.pick(Nat, sc.img.is(t), 4n,
+      Bool.pick(Nat, String.eq(sc.cmd.word(t), "/spell"), 5n, 3n)))))
+
+# /spell [on|off]: the spellcheck on or off (alone: switched)
+def sc.spell.cmd(+s: sc.S, +arg: String) -> sc.S:
+  +sp = sc.sp(s)
+  +on = Bool.pick(Bool, String.eq(arg, "on"), True{}, Bool.pick(Bool, String.eq(arg, "off"), False{}, Bool.not(Sp.sp.on(sp))))
+  +ok = Bool.or(String.is_empty(arg), Bool.or(String.eq(arg, "on"), String.eq(arg, "off")))
+  +say = Bool.pick(String, on, "spellcheck on: point at a red-underlined word, or put the cursor on it, for suggestions \u{b7} M-s fixes it, M-S all", "spellcheck off (/spell on brings it back)")
+  Bool.pick(sc.S, ok, sc.dirty(sc.with.hint(sc.with.sp(s, Sp.sp.with.on(sp, on)), say), 2), sc.dirty(sc.with.hint(s, "/spell takes on or off"), 1))
 
 def sc.enter(k: Nat, +s: sc.S) -> IO(sc.S):
   match k:
@@ -1355,6 +1719,9 @@ def sc.enter(k: Nat, +s: sc.S) -> IO(sc.S):
       sc.mouse(sc.with.ed(s, D.ed.sent(sc.ed(s))))
     case 4n:
       sc.img.attach(s)
+    case 5n:
+      +t = String.trim(D.ed.text(sc.ed(s)))
+      IO.pure(sc.S, sc.spell.cmd(sc.with.ed(s, D.ed.sent(sc.ed(s))), String.trim(String.drop(t, 6n))))
     case _:
       sc.sent(s, D.ed.text(sc.ed(s)))
 
@@ -1397,26 +1764,28 @@ def sc.click(+s: sc.S, +y: U32) -> sc.S:
   +ids = sc.tr.ids(sc.tr(s))
   +m = List.get(&2, U32, ids, U32.to_nat((y - 1 : U32)))
   +id = Maybe.default(&2, U32, m, 0)
-  +bs = sc.blks(s)
+  +bs = sc.vw(s)
   +bs2 = sc.toggle(bs, sc.toggle.v(bs, id), id, sc.w(s), sc.home(s))
   +n0 = sc.blk.n.of(bs, id)
   +n1 = sc.blk.n.of(bs2, id)
   +o = sc.off(s)
   +follow = Bool.and(U32.is_eq(o, 0), U32.is_eq(sc.newest(bs), id))
   +o2 = Bool.pick(U32, follow, 0, Bool.pick(U32, U32.is_ge(n1, n0), (o + (n1 - n0 : U32) : U32), (o - U32.min(o, (n0 - n1 : U32)) : U32)))
-  Bool.pick(sc.S, Bool.or(U32.is_eq(y, 0), Maybe.is_none(&2, U32, m)), s, sc.dirty(sc.with.off(sc.with.blks(s, bs2), o2), 2))
+  Bool.pick(sc.S, Bool.or(U32.is_eq(y, 0), Maybe.is_none(&2, U32, m)), s, sc.dirty(sc.with.off(sc.with.vw(s, bs2), o2), 2))
 
 def sc.all(+s: sc.S) -> sc.S:
-  +bs = sc.blks(s)
-  sc.dirty(sc.with.blks(s, sc.open.all(bs, sc.any.closed(bs), sc.w(s), sc.home(s))), 2)
+  +bs = sc.vw(s)
+  sc.dirty(sc.with.vw(s, sc.open.all(bs, sc.any.closed(bs), sc.w(s), sc.home(s))), 2)
 
 # what a key does: 0 an edit, 1 Enter, 2 C-c, 3 C-d, 4 C-g, 5 C-s, 6 M-o (or C-o,
 # tmux's prefix where it is set so),
-# 7 C-l, 8 Esc, 9 Tab, 10 PgUp, 11 PgDn, 12 M-<, 13 M-> or End on an empty
-# input, 14 the wheel up, 15 down, 16 a press, 17 nothing, 18 a drag, 19 a
-# let go, 20 Up on an empty input with messages waiting, 21 M-Left and 22
-# M-Right with tabs shown. While searching,
-# Enter, C-g and Esc are the search's.
+# 7 C-l, 8 Esc, 9 Tab, 10 PgUp, 11 PgDn, 12 M-< or Home on an empty input,
+# 13 M-> or End on an empty input, 14 the wheel up, 15 down, 16 a press, 17
+# nothing, 18 a drag, 19 a let go, 20 Up on an empty input with messages
+# waiting, 21 M-Left and 22 M-Right with tabs shown, 23 M-s, 24 M-S, 25 M-1
+# to M-9 (the spellcheck's), 27 Shift-Tab (plan or auto), 28 the mouse moved
+# (no button held). While searching, Enter, C-g, Esc and Shift-Tab are the
+# search's.
 def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool) -> Nat:
   match key:
     case K.ky.Nav{1, m}:
@@ -1455,6 +1824,18 @@ def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool)
       13n
     case K.ky.Nav{6, m}:
       Bool.pick(Nat, empty, 13n, 0n)
+    case K.ky.Nav{5, m}:
+      Bool.pick(Nat, empty, 12n, 0n)
+    case K.ky.BackTab{}:
+      Bool.pick(Nat, find, 0n, 27n)
+    case K.ky.Meta{115}:
+      23n
+    case K.ky.Meta{83}:
+      24n
+    case K.ky.Meta{+c}:
+      Bool.pick(Nat, P.pp.in(c, 49, 57), 25n, 0n)
+    case K.ky.Mouse{35, x, y, up}:
+      28n
     case K.ky.Mouse{64, x, y, up}:
       14n
     case K.ky.Mouse{65, x, y, up}:
@@ -1545,20 +1926,131 @@ def sc.status.y(+s: sc.S) -> U32:
   +t = Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0)
   (t + (sc.low.stat(low) + 1 : U32) : U32)
 
+# the input set to a fix's text and cursor (the mouse's word forgotten)
+def sc.sp.set(+s: sc.S, +x: Sp.sp.Ed, +hint: String) -> sc.S:
+  +t = Sp.sp.ed.text(x)
+  +c = Sp.sp.ed.cur(x)
+  +e = sc.ed(s)
+  sc.dirty(sc.with.hint(sc.with.sp(sc.with.ed(s, D.ed.with(e, String.reverse(String.take(t, c)), String.drop(t, c))), Sp.sp.with.shut(Sp.sp.with.mx(sc.sp(s), 0n), 0n)), hint), 1)
+
+# the text and the cursor, for Spell's fixes
+def sc.sp.ed(+s: sc.S) -> Sp.sp.Ed:
+  +e = sc.ed(s)
+  Sp.sp.Ed{D.ed.text(e), String.length(D.ed.pre(e))}
+
+def sc.fix.one(m: Maybe<&2, String>, +s: sc.S, +f: Sp.sp.F, +i: Nat) -> sc.S:
+  match m:
+    case Some{r}:
+      sc.sp.set(s, Sp.sp.fix(sc.sp.ed(s), f, i), "")
+    case None{}:
+      sc.dirty(sc.with.hint(s, "no suggestion " ++ Nat.show(Nat.add(i, 1n)) ++ " for \u{ab}" ++ Sp.sp.f.text(f) ++ "\u{bb}"), 1)
+
+def sc.fix.go(m: Maybe<&2, Sp.sp.F>, +s: sc.S, +i: Nat) -> sc.S:
+  match m:
+    case Some{+f}:
+      sc.fix.one(List.get(&2, String, Sp.sp.f.sugg(f), i), s, f, i)
+    case None{}:
+      sc.dirty(sc.with.hint(s, Bool.pick(String, Sp.sp.on(sc.sp(s)), "no misspelled word under the mouse or the cursor", "spellcheck off (/spell on)")), 1)
+
+def sc.word.of(m: Maybe<&2, Nat>, +fs: List<&2, Sp.sp.F>) -> Nat:
+  match m:
+    case Some{+at}:
+      Sp.sp.key.of(Sp.sp.over(fs, at))
+    case None{}:
+      0n
+
+# the misspelled word at column x, row y of the screen: where it starts,
+# plus 1 (0 none). The input's text starts at column 3, after the lambda.
+def sc.word.at(+sl: sc.Sl, +x: U32, +y: U32) -> Nat:
+  +y0 = sc.sl.y0(sl)
+  +in = Bool.and(Bool.and(U32.is_ge(y, y0), U32.is_lt(y, (y0 + sc.sl.n(sl) : U32))), U32.is_ge(x, 3))
+  +i = (sc.sl.top(sl) + (y - U32.min(y, y0) : U32) : U32)
+  +m = Sp.sp.spot(sc.sl.rows(sl), sc.sl.sts(sl), i, (x - U32.min(x, 3) : U32))
+  Bool.pick(Nat, in, sc.word.of(m, sc.sl.fs(sl)), 0n)
+
+def sc.click.go(k: Nat, +s: sc.S, +sl: sc.Sl, +x: U32, +y: U32) -> IO(sc.S):
+  match k:
+    case 1n:
+      IO.pure(sc.S, sc.fix.go(sc.sl.tgt(sl), s, U32.to_nat((y - U32.min(y, sc.bx.y(sc.sl.box(sl))) : U32))))
+    case 2n:
+      IO.pure(sc.S, sc.dirty(sc.with.sp(s, Sp.sp.with.shut(Sp.sp.with.mx(sc.sp(s), sc.word.at(sl, x, y)), 0n)), 1))
+    case 3n:
+      IO.pure(sc.S, s)
+    case _:
+      Bool.pick(IO(sc.S), U32.is_eq(y, sc.status.y(s)), IO.pure(sc.S, sc.dirty(sc.tab.click(s, x), 2)),
+        IO.pure(sc.S, sc.click.at(Bool.pick(Nat, Bool.and(U32.is_eq(y, 1), Bool.not(U32.is_eq(sc.sel.pin(sc.z(s)), 0))), 1n, 0n), s, y)))
+
+# what a click is: 1 on a suggestion in the box, 2 on a misspelled word
+# of the input (its box opens: a phone has no pointer), 3 on the box's
+# keys (nothing), 0 any other (sc.up)
+def sc.click.k(+sl: sc.Sl, +x: U32, +y: U32) -> Nat:
+  +b = sc.sl.box(sl)
+  +i = (y - U32.min(y, sc.bx.y(b)) : U32)
+  Bool.pick(Nat, sc.bx.on(b, x, y), Bool.pick(Nat, U32.is_lt((i + 1 : U32), sc.bx.n(b)), 1n, 3n),
+    Bool.pick(Nat, Nat.is_eq(sc.word.at(sl, x, y), 0n), 0n, 2n))
+
 def sc.up(k: Nat, +s: sc.S, +x: U32, +y: U32) -> IO(sc.S):
   match k:
     case 0n:
       IO.pure(sc.S, s)
     case 1n:
       +s1 = sc.with.z(s, sc.sel.off(sc.z(s)))
-      Bool.pick(IO(sc.S), U32.is_eq(y, sc.status.y(s1)), IO.pure(sc.S, sc.dirty(sc.tab.click(s1, x), 2)),
-        IO.pure(sc.S, sc.click.at(Bool.pick(Nat, Bool.and(U32.is_eq(y, 1), Bool.not(U32.is_eq(sc.sel.pin(sc.z(s1)), 0))), 1n, 0n), s1, y)))
+      +sl = sc.low.sl(sc.low(s1))
+      sc.click.go(sc.click.k(sl, x, y), s1, sl, x, y)
     case _:
       +z = sc.z(s)
       +text = sc.sel.text(z)
       do IO<sc.S>:
         o : S.mu.Out <- S.mu.run("sh", ["-c", sc.clip()], text, 4096, 5000)
         return sc.dirty(sc.with.hint(sc.with.z(s, sc.sel.off(z)), sc.copied.of(o, List.length(&2, String, P.pp.split(text)))), 2)
+
+# Esc with the box open closes it (and is no first Esc of two that leave)
+def sc.esc.or(open: Bool, +s: sc.S) -> IO(sc.S):
+  match open:
+    case True{}:
+      +tgt = sc.sl.tgt(sc.low.sl(sc.low(s)))
+      IO.pure(sc.S, sc.dirty(sc.with.sp(s, Sp.sp.with.shut(sc.sp(s), Sp.sp.key.of(tgt))), 1))
+    case False{}:
+      sc.esc(s)
+
+# M-s (i 0), M-1 to M-9: the word the box is for replaced by suggestion i
+def sc.fix(+s: sc.S, +i: Nat) -> sc.S:
+  sc.fix.go(sc.sl.tgt(sc.low.sl(sc.low(s))), s, i)
+
+# M-S: every misspelled word of the input replaced by its first suggestion
+def sc.fix.every(+s: sc.S) -> sc.S:
+  +fs = sc.flags(s)
+  +n = Sp.sp.fixable(fs)
+  Bool.pick(sc.S, Nat.is_eq(n, 0n), sc.dirty(sc.with.hint(s, "no misspelled word with a suggestion"), 1),
+    sc.sp.set(s, Sp.sp.fix.all(fs, sc.sp.ed(s)), "fixed " ++ Nat.show(n) ++ Bool.pick(String, Nat.is_eq(n, 1n), " word", " words")))
+
+def sc.meta.c(key: K.ky.Key) -> U32:
+  match key:
+    case K.ky.Meta{c}:
+      c
+    case _:
+      0
+
+# Shift-Tab: plan mode, or back to auto (the hub's /plan and /auto), as in
+# Claude Code. The mode shows at once, the hub's state says it after.
+def sc.mode.flip(+s: sc.S) -> IO(sc.S):
+  +st = sc.st(s)
+  +plan = Bool.not(sc.st.plan(st))
+  +say = Bool.pick(String, plan, P.pp.paint("1;33", "plan mode") ++ P.pp.paint("2", ": mugen reads and proposes, changing nothing \u{b7} Shift-Tab: auto"),
+    P.pp.paint("1;32", "auto mode") ++ P.pp.paint("2", ": mugen runs its tools as it needs them \u{b7} Shift-Tab: plan"))
+  do IO<sc.S>:
+    Unit <- sc.send(s, Bool.pick(String, plan, "/plan", "/auto"))
+    return sc.dirty(sc.with.hint(sc.with.st(s, sc.st.with.plan(st, plan)), say), 1)
+
+# Events ------------------------------------------------------------------------
+
+# the mouse moved (mode 1003, no button held): over a misspelled word of the
+# input, its box opens; off it, the box closes; on the box, it stays
+def sc.hover(+s: sc.S, +x: U32, +y: U32) -> sc.S:
+  +sp = sc.sp(s)
+  +sl = sc.low.sl(sc.low(s))
+  +mx = Bool.pick(Nat, sc.bx.on(sc.sl.box(sl), x, y), Sp.sp.mx(sp), sc.word.at(sl, x, y))
+  Bool.pick(sc.S, Nat.is_eq(mx, Sp.sp.mx(sp)), s, sc.dirty(sc.with.sp(s, Sp.sp.with.mx(sp, mx)), 1))
 
 def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
   match k:
@@ -1579,7 +2071,7 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
     case 7n:
       IO.pure(sc.S, sc.dirty(s, 2))
     case 8n:
-      sc.esc(s)
+      sc.esc.or(Bool.not(List.is_empty(&2, String, sc.bx.rows(sc.low.box(sc.low(s))))), s)
     case 9n:
       IO.pure(sc.S, sc.tab(s))
     case 10n:
@@ -1587,7 +2079,7 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
     case 11n:
       IO.pure(sc.S, sc.scroll(s, False{}, sc.page(s)))
     case 12n:
-      IO.pure(sc.S, sc.scroll(s, True{}, 4294967295))
+      IO.pure(sc.S, sc.scroll(s, True{}, sc.top()))
     case 13n:
       IO.pure(sc.S, sc.dirty(sc.with.off(s, 0), 2))
     case 14n:
@@ -1606,6 +2098,16 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
       IO.pure(sc.S, sc.tab.step(s, False{}))
     case 22n:
       IO.pure(sc.S, sc.tab.step(s, True{}))
+    case 23n:
+      IO.pure(sc.S, sc.fix(s, 0n))
+    case 24n:
+      IO.pure(sc.S, sc.fix.every(s))
+    case 25n:
+      IO.pure(sc.S, sc.fix(s, Nat.sub(U32.to_nat(sc.meta.c(key)), 49n)))
+    case 27n:
+      sc.mode.flip(s)
+    case 28n:
+      IO.pure(sc.S, sc.hover(s, sc.mouse.x(key), sc.mouse.y(key)))
     case _:
       IO.pure(sc.S, s)
 
@@ -1614,10 +2116,68 @@ def sc.key(+s: sc.S, +key: K.ky.Key) -> IO(sc.S):
   +back = Bool.not(List.is_empty(&2, String, sc.st.wait(sc.st(s))))
   +tabs = Bool.not(List.is_empty(&2, String, sc.tabs(sc.st.agents(sc.st(s)), sc.focus(s))))
   +k = sc.key.k(key, Maybe.is_some(&2, String, D.ed.find(e)), D.ed.is.empty(e), back, tabs)
-  +s1 = Bool.pick(sc.S, Nat.is_eq(k, 8n), s, sc.with.esc(s, 0n))
+  +s1 = Bool.pick(sc.S, Bool.or(Nat.is_eq(k, 8n), Nat.is_eq(k, 28n)), s, sc.with.esc(s, 0n))
   sc.key.go(k, s1, key)
 
-# Events ------------------------------------------------------------------------
+# The spellcheck ------------------------------------------------------------------
+#
+# Spell.bend has the words and the answers; here they are asked (a call to
+# hunspell at a time, on a tick, its answer an sc.Spelt), shown (sc.low:
+# the underline, the box) and fixed (M-s, M-1 to M-9, a click in the box,
+# M-S).
+
+# what the spellcheck looked at last: the text and the cursor
+def sc.spell.key(+s: sc.S) -> String:
+  +e = sc.ed(s)
+  D.ed.text(e) ++ "\u{0}" ++ Nat.show(String.length(D.ed.pre(e)))
+
+# what the hub says (sent, whatever came of it)
+def sc.tell(+me: Chan(sc.In), +x: sc.In) -> IO(Unit):
+  IO.bind(Result<&1, &1, sc.In, Unit>, Unit, Chan.send(sc.In, me, x), r => IO.pure(Unit, Unit{}))
+
+def sc.spell.job(+me: Chan(sc.In), +ws: List<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    o : S.mu.Out <- S.mu.run("hunspell", Sp.sp.args(), Sp.sp.ask(ws), 1048576, 10000)
+    sc.tell(me, sc.Spelt{ws, o})
+
+def sc.spell.ask(none: Bool, +s: sc.S, +key: String, +ws: List<&2, String>) -> IO(sc.S):
+  match none:
+    case True{}:
+      IO.pure(sc.S, sc.with.sp(s, Sp.sp.with.last(sc.sp(s), key)))
+    case False{}:
+      do IO<sc.S>:
+        Unit <- IO.spawn(Unit, sc.spell.job(sc.cf.me(sc.cf(s)), ws))
+        return sc.with.sp(s, Sp.sp.with.asking(sc.sp(s), key))
+
+def sc.spell.look(go: Bool, +s: sc.S, +key: String) -> IO(sc.S):
+  match go:
+    case False{}:
+      IO.pure(sc.S, s)
+    case True{}:
+      +e = sc.ed(s)
+      +ws = Sp.sp.fresh(Sp.sp.words(D.ed.text(e), String.length(D.ed.pre(e))), Sp.sp.seen(sc.sp(s)), [])
+      sc.spell.ask(List.is_empty(&2, String, ws), s, key, ws)
+
+# at a tick: once the text or the cursor moved, the words not asked about
+# yet asked of hunspell (none while a call is under way)
+def sc.spell(+s: sc.S) -> IO(sc.S):
+  +sp = sc.sp(s)
+  +key = sc.spell.key(s)
+  sc.spell.look(Bool.and(Bool.and(Sp.sp.on(sp), Bool.not(Sp.sp.busy(sp))), Bool.not(String.eq(key, Sp.sp.last(sp)))), s, key)
+
+# hunspell's answer kept; it did not run: the spellcheck off, said once
+def sc.spelt.go(ran: Bool, +s: sc.S, +ws: List<&2, String>, +out: String, +err: String) -> sc.S:
+  match ran:
+    case True{}:
+      sc.dirty(sc.with.sp(s, Sp.sp.with.got(sc.sp(s), ws, Sp.sp.parse(out, ws))), 1)
+    case False{}:
+      +why = Maybe.default(&2, String, List.get(&2, String, String.lines(String.trim(err)), 0n), "")
+      sc.add(sc.with.sp(s, Sp.sp.with.on(sc.sp(s), False{})), "", "info", "spellcheck off: hunspell (en_US) did not run" ++ Bool.pick(String, String.is_empty(why), "", " (" ++ why ++ ")") ++ "; /spell on tries again", False{})
+
+def sc.spelt(+s: sc.S, +ws: List<&2, String>, o: S.mu.Out) -> sc.S:
+  match o:
+    case S.mu.Out{+status, +out, +err}:
+      sc.spelt.go(Sp.sp.ran(status, out), s, ws, out, err)
 
 def sc.size(+s: sc.S, +ws: U32) -> sc.S:
   +m = sc.tm(s)
@@ -1652,14 +2212,15 @@ def sc.phone(go: Bool, +s: sc.S) -> IO(sc.S):
       IO.pure(sc.S, s)
 
 # a tick: the size checked (a new width: a phone?); the spinner and the
-# times on, if anything runs
+# times on, if anything runs; the input's new words asked of hunspell
 def sc.tick(+s: sc.S) -> IO(sc.S):
   do IO<sc.S>:
     now : Nat <- IO.now()
     ws : U32 <- S.mu.winsize()
     +s1 : sc.S = sc.size(sc.with.now(s, now), ws)
     +live : Bool = Bool.or(Bool.or(sc.st.busy(sc.st(s1)), Maybe.is_some(&2, sc.Blk, sc.running(sc.blks(s1)))), Bool.not(List.is_empty(&2, String, sc.st.agents(sc.st(s1)))))
-    sc.phone(Bool.not(U32.is_eq(sc.w(s), sc.w(s1))), Bool.pick(sc.S, live, sc.dirty(s1, 1), s1))
+    +s2 : sc.S <- sc.phone(Bool.not(U32.is_eq(sc.w(s), sc.w(s1))), Bool.pick(sc.S, live, sc.dirty(s1, 1), s1))
+    sc.spell(s2)
 
 # the hub leaves: the terminal as it was, the hub told
 def sc.bye(+s: sc.S, +done: Chan(Unit)) -> IO(sc.S):
@@ -1685,6 +2246,8 @@ def sc.on(+s: sc.S, m: Maybe<&1, sc.In>) -> IO(sc.S):
       sc.quit(s)
     case Some{sc.Bye{+done}}:
       sc.bye(s, done)
+    case Some{sc.Spelt{+ws, +o}}:
+      IO.pure(sc.S, sc.spelt(s, ws, o))
     case Some{sc.Back{+text}}:
       IO.pure(sc.S, sc.dirty(sc.with.hint(sc.with.ed(s, D.ed.taken(sc.ed(s), text)), "taken back from the queue: edit it, Enter sends it"), 1))
 
@@ -1707,7 +2270,8 @@ def sc.loop(n: Nat, go: Bool, +s: sc.S) -> IO(Unit):
         +s1 : sc.S <- sc.on(s, m)
         p : Poll<&1, &1, Maybe<&1, sc.In>, Unit> <- Bool.pick(IO(Poll<&1, &1, Maybe<&1, sc.In>, Unit>), sc.u.done(sc.u(s1)), IO.pure(Poll<&1, &1, Maybe<&1, sc.In>, Unit>, Wait{Unit{}}), Chan.try_recv(sc.In, sc.cf.me(sc.cf(s1)), 0))
         +s2 : sc.S <- sc.drain(256n, p, s1)
-        +s3 : sc.S <- sc.draw(s2)
+        +s2a : sc.S <- sc.ag.load(sc.ag.want(s2), s2)
+        +s3 : sc.S <- sc.draw(s2a)
         sc.loop(f, Bool.not(sc.u.done(sc.u(s3))), s3)
     case _ _:
       IO.pure(Unit, Unit{})
@@ -1767,13 +2331,9 @@ def sc.run(+hub: Chan(E.ev.Ev), +me: Chan(sc.In), +home: String, +hfile: String)
     ws : U32 <- S.mu.winsize()
     hist : List<&2, String> <- sc.hist.load(hfile)
     now : Nat <- IO.now()
-    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, [], sc.An{0, 0, 0}}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([])}, ws)
+    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, [], sc.An{0, 0, 0}, "", []}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([]), Sp.sp.new()}, ws)
     Unit <- IO.spawn(Unit, sc.reader(me))
     Unit <- IO.spawn(Unit, sc.ticker(sc.fuel(), me, Done{Unit{}}))
     +s0p : sc.S <- sc.phone(True{}, s0)
     +s1 : sc.S <- sc.draw(sc.dirty(s0p, 2))
     sc.loop(sc.fuel(), True{}, s1)
-
-# what the hub says (sent, whatever came of it)
-def sc.tell(+me: Chan(sc.In), +x: sc.In) -> IO(Unit):
-  IO.bind(Result<&1, &1, sc.In, Unit>, Unit, Chan.send(sc.In, me, x), r => IO.pure(Unit, Unit{}))
