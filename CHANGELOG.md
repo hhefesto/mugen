@@ -2,6 +2,15 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.8.1 (2026-10-24)
+
+- A markdown table in a reply is drawn as a table: box lines, each column
+  as wide as its widest cell, the header bold, the colons of its row of
+  dashes aligning a column (`--:` right, `:-:` centered). Too wide for
+  the screen, its widest columns are narrowed and their cells wrap, a
+  line between rows; on a screen too narrow even for that, its lines show
+  as they came, as before.
+
 ## 0.8.0 (2026-10-23)
 
 - Your words for the spellcheck: `M-a` on a red word adds it to them (its

@@ -118,8 +118,11 @@ the files under `~/.mugen`, the wires to the API or Claude Code. A refactor,
 a test, a doc or a comment changes nothing. While it is 0.x: a change that
 breaks something (a file format, a removed command or flag) bumps MINOR and
 zeroes PATCH; an added or changed behavior bumps MINOR too; a fix with no
-new behavior bumps PATCH. Bump it in the commit that makes the change, and
-add a line to `CHANGELOG.md`.
+new behavior bumps PATCH. A small change takes the smallest bump, PATCH,
+even when it shows: how a thing is drawn (a markdown table set as a table),
+a color, a wording, a fix. MINOR is for what is new to use or breaks: a
+command, a key, a flag, a file, a wire. Bump it in the commit that makes
+the change, and add a line to `CHANGELOG.md`.
 
 ## Conventions
 

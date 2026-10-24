@@ -7,9 +7,9 @@ import ./Json.bend as J
 # result: a header (the tool, what it was asked, how it went) over the
 # output, an edit's or a write's as its diff (line numbers, - red, + green),
 # folded to a few lines till a click opens it. Replies get a little
-# markdown (code fences, headings, bullets, `code`, **bold**); thoughts are
-# dim, folded too. What tools print is cleaned first: escape sequences and
-# control characters dropped, tabs to spaces.
+# markdown (code fences, headings, bullets, tables, `code`, **bold**);
+# thoughts are dim, folded too. What tools print is cleaned first: escape
+# sequences and control characters dropped, tabs to spaces.
 #
 # Every def is prefixed `pp.` (a program's defs share one namespace).
 
@@ -528,18 +528,301 @@ def pp.md.line(k: Nat, +l: String, +tl: String, +lang: String, +p1: String, +w: 
     case _:
       pp.pre(pp.rows(pp.inline(l), (w - 2 : U32), True{}), p1, "  ")
 
-# a reply's lines: in a code fence (of a language) or not; p1 the first
-# row's prefix
-def pp.md(ls: List<&2, String>, +code: Bool, +lang: String, +p1: String, +w: U32) -> List<&2, String>:
+# Tables --------------------------------------------------------------------------
+#
+# A table (a row of cells between pipes, a row of dashes under it, then its
+# rows) is drawn in box lines: each column as wide as its widest cell, the
+# header bold, a colon in the dashes aligning its column (":--" left, "--:"
+# right, ":-:" centered). Too wide for the screen, the widest columns are
+# cut down to one width and their cells wrap, a line between rows; a table
+# that would still not fit (a column under four) is shown as its lines.
+
+# a line starting with a pipe
+def pp.tb.is(+tl: String) -> Bool:
+  String.starts_with(tl, "|")
+
+# a row of dashes' next character: 0 none left, 1 a pipe, a dash, a colon
+# or a space, 2 any other
+def pp.tb.dl.v(s: String) -> Nat:
+  match s:
+    case SNil{}:
+      0n
+    case SCon{Chr{+c}, t}:
+      Bool.pick(Nat, Bool.or(Bool.or(U32.is_eq(c, 124), U32.is_eq(c, 45)), Bool.or(U32.is_eq(c, 58), U32.is_eq(c, 32))), 1n, 2n)
+
+def pp.tb.dl.go(s: String, v: Nat, +dash: Bool) -> Bool:
+  match s v:
+    case SCon{Chr{+c}, +t} 1n:
+      pp.tb.dl.go(t, pp.tb.dl.v(t), Bool.or(dash, U32.is_eq(c, 45)))
+    case SNil{} _:
+      dash
+    case _ _:
+      False{}
+
+# the row of dashes under a table's header
+def pp.tb.dashes(+tl: String) -> Bool:
+  Bool.and(pp.tb.is(tl), pp.tb.dl.go(tl, pp.tb.dl.v(tl), False{}))
+
+# the first of the lines, its indent dropped ("" none)
+def pp.tb.first(+ls: List<&2, String>) -> String:
+  pp.ltrim(Maybe.default(&2, String, List.get(&2, String, ls, 0n), ""))
+
+# how many of the lines are the table's (the first one is)
+def pp.tb.len(ls: List<&2, String>, v: Bool) -> Nat:
+  match ls v:
+    case l <> +t True{}:
+      Nat.add(1n, pp.tb.len(t, pp.tb.is(pp.tb.first(t))))
+    case _ _:
+      0n
+
+def pp.tb.trims(xs: List<&2, String>) -> List<&2, String>:
+  match xs:
+    case []:
+      []
+    case x <> t:
+      String.trim(x) <> pp.tb.trims(t)
+
+# a row's cells: what is between its pipes, trimmed
+def pp.tb.cells(+tl: String) -> List<&2, String>:
+  +s = String.trim_end(String.drop(tl, 1n))
+  pp.tb.trims(String.split(Bool.pick(String, String.ends_with(s, "|"), String.take(s, Nat.sub(String.length(s), 1n)), s), '|'))
+
+def pp.tb.rows(ls: List<&2, String>) -> List<&2, List<&2, String>>:
   match ls:
     case []:
       []
-    case +l <> rest:
+    case l <> t:
+      pp.tb.cells(pp.ltrim(l)) <> pp.tb.rows(t)
+
+# a column's alignment, by its dashes: 0 left, 1 right, 2 centered
+def pp.tb.al(+c: String) -> Nat:
+  Bool.pick(Nat, String.ends_with(c, ":"), Bool.pick(Nat, String.starts_with(c, ":"), 2n, 1n), 0n)
+
+def pp.tb.als(cs: List<&2, String>) -> List<&2, Nat>:
+  match cs:
+    case []:
+      []
+    case c <> t:
+      pp.tb.al(c) <> pp.tb.als(t)
+
+# one for each column (left, if the dashes have none)
+def pp.tb.alpad(ws: List<&2, U32>, als: List<&2, Nat>) -> List<&2, Nat>:
+  match ws als:
+    case w <> wt a <> at:
+      a <> pp.tb.alpad(wt, at)
+    case w <> wt Nil{}:
+      0n <> pp.tb.alpad(wt, [])
+    case _ _:
+      []
+
+def pp.tb.spw(sps: List<&2, pp.Sp>) -> U32:
+  match sps:
+    case []:
+      0
+    case pp.Sp{st, tx} <> t:
+      (pp.width(tx) + pp.tb.spw(t) : U32)
+
+# a cell's columns, its marks (` and **) left out
+def pp.tb.cw(+c: String) -> U32:
+  pp.tb.spw(pp.inline(c))
+
+# the columns' widths so far, widened to a row's cells
+def pp.tb.wmax(ws: List<&2, U32>, cs: List<&2, String>) -> List<&2, U32>:
+  match ws cs:
+    case w <> wt c <> ct:
+      U32.max(w, pp.tb.cw(c)) <> pp.tb.wmax(wt, ct)
+    case w <> wt Nil{}:
+      w <> pp.tb.wmax(wt, [])
+    case Nil{} c <> ct:
+      pp.tb.cw(c) <> pp.tb.wmax([], ct)
+    case _ _:
+      []
+
+def pp.tb.widths(rs: List<&2, List<&2, String>>, +ws: List<&2, U32>) -> List<&2, U32>:
+  match rs:
+    case []:
+      ws
+    case r <> t:
+      pp.tb.widths(t, pp.tb.wmax(ws, r))
+
+# the columns' widths, none over c, summed
+def pp.tb.sum(ws: List<&2, U32>, +c: U32) -> U32:
+  match ws:
+    case []:
+      0
+    case w <> t:
+      (U32.min(w, c) + pp.tb.sum(t, c) : U32)
+
+def pp.tb.max(ws: List<&2, U32>) -> U32:
+  match ws:
+    case []:
+      0
+    case w <> t:
+      U32.max(w, pp.tb.max(t))
+
+def pp.tb.cut(ws: List<&2, U32>, +c: U32) -> List<&2, U32>:
+  match ws:
+    case []:
+      []
+    case w <> t:
+      U32.min(w, c) <> pp.tb.cut(t, c)
+
+def pp.tb.cap.go(n: Nat, +ws: List<&2, U32>, +c: U32, +room: U32, v: Bool) -> U32:
+  match n v:
+    case 1n+f False{}:
+      +c2 = (c - 1 : U32)
+      pp.tb.cap.go(f, ws, c2, room, Bool.or(U32.is_le(pp.tb.sum(ws, c2), room), U32.is_le(c2, 4)))
+    case _ _:
+      c
+
+# the widest a column may be for the columns to fit in room (four at least)
+def pp.tb.cap(+ws: List<&2, U32>, +room: U32) -> U32:
+  +c = pp.tb.max(ws)
+  pp.tb.cap.go(pp.fuel(), ws, c, room, Bool.or(U32.is_le(pp.tb.sum(ws, c), room), U32.is_le(c, 4)))
+
+def pp.tb.segs(ws: List<&2, U32>) -> List<&2, String>:
+  match ws:
+    case []:
+      []
+    case w <> t:
+      String.repeat("\u{2500}", U32.to_nat((w + 2 : U32))) <> pp.tb.segs(t)
+
+# a line across the table: l at its left, m where columns meet, r at its
+# right
+def pp.tb.rule(+ws: List<&2, U32>, +l: String, +m: String, +r: String) -> String:
+  pp.paint("2", l ++ String.join(pp.tb.segs(ws), m) ++ r)
+
+# a cell's row in w columns, aligned
+def pp.tb.pad(+s: String, +w: U32, +al: Nat) -> String:
+  +gap = (w - U32.min(pp.vis(s), w) : U32)
+  +half = U32.div(gap, 2)
+  Bool.pick(String, Nat.is_eq(al, 1n), pp.spaces(gap) ++ s, Bool.pick(String, Nat.is_eq(al, 2n), pp.spaces(half) ++ s ++ pp.spaces((gap - half : U32)), s ++ pp.spaces(gap)))
+
+# the header's spans bold (its code stays code)
+def pp.tb.bold(sps: List<&2, pp.Sp>) -> List<&2, pp.Sp>:
+  match sps:
+    case []:
+      []
+    case pp.Sp{+st, tx} <> t:
+      pp.Sp{Bool.pick(String, String.is_empty(st), "1", st), tx} <> pp.tb.bold(t)
+
+# a cell's rows in w columns
+def pp.tb.cell(+c: String, +w: U32, +head: Bool) -> List<&2, String>:
+  +sps = pp.inline(c)
+  pp.rows(Bool.pick(List<&2, pp.Sp>, head, pp.tb.bold(sps), sps), w, True{})
+
+# a row's cells, each as its rows ([""] for a cell the row lacks)
+def pp.tb.cols(ws: List<&2, U32>, cs: List<&2, String>, +head: Bool) -> List<&2, List<&2, String>>:
+  match ws cs:
+    case w <> wt c <> ct:
+      pp.tb.cell(c, w, head) <> pp.tb.cols(wt, ct, head)
+    case w <> wt Nil{}:
+      [""] <> pp.tb.cols(wt, [], head)
+    case _ _:
+      []
+
+def pp.tb.h(cols: List<&2, List<&2, String>>) -> Nat:
+  match cols:
+    case []:
+      0n
+    case c <> t:
+      Nat.max(List.length(&2, String, c), pp.tb.h(t))
+
+# the cells' j-th rows, padded
+def pp.tb.at(cols: List<&2, List<&2, String>>, ws: List<&2, U32>, als: List<&2, Nat>, +j: Nat) -> List<&2, String>:
+  match cols ws als:
+    case c <> ct w <> wt a <> at:
+      pp.tb.pad(Maybe.default(&2, String, List.get(&2, String, c, j), ""), w, a) <> pp.tb.at(ct, wt, at, j)
+    case _ _ _:
+      []
+
+def pp.tb.line(+cs: List<&2, String>) -> String:
+  +bar = pp.paint("2", "\u{2502}")
+  bar ++ " " ++ String.join(cs, " " ++ bar ++ " ") ++ " " ++ bar
+
+def pp.tb.lines(n: Nat, +cols: List<&2, List<&2, String>>, +ws: List<&2, U32>, +als: List<&2, Nat>, +j: Nat) -> List<&2, String>:
+  match n:
+    case 1n+f:
+      pp.tb.line(pp.tb.at(cols, ws, als, j)) <> pp.tb.lines(f, cols, ws, als, Nat.add(j, 1n))
+    case _:
+      []
+
+# a row's lines
+def pp.tb.row(+cs: List<&2, String>, +ws: List<&2, U32>, +als: List<&2, Nat>, +head: Bool) -> List<&2, String>:
+  +cols = pp.tb.cols(ws, cs, head)
+  pp.tb.lines(pp.tb.h(cols), cols, ws, als, 0n)
+
+# the rows under the header, a line between them if sep
+def pp.tb.body(rs: List<&2, List<&2, String>>, +ws: List<&2, U32>, +als: List<&2, Nat>, +sep: Bool, +first: Bool) -> List<&2, String>:
+  match rs:
+    case []:
+      []
+    case r <> t:
+      +line = Bool.pick(List<&2, String>, Bool.and(sep, Bool.not(first)), [pp.tb.rule(ws, "\u{251c}", "\u{253c}", "\u{2524}")], [])
+      pp.cat(line, pp.cat(pp.tb.row(r, ws, als, False{}), pp.tb.body(t, ws, als, sep, False{})))
+
+def pp.tb.draw(+head: List<&2, String>, +rs: List<&2, List<&2, String>>, +ws: List<&2, U32>, +als: List<&2, Nat>, +sep: Bool) -> List<&2, String>:
+  pp.tb.rule(ws, "\u{250c}", "\u{252c}", "\u{2510}") <> pp.cat(pp.tb.row(head, ws, als, True{}),
+    pp.tb.rule(ws, "\u{251c}", "\u{253c}", "\u{2524}") <> pp.cat(pp.tb.body(rs, ws, als, sep, True{}), [pp.tb.rule(ws, "\u{2514}", "\u{2534}", "\u{2518}")]))
+
+# the table's lines as prose, as they came
+def pp.tb.plain(ls: List<&2, String>, +p1: String, +w: U32) -> List<&2, String>:
+  match ls:
+    case []:
+      []
+    case l <> t:
+      pp.cat(pp.pre(pp.rows(pp.inline(l), (w - 2 : U32), True{}), p1, "  "), pp.tb.plain(t, "  ", w))
+
+def pp.tb.go(fit: Bool, +ls: List<&2, String>, +p1: String, +w: U32, +head: List<&2, String>, +rs: List<&2, List<&2, String>>, +ws: List<&2, U32>, +als: List<&2, Nat>, +sep: Bool) -> List<&2, String>:
+  match fit:
+    case True{}:
+      pp.pre(pp.tb.draw(head, rs, ws, als, sep), p1, "  ")
+    case False{}:
+      pp.tb.plain(ls, p1, w)
+
+# a table's lines as rows of w columns; p1 the first's prefix
+def pp.tb(+ls: List<&2, String>, +p1: String, +w: U32) -> List<&2, String>:
+  +all = pp.tb.rows(ls)
+  +head = Maybe.default(&2, List<&2, String>, List.get(&2, List<&2, String>, all, 0n), [])
+  +dash = Maybe.default(&2, List<&2, String>, List.get(&2, List<&2, String>, all, 1n), [])
+  +rs = List.drop(&2, List<&2, String>, all, 2n)
+  +ws0 = pp.tb.widths(head <> rs, [])
+  +n = U32.from_nat(List.length(&2, U32, ws0))
+  +room = (w - U32.min(w, ((n * 3 : U32) + 3 : U32)) : U32)
+  +c = pp.tb.cap(ws0, room)
+  +ws = pp.tb.cut(ws0, c)
+  +fit = Bool.and(U32.is_le(pp.tb.sum(ws, c), room), U32.is_gt(n, 0))
+  pp.tb.go(fit, ls, p1, w, head, rs, ws, pp.tb.alpad(ws, pp.tb.als(dash)), U32.is_lt(c, pp.tb.max(ws0)))
+
+# what a reply's lines start with: 0 nothing, 1 a table (outside code), 2
+# any other line
+def pp.md.v(ls: List<&2, String>, +code: Bool) -> Nat:
+  match ls:
+    case []:
+      0n
+    case l <> t:
+      Bool.pick(Nat, Bool.and(Bool.not(code), Bool.and(pp.tb.is(pp.ltrim(l)), pp.tb.dashes(pp.tb.first(t)))), 1n, 2n)
+
+def pp.md.go(n: Nat, ls: List<&2, String>, v: Nat, +code: Bool, +lang: String, +p1: String, +w: U32) -> List<&2, String>:
+  match n ls v:
+    case 1n+f +l <> +rest 1n:
+      +k = pp.tb.len(l <> rest, True{})
+      +after = List.drop(&2, String, rest, Nat.sub(k, 1n))
+      pp.cat(pp.tb(List.take(&2, String, l <> rest, k), p1, w), pp.md.go(f, after, pp.md.v(after, False{}), False{}, "", "  ", w))
+    case 1n+f +l <> +rest 2n:
       +tl = pp.ltrim(l)
       +k = pp.md.k(tl, code)
       +fence = Nat.is_eq(k, 0n)
+      +code2 = Bool.xor(code, fence)
       pp.cat(pp.md.line(k, l, tl, lang, p1, w),
-        pp.md(rest, Bool.xor(code, fence), Bool.pick(String, fence, Bool.pick(String, code, "", pp.ltrim(String.drop(tl, 3n))), lang), "  ", w))
+        pp.md.go(f, rest, pp.md.v(rest, code2), code2, Bool.pick(String, fence, Bool.pick(String, code, "", pp.ltrim(String.drop(tl, 3n))), lang), "  ", w))
+    case _ _ _:
+      []
+
+# a reply's lines: in a code fence (of a language) or not; p1 the first
+# row's prefix
+def pp.md(+ls: List<&2, String>, +code: Bool, +lang: String, +p1: String, +w: U32) -> List<&2, String>:
+  pp.md.go(pp.fuel(), ls, pp.md.v(ls, code), code, lang, p1, w)
 
 # Tools ---------------------------------------------------------------------------
 

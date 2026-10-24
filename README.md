@@ -85,8 +85,9 @@ opus-5.5 · medium · 87% left · auto
 ```
 
 Each entry is a block: your message (`❯`), mugen's reply (`●`, with a
-little markdown), its summarized thinking (`✻`), and each tool call with
-its result: the command or path asked, how it went (`✓ 0.4 s`,
+little markdown: code, headings, bullets, tables), its summarized
+thinking (`✻`), and each tool call with its result: the command or
+path asked, how it went (`✓ 0.4 s`,
 `✗ exit 1`, `✂ cut`), its first lines of output, and for an edit or a
 write the diff, with the file's line numbers, each line taken out on red and
 each one added on green. Blocks come

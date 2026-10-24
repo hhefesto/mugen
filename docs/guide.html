@@ -348,7 +348,7 @@ mugen --api</pre>
     <section id="screen">
       <div class="eyebrow">The screen</div>
       <h2>What you see</h2>
-      <p>The chat fills the top. Each entry is a block: your message after <code>❯</code>, mugen's reply after <code>●</code> (with its code blocks, headings, bullets and <code>code</code> set apart), its summarized thinking after <code>✻</code>, notes after <code>※</code>, an agent's report after <code>◆</code>.</p>
+      <p>The chat fills the top. Each entry is a block: your message after <code>❯</code>, mugen's reply after <code>●</code> (with its code blocks, headings, bullets, tables and <code>code</code> set apart), its summarized thinking after <code>✻</code>, notes after <code>※</code>, an agent's report after <code>◆</code>.</p>
       <ul>
         <li><strong>A tool call is one block.</strong> Its header says the tool, what it was asked (a shell's command, a file's path) and how it went on the right: <code>✓ 0.4 s</code>, <code>✗ exit 1 · 0.2 s</code>, <code>✂ cut</code>, <code>■ stopped</code>, or <code>running…</code>. Under it, the first lines of its output.</li>
         <li><strong>An edit or a write shows its diff,</strong> with the line numbers of the file, each taken-out line on a red background and each added one on a green one (so too the lines of a <code>```diff</code> block in a reply), long lines wrapped under their own text.</li>
