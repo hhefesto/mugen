@@ -83,6 +83,7 @@
           golden = bendBinary pkgs "golden" "tests/Golden.bend";
           toolcheck = bendBinary pkgs "toolcheck" "tests/ToolCheck.bend";
           spellcheck = bendBinary pkgs "spellcheck" "tests/SpellCheck.bend";
+          helpcheck = bendBinary pkgs "helpcheck" "tests/HelpCheck.bend";
         }
       );
 
@@ -191,10 +192,18 @@
                 touch $out
               '';
           # the spellcheck (Spell.bend: words, hunspell's answer, the fixes,
-          # the underline), the keys it, Shift-Tab and Home take, and the real
-          # hunspell asked about a few words
+          # the underline, your words), the keys it, Shift-Tab and Home take,
+          # and the real hunspell asked about a few words (with a words file
+          # too)
           spell = pkgs.runCommand "spell" { nativeBuildInputs = [ (hunspellFor pkgs) ]; } ''
             ${self.packages.${system}.spellcheck}/bin/spellcheck | tee result
+            grep -qx "PASS: \([0-9]*\) / \1" result
+            touch $out
+          '';
+          # /help names every command Tab completes and every key the screen
+          # takes (bend/tests/HelpCheck.bend), and its pages hang together
+          help = pkgs.runCommand "help" { } ''
+            ${self.packages.${system}.helpcheck}/bin/helpcheck | tee result
             grep -qx "PASS: \([0-9]*\) / \1" result
             touch $out
           '';

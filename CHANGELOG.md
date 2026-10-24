@@ -2,6 +2,24 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.8.0 (2026-10-23)
+
+- Your words for the spellcheck: `M-a` on a red word adds it to them (its
+  underline goes at once), `M-a` on a word of yours takes it out again,
+  and the suggestions' box has a `+ add` row that does the same. They are
+  hunspell's own list, `~/.hunspell_en_US`, so every mugen chat (and
+  anything else running hunspell) shares them; a word is kept in
+  lowercase unless it has a capital after its first letter. `/words`
+  lists them, `/words add WORD…` and `/words rm WORD…` change them (`Tab`
+  completes the words of `/words rm`). mugen never writes a `*word` line
+  (one marking a dictionary word wrong), nor takes one out.
+- `/help` is remade: alone, the keys used most and nine topics (`writing`,
+  `working`, `reading`, `spell`, `modes`, `agents`, `shell`, `commands`,
+  `setup`); `/help TOPIC` one (`Tab` completes it), `/help all` every one.
+  It shows as markdown wrapped to the screen (it was cut at the screen's
+  width), in a block a click or `M-o` folds; `M-?` opens it. A test
+  (`help`) fails when a command or a key has no word in it.
+
 ## 0.7.0 (2026-10-23)
 
 - The input is spellchecked as you write: a word hunspell (en_US) doesn't

@@ -2,6 +2,7 @@
 import Base
 import ./Keys.bend as K
 import ./Pretty.bend as P
+import ./Help.bend as Hl
 
 # Edit: the input (Screen.bend), an emacs-style editor of a message of any
 # number of lines. It holds the text before the cursor (reversed) and after
@@ -461,9 +462,11 @@ def ed.key(+e: ed.Ed, +key: K.ky.Key) -> ed.Ed:
 
 # Completing ---------------------------------------------------------------------
 
+# the commands (the first word of each; Help.bend names every one), and
+# what may follow some
 def ed.words() -> List<&2, String>:
-  ["/help", "/quit", "/stop", "/now", "/goal", "/halt", "/model", "/effort", "/status", "/tree", "/export", "/plan", "/auto", "/mouse", "/image", "/spell",
-    "/model opus-5.5", "/model sonnet-5.5", "/model haiku-5.5", "/effort low", "/effort medium", "/effort high", "/effort xhigh", "/effort max", "/spell on", "/spell off"]
+  List.append(&2, String, ["/help", "/quit", "/stop", "/now", "/goal", "/halt", "/model", "/effort", "/status", "/tree", "/export", "/plan", "/auto", "/mouse", "/image", "/spell", "/words",
+    "/model opus-5.5", "/model sonnet-5.5", "/model haiku-5.5", "/effort low", "/effort medium", "/effort high", "/effort xhigh", "/effort max", "/spell on", "/spell off", "/words add", "/words rm"], Hl.hl.cmds())
 
 def ed.starting(ws: List<&2, String>, +p: String) -> List<&2, String>:
   match ws:

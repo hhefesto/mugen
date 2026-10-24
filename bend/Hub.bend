@@ -16,6 +16,7 @@ import ./Tools.bend as L
 import ./Agent.bend as G
 import ./Prompts.bend as Pr
 import ./Term.bend as Tm
+import ./Help.bend as Hl
 import ./Export.bend as X
 import ./Code.bend as Cc
 import ./Pic.bend as Pc
@@ -473,6 +474,15 @@ def hb.info.on(m: Maybe<&2, Chan(Sc.sc.In)>, +text: String) -> IO(Unit):
 
 def hb.info(+s: hb.S, +text: String) -> IO(Unit):
   hb.info.on(hb.scr(s), text)
+
+# a page of help (Help.bend: markdown, the screen wraps it), told the
+# screen, or printed as it is
+def hb.help.on(m: Maybe<&2, Chan(Sc.sc.In)>, +text: String) -> IO(Unit):
+  match m:
+    case Some{+c}:
+      Sc.sc.tell(c, Sc.sc.Put{"", "help", text})
+    case None{}:
+      IO.print(text)
 
 # the same, written as it is (no newline added) off the screen
 def hb.info.w.on(m: Maybe<&2, Chan(Sc.sc.In)>, +text: String) -> IO(Unit):
@@ -1748,7 +1758,7 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
     case 0n:
       Bool.pick(IO(hb.S), String.is_empty(t), Bool.pick(IO(hb.S), hb.busy(hb.turn(s)), hb.stop(s, "turn"), IO.pure(hb.S, s)), hb.said.user(s, t))
     case 1n:
-      IO.bind(Unit, hb.S, hb.info(s, Tm.tm.help()), u => IO.pure(hb.S, s))
+      IO.bind(Unit, hb.S, hb.help.on(hb.scr(s), Hl.hl.page(rest)), u => IO.pure(hb.S, s))
     case 2n:
       IO.bind(hb.S, hb.S, hb.release(s), s2 => IO.pure(hb.S, hb.with.quit(s2)))
     case 3n:

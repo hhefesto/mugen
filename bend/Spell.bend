@@ -8,7 +8,8 @@ import ./Pretty.bend as P
 # changed, and keeps the answers here: the words asked, and those hunspell
 # knows not with what it offers. A word known bad is underlined in red where
 # it shows; its suggestions show in a box over it while the mouse points at
-# it, or while the cursor is on it.
+# it, or while the cursor is on it. Your words (hunspell's own list,
+# ~/.hunspell_en_US) are known too: M-a adds one, or takes it out.
 #
 # Not checked: the word being written (the one the cursor ends), code
 # between backticks (a fence too), a shell command (`!` first), a run of
@@ -378,6 +379,10 @@ def sp.ask(ws: List<&2, String>) -> String:
 def sp.args() -> List<String>:
   ["-a", "-i", "utf-8", "-d", "en_US"]
 
+# the same, the words file given (the tests'; mugen's is hunspell's default)
+def sp.args.p(path: String) -> List<String>:
+  ["-a", "-i", "utf-8", "-d", "en_US", "-p", path]
+
 # whether hunspell ran: it exited well, its banner first
 def sp.ran(+status: U32, +out: String) -> Bool:
   Bool.and(U32.is_eq(status, 0), String.starts_with(out, "@(#)"))
@@ -476,6 +481,13 @@ def sp.bad.of(bs: List<&2, sp.Bad>, +w: String) -> Maybe<&2, List<&2, String>>:
       None{}
     case +b <> rest:
       Bool.pick(Maybe<&2, List<&2, String>>, String.eq(sp.bad.word(b), w), Some{sp.bad.sugg(b)}, sp.bad.of(rest, w))
+
+def sp.bad.words(bs: List<&2, sp.Bad>) -> List<&2, String>:
+  match bs:
+    case []:
+      []
+    case +b <> rest:
+      sp.bad.word(b) <> sp.bad.words(rest)
 
 def sp.flag.one(m: Maybe<&2, List<&2, String>>, +w: sp.W) -> List<&2, sp.F>:
   match m:
@@ -610,6 +622,199 @@ def sp.target(+fs: List<&2, sp.F>, +cur: Nat, +mx: Nat) -> Maybe<&2, sp.F>:
   +m = Bool.pick(Maybe<&2, sp.F>, Nat.is_eq(mx, 0n), None{}, sp.from(fs, Nat.sub(mx, 1n)))
   Bool.pick(Maybe<&2, sp.F>, Maybe.is_some(&2, sp.F, m), m, sp.over(fs, cur))
 
+# Your words ----------------------------------------------------------------------------
+#
+# Your words are hunspell's own list, ~/.hunspell_en_US, read by each call
+# of it (so a word added counts at the next): a word a line (`word/FLAGS`
+# too). A line `*word` makes a word wrong; mugen writes none, and takes
+# none out. A word is kept in lowercase, unless a capital follows its first
+# letter (GitHub, OAuth, NASA): hunspell lets a lowercase word come
+# capitalized, not the other way.
+
+def sp.dict.file() -> String:
+  "/.hunspell_en_US"
+
+# an upper letter: ASCII's, or Latin-1's (À to Þ, but ×)
+def sp.upper(+c: U32) -> Bool:
+  Bool.or(P.pp.in(c, 65, 90), Bool.and(P.pp.in(c, 192, 222), U32.is_ne(c, 215)))
+
+def sp.lower(s: String) -> String:
+  match s:
+    case SNil{}:
+      ""
+    case SCon{Chr{+c}, +t}:
+      SCon{Chr{Bool.pick(U32, sp.upper(c), (c + 32 : U32), c)}, sp.lower(t)}
+
+def sp.caps(s: String) -> Bool:
+  match s:
+    case SNil{}:
+      False{}
+    case SCon{Chr{+c}, +t}:
+      Bool.or(sp.upper(c), sp.caps(t))
+
+# the form a word is kept in
+def sp.dict.form(+w: String) -> String:
+  Bool.pick(String, sp.caps(String.drop(w, 1n)), w, sp.lower(w))
+
+# a line's word ("" none: an empty line, a `*word`)
+def sp.dict.key(+l: String) -> String:
+  +t = String.trim(l)
+  +k = String.trim(Maybe.default(&2, String, List.get(&2, String, String.split(t, '/'), 0n), ""))
+  Bool.pick(String, String.starts_with(t, "*"), "", k)
+
+# whether a line holds the word (w in its form)
+def sp.dict.is(+l: String, +w: String) -> Bool:
+  +k = sp.dict.key(l)
+  Bool.and(Bool.not(String.is_empty(k)), String.eq(sp.dict.form(k), w))
+
+def sp.dict.has(ls: List<&2, String>, +w: String) -> Bool:
+  match ls:
+    case []:
+      False{}
+    case +l <> rest:
+      Bool.or(sp.dict.is(l, w), sp.dict.has(rest, w))
+
+# the lines but those holding the word
+def sp.dict.drop(ls: List<&2, String>, +w: String) -> List<&2, String>:
+  match ls:
+    case []:
+      []
+    case +l <> rest:
+      List.append(&2, String, Bool.pick(List<&2, String>, sp.dict.is(l, w), [], [l]), sp.dict.drop(rest, w))
+
+# the file's lines, the empty ones dropped
+def sp.dict.nonempty(ls: List<&2, String>) -> List<&2, String>:
+  match ls:
+    case []:
+      []
+    case +l <> rest:
+      List.append(&2, String, Bool.pick(List<&2, String>, String.is_empty(String.trim(l)), [], [l]), sp.dict.nonempty(rest))
+
+def sp.dict.lines(+text: String) -> List<&2, String>:
+  sp.dict.nonempty(String.lines(text))
+
+# the file's text, each line ended
+def sp.dict.text(ls: List<&2, String>) -> String:
+  match ls:
+    case []:
+      ""
+    case +l <> rest:
+      l ++ "\n" ++ sp.dict.text(rest)
+
+# the words, in the file's order
+def sp.dict.words(ls: List<&2, String>) -> List<&2, String>:
+  match ls:
+    case []:
+      []
+    case +l <> rest:
+      +k = sp.dict.key(l)
+      List.append(&2, String, Bool.pick(List<&2, String>, String.is_empty(k), [], [k]), sp.dict.words(rest))
+
+# a word one may keep: not empty, no / (hunspell's flags), no * first
+def sp.dict.ok(+w: String) -> Bool:
+  Bool.and(Bool.not(String.is_empty(w)), Bool.and(Bool.not(String.starts_with(w, "*")), Nat.is_eq(List.length(&2, String, String.split(w, '/')), 1n)))
+
+# A change to the words: the file's lines after it, the words it changed
+# (in their form), those it left (already in, or not in, or no word)
+type sp.Dx is Data:
+  sp.Dx{lines: List<&2, String>, done: List<&2, String>, left: List<&2, String>}
+
+def sp.dx.lines(x: sp.Dx) -> List<&2, String>:
+  match x:
+    case sp.Dx{l, d, f}:
+      l
+
+def sp.dx.done(x: sp.Dx) -> List<&2, String>:
+  match x:
+    case sp.Dx{l, d, f}:
+      d
+
+def sp.dx.left(x: sp.Dx) -> List<&2, String>:
+  match x:
+    case sp.Dx{l, d, f}:
+      f
+
+def sp.dx.new(+ls: List<&2, String>) -> sp.Dx:
+  sp.Dx{ls, [], []}
+
+# 0 the word changes, 1 it is left
+def sp.dx.k(+go: Bool) -> Nat:
+  Bool.pick(Nat, go, 0n, 1n)
+
+def sp.dx.step(k: Nat, x: sp.Dx, +ls2: List<&2, String>, +w: String) -> sp.Dx:
+  match k x:
+    case 0n sp.Dx{l, +d, f}:
+      sp.Dx{ls2, List.append(&2, String, d, [w]), f}
+    case _ sp.Dx{+l, d, +f}:
+      sp.Dx{l, d, List.append(&2, String, f, [w])}
+
+# words added, each in its form (one already in is left)
+def sp.dict.add(ws: List<&2, String>, +x: sp.Dx) -> sp.Dx:
+  match ws:
+    case []:
+      x
+    case +w <> rest:
+      +f = sp.dict.form(w)
+      +ls = sp.dx.lines(x)
+      +go = Bool.and(sp.dict.ok(w), Bool.not(sp.dict.has(ls, f)))
+      sp.dict.add(rest, sp.dx.step(sp.dx.k(go), x, List.append(&2, String, ls, [f]), f))
+
+# words taken out (one not in is left)
+def sp.dict.rm(ws: List<&2, String>, +x: sp.Dx) -> sp.Dx:
+  match ws:
+    case []:
+      x
+    case +w <> rest:
+      +f = sp.dict.form(w)
+      +ls = sp.dx.lines(x)
+      sp.dict.rm(rest, sp.dx.step(sp.dx.k(sp.dict.has(ls, f)), x, sp.dict.drop(ls, f), f))
+
+# Words known: those hunspell answered (seen) found good
+def sp.known(+x: sp.Sp, +w: String) -> Bool:
+  Bool.and(sp.has(sp.seen(x), w), Maybe.is_none(&2, List<&2, String>, sp.bad.of(sp.bad(x), w)))
+
+def sp.not.of(xs: List<&2, String>, +lw: String) -> List<&2, String>:
+  match xs:
+    case []:
+      []
+    case +x <> rest:
+      List.append(&2, String, Bool.pick(List<&2, String>, String.eq(sp.lower(x), lw), [], [x]), sp.not.of(rest, lw))
+
+def sp.bad.not.of(bs: List<&2, sp.Bad>, +lw: String) -> List<&2, sp.Bad>:
+  match bs:
+    case []:
+      []
+    case +b <> rest:
+      List.append(&2, sp.Bad, Bool.pick(List<&2, sp.Bad>, String.eq(sp.lower(sp.bad.word(b)), lw), [], [b]), sp.bad.not.of(rest, lw))
+
+# a word's answers forgotten (in any case), and the input looked at anew:
+# the next tick asks hunspell about it again, which reads the words then
+def sp.forget(x: sp.Sp, +w: String) -> sp.Sp:
+  match x:
+    case sp.Sp{on, se, b, l, bu, mx, sh, d}:
+      +lw = sp.lower(w)
+      sp.Sp{on, sp.not.of(se, lw), sp.bad.not.of(b, lw), "", bu, mx, sh, d}
+
+def sp.forget.all(ws: List<&2, String>, +x: sp.Sp) -> sp.Sp:
+  match ws:
+    case []:
+      x
+    case +w <> rest:
+      sp.forget.all(rest, sp.forget(x, w))
+
+# the word the cursor is in or just after, of any (checked or not)
+def sp.at.cur(ws: List<&2, sp.W>, +cur: Nat) -> Maybe<&2, sp.W>:
+  match ws:
+    case []:
+      None{}
+    case +w <> rest:
+      +a = sp.w.at(w)
+      Bool.pick(Maybe<&2, sp.W>, Bool.and(Nat.is_ge(cur, a), Nat.is_le(cur, Nat.add(a, String.length(sp.w.text(w))))), Some{w}, sp.at.cur(rest, cur))
+
+# the text's word the cursor is on (None: none)
+def sp.cur.word(+t: String, +cur: Nat) -> Maybe<&2, sp.W>:
+  sp.at.cur(sp.words(t, Nat.add(String.length(t), 1n)), cur)
+
 # The box ------------------------------------------------------------------------------
 #
 # Over the word: its suggestions numbered (5 at most), the first lit (M-s
@@ -643,17 +848,25 @@ def sp.box.paint(xs: List<&2, String>, +w: U32, +first: Bool) -> List<&2, String
       +pad = x ++ P.pp.spaces((w - U32.min(w, P.pp.width(x)) : U32))
       ("\u{1B}[0m" ++ Bool.pick(String, first, "\u{1B}[1;97;44m", "\u{1B}[97;48;5;238m") ++ pad ++ "\u{1B}[0m") <> sp.box.paint(rest, w, False{})
 
-# its rows, as drawn
+# the row that adds the word to your words (M-a, or a click)
+def sp.box.add(+f: sp.F) -> String:
+  " + add \u{ab}" ++ sp.dict.form(sp.f.text(f)) ++ "\u{bb} to your words \u{b7} M-a "
+
+def sp.box.row(+st: String, +x: String, +w: U32) -> String:
+  "\u{1B}[0m\u{1B}[" ++ st ++ "m" ++ x ++ P.pp.spaces((w - U32.min(w, P.pp.width(x)) : U32)) ++ "\u{1B}[0m"
+
+# its rows, as drawn: the suggestions, the row that adds, the keys
 def sp.box.rows(+f: sp.F) -> List<&2, String>:
   +n = sp.box.n(f)
   +items = sp.box.items(List.take(&2, String, sp.f.sugg(f), n), 0n)
+  +add = sp.box.add(f)
   +keys = sp.box.keys(n)
-  +w = sp.widest(keys <> items, 0)
-  List.append(&2, String, sp.box.paint(items, w, True{}), ["\u{1B}[0m\u{1B}[2;37;48;5;238m" ++ keys ++ P.pp.spaces((w - U32.min(w, P.pp.width(keys)) : U32)) ++ "\u{1B}[0m"])
+  +w = sp.widest(add <> keys <> items, 0)
+  List.append(&2, String, sp.box.paint(items, w, True{}), [sp.box.row("36;48;5;238", add, w), sp.box.row("2;37;48;5;238", keys, w)])
 
 def sp.box.width(+f: sp.F) -> U32:
   +n = sp.box.n(f)
-  sp.widest(sp.box.keys(n) <> sp.box.items(List.take(&2, String, sp.f.sugg(f), n), 0n), 0)
+  sp.widest(sp.box.add(f) <> sp.box.keys(n) <> sp.box.items(List.take(&2, String, sp.f.sugg(f), n), 0n), 0)
 
 # Fixing --------------------------------------------------------------------------------
 

@@ -753,12 +753,13 @@ def pp.tool(+who: String, +text: String, +res: String, +open: Bool, +run: Bool, 
 
 # 1 the user's, 2 a reply, 3 a thought, 4 a tool call, 5 a result alone, 6
 # a note, 7 an agent's report, 8 a call's tokens, 9 mugen's word, 10 mugen's
-# own text (SGR kept), 0 any other
+# own text (SGR kept), 11 a page of mugen's (/help, /words: markdown,
+# wrapped), 0 any other
 def pp.kind(+kind: String) -> Nat:
   Bool.pick(Nat, String.eq(kind, "user"), 1n, Bool.pick(Nat, String.eq(kind, "unii"), 2n, Bool.pick(Nat, String.eq(kind, "mind"), 3n,
     Bool.pick(Nat, String.eq(kind, "tool"), 4n, Bool.pick(Nat, String.eq(kind, "echo"), 5n, Bool.pick(Nat, String.eq(kind, "note"), 6n,
       Bool.pick(Nat, String.eq(kind, "work"), 7n, Bool.pick(Nat, String.eq(kind, "usage"), 8n, Bool.pick(Nat, String.eq(kind, "say"), 9n,
-        Bool.pick(Nat, String.eq(kind, "info"), 10n, 0n))))))))))
+        Bool.pick(Nat, String.eq(kind, "info"), 10n, Bool.pick(Nat, String.eq(kind, "help"), 11n, 0n)))))))))))
 
 def pp.info(ls: List<&2, String>, +w: U32) -> List<&2, String>:
   match ls:
@@ -801,6 +802,8 @@ def pp.block.go(k: Nat, +who: String, +text: String, +res: String, +open: Bool, 
       pp.para(pp.lines(pp.clean(text)), "  ", "  ", 2, "2", True{}, w)
     case 10n:
       pp.info(pp.lines(text), w)
+    case 11n:
+      "" <> pp.fold(pp.md(pp.lines(pp.clean(text)), False{}, "", pp.paint("1;35", "? "), w), open, 4n, "  ")
     case _:
       pp.para(pp.lines(pp.clean(pp.who(who) ++ text)), "  ", "  ", 2, "", True{}, w)
 
@@ -813,4 +816,4 @@ def pp.block(+kind: String, +who: String, +text: String, +res: String, +open: Bo
 # whether a click can open or fold it
 def pp.foldable(+kind: String, +text: String, +res: String) -> Bool:
   +k = pp.kind(kind)
-  Bool.or(Bool.or(Nat.is_eq(k, 4n), Nat.is_eq(k, 5n)), Bool.or(Bool.or(Nat.is_eq(k, 3n), Nat.is_eq(k, 7n)), Nat.is_eq(k, 1n)))
+  Bool.or(Bool.or(Bool.or(Nat.is_eq(k, 4n), Nat.is_eq(k, 5n)), Nat.is_eq(k, 11n)), Bool.or(Bool.or(Nat.is_eq(k, 3n), Nat.is_eq(k, 7n)), Nat.is_eq(k, 1n)))

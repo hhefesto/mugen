@@ -125,6 +125,23 @@ def on() -> String:
 def off() -> String:
   Sp.sp.sgr.off()
 
+# a words file: a word, a *word, flags, spaces, an empty line
+def dict1() -> String:
+  "mugen\n*color\nfoo/AB\n  bar \n\nTelomare\n"
+
+def dx.show(+x: Sp.sp.Dx) -> String:
+  String.join(Sp.sp.dx.lines(x), ",") ++ "|" ++ String.join(Sp.sp.dx.done(x), ",") ++ "|" ++ String.join(Sp.sp.dx.left(x), ",")
+
+def sp.show(+x: Sp.sp.Sp) -> String:
+  String.join(Sp.sp.seen(x), ",") ++ "|" ++ String.join(Sp.sp.bad.words(Sp.sp.bad(x)), ",") ++ "|" ++ Sp.sp.last(x)
+
+def cw.show(m: Maybe<&2, Sp.sp.W>) -> String:
+  match m:
+    case Some{+w}:
+      Sp.sp.w.text(w) ++ "@" ++ Nat.show(Sp.sp.w.at(w))
+    case None{}:
+      "-"
+
 def pure() -> List<&2, T>:
   +t1 = {"teh ok quikc" : String}
   +r1 = lay.rows(t1, 7)
@@ -163,10 +180,21 @@ def pure() -> List<&2, T>:
    T{"target: the mouse's word first", Nat.show(Sp.sp.key.of(Sp.sp.target(f1, 1n, 8n))), "8"},
    T{"target: else the cursor's", Nat.show(Sp.sp.key.of(Sp.sp.target(f1, 1n, 0n))), "1"},
    T{"target: none", Nat.show(Sp.sp.key.of(Sp.sp.target(f1, 4n, 0n))), "0"},
-   T{"box", box.show(Sp.sp.box.rows(Sp.sp.F{"teh", 0n, ["the", "eh"]})), "1 the:30|2 eh:30|M-s \u{b7} M-1..2 \u{b7} M-S all \u{b7} Esc:30"},
+   T{"box", box.show(Sp.sp.box.rows(Sp.sp.F{"teh", 0n, ["the", "eh"]})), "1 the:33|2 eh:33|+ add \u{ab}teh\u{bb} to your words \u{b7} M-a:33|M-s \u{b7} M-1..2 \u{b7} M-S all \u{b7} Esc:33"},
    T{"box: the first lit", Bool.pick(String, String.starts_with(Maybe.default(&2, String, List.get(&2, String, Sp.sp.box.rows(Sp.sp.F{"teh", 0n, ["the", "eh"]}), 0n), ""), "\u{1B}[0m\u{1B}[1;97;44m 1 the "), "yes", "no"), "yes"},
-   T{"box: no suggestion", box.show(Sp.sp.box.rows(Sp.sp.F{"xq", 0n, []})), "no suggestion \u{b7} Esc:21"},
-   T{"box: five at most", Nat.show(List.length(&2, String, Sp.sp.box.rows(Sp.sp.F{"teh", 0n, ["a", "b", "c", "d", "e", "f", "g"]}))), "6"},
+   T{"box: no suggestion", box.show(Sp.sp.box.rows(Sp.sp.F{"xq", 0n, []})), "+ add \u{ab}xq\u{bb} to your words \u{b7} M-a:32|no suggestion \u{b7} Esc:32"},
+   T{"box: five at most", Nat.show(List.length(&2, String, Sp.sp.box.rows(Sp.sp.F{"teh", 0n, ["a", "b", "c", "d", "e", "f", "g"]}))), "7"},
+   T{"box: the + add row keeps the word's form", box.show(List.take(&2, String, Sp.sp.box.rows(Sp.sp.F{"Telomare", 0n, []}), 1n)), "+ add \u{ab}telomare\u{bb} to your words \u{b7} M-a:38"},
+   T{"words: the form kept", String.join([Sp.sp.dict.form("Telomare"), Sp.sp.dict.form("GitHub"), Sp.sp.dict.form("NASA"), Sp.sp.dict.form("Café"), Sp.sp.dict.form("chekc")], " "), "telomare GitHub NASA café chekc"},
+   T{"words: the file's words", String.join(Sp.sp.dict.words(Sp.sp.dict.lines(dict1())), ","), "mugen,foo,bar,Telomare"},
+   T{"words: the file's text", Sp.sp.dict.text(["a", "b"]), "a\nb\n"},
+   T{"words: has (any line's form)", Bool.pick(String, Bool.and(Sp.sp.dict.has(Sp.sp.dict.lines(dict1()), "telomare"), Bool.not(Sp.sp.dict.has(Sp.sp.dict.lines(dict1()), "color"))), "yes", "no"), "yes"},
+   T{"words: add", dx.show(Sp.sp.dict.add(["Chekc", "mugen", "x/y", "*no", "OAuth"], Sp.sp.dx.new(Sp.sp.dict.lines(dict1())))), "mugen,*color,foo/AB,  bar ,Telomare,chekc,OAuth|chekc,OAuth|mugen,x/y,*no"},
+   T{"words: add the same twice", dx.show(Sp.sp.dict.add(["teh", "Teh"], Sp.sp.dx.new([]))), "teh|teh|teh"},
+   T{"words: rm (any case, flags too; a *word stays)", dx.show(Sp.sp.dict.rm(["Foo", "telomare", "color", "nope"], Sp.sp.dx.new(Sp.sp.dict.lines(dict1())))), "mugen,*color,  bar |foo,telomare|color,nope"},
+   T{"words: forget a word (any case), look anew", sp.show(Sp.sp.forget(Sp.sp.with.last(Sp.sp.with.got(Sp.sp.new(), ["Teh", "teh", "the", "ok"], [Sp.sp.Bad{"teh", ["the"]}, Sp.sp.Bad{"Teh", ["The"]}, Sp.sp.Bad{"quikc", []}]), "key"), "teh")), "the,ok|quikc|"},
+   T{"words: known (asked, good)", Bool.pick(String, Bool.and(Sp.sp.known(Sp.sp.with.got(Sp.sp.new(), ["the", "teh"], [Sp.sp.Bad{"teh", []}]), "the"), Bool.not(Sp.sp.known(Sp.sp.with.got(Sp.sp.new(), ["the", "teh"], [Sp.sp.Bad{"teh", []}]), "teh"))), "yes", "no"), "yes"},
+   T{"words: the cursor's word, at its end too", cw.show(Sp.sp.cur.word("I sea teh", 9n)) ++ " " ++ cw.show(Sp.sp.cur.word("I sea teh", 3n)) ++ " " ++ cw.show(Sp.sp.cur.word("ab   cd", 3n)), "teh@6 sea@2 -"},
    T{"decode: Shift-Tab, CSI Z", dec(esc() ++ "[Z"), "BackTab"},
    T{"decode: Shift-Tab, CSI u", dec(esc() ++ "[9;2u"), "BackTab"},
    T{"decode: Shift-Tab, modifyOtherKeys", dec(esc() ++ "[27;2;9~"), "BackTab"},
@@ -195,7 +223,10 @@ def pure() -> List<&2, T>:
    T{"screen: M-o", act(K.ky.Meta{111}, False{}), "6"},
    T{"screen: the mouse moved", act(K.ky.Mouse{35, 4, 40, False{}}, False{}), "28"},
    T{"screen: a drag", act(K.ky.Mouse{32, 4, 40, False{}}, False{}), "18"},
-   T{"screen: Esc", act(K.ky.Esc{}, False{}), "8"}]
+   T{"screen: Esc", act(K.ky.Esc{}, False{}), "8"},
+   T{"screen: M-a", act(K.ky.Meta{97}, False{}), "29"},
+   T{"screen: M-?", act(K.ky.Meta{63}, False{}), "30"},
+   T{"decode: M-a, M-?", dec(esc() ++ "a" ++ esc() ++ "?"), "Meta 97, Meta 63"}]
 
 def bads.first(bs: List<&2, Sp.sp.Bad>) -> String:
   match bs:
@@ -226,7 +257,20 @@ def run(ts: List<&2, T>, +pass: Nat, +n: Nat) -> IO(Unit):
             Unit <- Bool.pick(IO(Unit), ok, IO.pure(Unit, Unit{}), IO.print("FAIL " ++ name ++ "\n  got:  " ++ got ++ "\n  want: " ++ want))
             run(rest, Nat.add(pass, Bool.pick(Nat, ok, 1n, 0n)), Nat.add(n, 1n))
 
+# hunspell with a words file (-p, as ~/.hunspell_en_US is by default):
+# a word kept lowercase comes capitalized too, not all in capitals
+def real.words(o: S.mu.Out) -> List<&2, T>:
+  match o:
+    case S.mu.Out{+status, +out, +err}:
+      +ws = {["chekc", "Chekc", "teh", "GitHub", "Github"] : List<&2, String>}
+      [T{"hunspell with your words ran", Bool.pick(String, Sp.sp.ran(status, out), "yes", "no: " ++ U32.show(status) ++ " " ++ err), "yes"},
+       T{"hunspell with your words: those left bad", String.join(Sp.sp.bad.words(Sp.sp.parse(out, ws)), ","), "teh,Github"}]
+
 def main() -> IO(Unit):
   do IO<Unit>:
     o : S.mu.Out <- S.mu.run("hunspell", Sp.sp.args(), Sp.sp.ask(["teh", "quikc", "brown", "don't", "café"]), 1048576, 20000)
-    run(List.append(&2, T, pure(), real(o)), 0n, 0n)
+    tmp : String <- S.mu.env("TMPDIR", "/tmp")
+    +p : String = tmp ++ "/spellcheck-words"
+    r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(p, Sp.sp.dict.text(Sp.sp.dx.lines(Sp.sp.dict.add(["Chekc", "GitHub"], Sp.sp.dx.new([])))), 0)
+    o2 : S.mu.Out <- S.mu.run("hunspell", Sp.sp.args.p(p), Sp.sp.ask(["chekc", "Chekc", "teh", "GitHub", "Github"]), 1048576, 20000)
+    run(List.concat(&2, T, [pure(), real(o), real.words(o2)]), 0n, 0n)

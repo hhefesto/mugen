@@ -121,7 +121,7 @@ Keys:
 - Emacs keys (`C-a`, `C-e`, `C-k`, `C-u`, `C-w`, `C-y`, `M-b`, `M-f`,
   `M-d`; `Home` and `End` in a text: its line's start and end), the
   history (`↑`, `↓`, `C-p`, `C-n`, `C-r`, kept in `$MUGEN_DIR/history`),
-  `Tab` completes a command.
+  `Tab` completes a command (a `/help` topic, a word for `/words rm`).
 - `Home` and `End` on an empty input: the chat's top and end (`M-<`,
   `M->` anywhere).
 - The spellcheck: as you write, a word hunspell (en_US) doesn't know is
@@ -132,7 +132,13 @@ Keys:
   a box over it, the first lit: `M-s` takes that one, `M-1`..`M-5` (or a
   click) the one numbered, `Esc` closes the box (and is no first `Esc` of
   the two that leave). `M-S` replaces every red word with its first
-  suggestion. `/spell off` and `/spell on` turn it off and on. mugen's
+  suggestion. **Your words:** `M-a` on a red word adds it to them (and
+  its underline goes away), and on a word of yours takes it out; the
+  box's `+ add` row does what `M-a` does. They are hunspell's own list,
+  `~/.hunspell_en_US`, one word a line, so every mugen chat shares
+  them. A word is kept in lowercase, so it may come capitalized too,
+  unless it has a capital after its first letter (`GitHub`, `OAuth`).
+  `/spell off` and `/spell on` turn the spellcheck off and on. mugen's
   package brings hunspell and its dictionary; run any other way it needs
   `hunspell` and `en_US` on the PATH, and says once if it can't run it.
 - The mouse is mugen's: drag over the chat to select text (shown reversed;
@@ -162,13 +168,21 @@ Commands:
   `Shift-Tab` switches between them.
 - `/spell on|off`: the spellcheck (on as mugen starts); `/spell` alone
   switches it.
+- `/words`: your words (the spellcheck's, `~/.hunspell_en_US`);
+  `/words add WORD…` and `/words rm WORD…` change them (`Tab` completes
+  `/words rm`'s).
+- `/help`: the keys used most and the help's topics (`writing`,
+  `working`, `reading`, `spell`, `modes`, `agents`, `shell`, `commands`,
+  `setup`); `/help TOPIC` one of them (`Tab` completes it), `/help all`
+  every one; `M-?` opens it. It shows as a block wrapped to the screen,
+  which a click or `M-o` folds.
 - `/image PATH` (or `/image` alone, for the clipboard's image, by xclip): the
   image goes with the message being written, as a line `[image
   docs/images/NAME]` in it (kept in `~/.mugen/docs/images/`). The turn's
   call sends the images its new messages name; `zoom(id, 1)` gives a
   message's images again, and `read` gives an image file whole (png, jpeg,
   gif, webp; 5 MB at most).
-- `/status`, `/mouse`, `/tree`, `/export`, `/help`, `/quit`.
+- `/status`, `/mouse`, `/tree`, `/export`, `/quit`.
 
 Whatever is running when you quit resumes at the next start. Leaving kills
 every process the tools started; if mugen dies any other way, a watchdog

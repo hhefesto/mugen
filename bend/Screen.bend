@@ -1691,21 +1691,203 @@ def sc.img.attach(+s: sc.S) -> IO(sc.S):
   +t = D.ed.text(sc.ed(s))
   IO.bind(Pc.pc.Got, sc.S, Pc.pc.attach(sc.mugen(s), sc.cf.home(sc.cf(s)), String.drop(String.trim(sc.last.line(t)), 6n)), g => IO.pure(sc.S, sc.img.got(s, t, g)))
 
+# Your words -----------------------------------------------------------------------
+#
+# M-a (or a click on the box's + add row) on a word: added to your words
+# (Spell.bend sp.dict, ~/.hunspell_en_US), or, one of yours already, taken
+# out. /words lists them; /words add WORD... and /words rm WORD... change
+# them. The file is read at each, and written whole (by a rename); the
+# words changed are forgotten, so the next tick asks hunspell anew.
+
+# the words file read: whether it was (or is not there: no words yet), its
+# text, why not
+type sc.Dr is Data:
+  sc.Dr{ok: Bool, text: String, why: String}
+
+def sc.dr.ok(d: sc.Dr) -> Bool:
+  match d:
+    case sc.Dr{o, t, w}:
+      o
+
+def sc.dr.text(d: sc.Dr) -> String:
+  match d:
+    case sc.Dr{o, t, w}:
+      t
+
+def sc.dr.why(d: sc.Dr) -> String:
+  match d:
+    case sc.Dr{o, t, w}:
+      w
+
+def sc.dict.path(+s: sc.S) -> String:
+  sc.home(s) ++ Sp.sp.dict.file()
+
+# an effect's error said: its text, or its number
+def sc.why(+code: U32, +text: String) -> String:
+  Bool.pick(String, String.is_empty(text), "error " ++ U32.show(code), text)
+
+# the file not there (ENOENT) is no words yet
+def sc.dr.fail(+code: U32, +text: String) -> sc.Dr:
+  sc.Dr{U32.is_eq(code, 2), "", sc.why(code, text)}
+
+def sc.dict.got(r: Result<&1, &1, U32 & String, String>) -> sc.Dr:
+  match r:
+    case Done{t}:
+      sc.Dr{True{}, t, ""}
+    case Fail{(code, text)}:
+      sc.dr.fail(code, text)
+
+def sc.dict.lines(+d: sc.Dr) -> List<&2, String>:
+  Sp.sp.dict.lines(sc.dr.text(d))
+
+def sc.say(+s: sc.S, +hint: String) -> sc.S:
+  sc.dirty(sc.with.hint(s, hint), 1)
+
+# a change written: the words it changed forgotten (asked anew), and said
+def sc.words.saved(r: Result<&1, &1, U32 & String, Unit>, +s: sc.S, +x: Sp.sp.Dx, +say: String) -> sc.S:
+  match r:
+    case Done{u}:
+      sc.say(sc.with.sp(s, Sp.sp.forget.all(Sp.sp.dx.done(x), sc.sp(s))), say)
+    case Fail{(code, text)}:
+      sc.say(s, "your words are as they were: ~/.hunspell_en_US can't be written (" ++ sc.why(code, text) ++ ")")
+
+def sc.words.save(+s: sc.S, +x: Sp.sp.Dx, +say: String) -> IO(sc.S):
+  IO.bind(Result<&1, &1, U32 & String, Unit>, sc.S, S.mu.save(sc.dict.path(s), Sp.sp.dict.text(Sp.sp.dx.lines(x)), 0), r => IO.pure(sc.S, sc.words.saved(r, s, x, say)))
+
+def sc.quote(+w: String) -> String:
+  "\u{ab}" ++ w ++ "\u{bb}"
+
+# what M-a does: 0 adds the word, 1 takes it out, 2 nothing (the dictionary
+# has it), 3 nothing (the file can't be read)
+def sc.words.toggle.go(k: Nat, +s: sc.S, +w: String, +f: String, +ls: List<&2, String>, +why: String) -> IO(sc.S):
+  match k:
+    case 0n:
+      sc.words.save(s, Sp.sp.dict.add([w], Sp.sp.dx.new(ls)), "\u{2713} " ++ sc.quote(f) ++ " added to your words \u{b7} M-a again takes it out")
+    case 1n:
+      sc.words.save(s, Sp.sp.dict.rm([w], Sp.sp.dx.new(ls)), sc.quote(f) ++ " taken out of your words \u{b7} M-a puts it back")
+    case 2n:
+      IO.pure(sc.S, sc.say(s, sc.quote(w) ++ " is in the dictionary already (M-a adds and takes out words of yours)"))
+    case _:
+      IO.pure(sc.S, sc.say(s, "~/.hunspell_en_US can't be read (" ++ why ++ "), so it is left as it is"))
+
+def sc.words.toggle(+s: sc.S, +w: String, +dr: sc.Dr) -> IO(sc.S):
+  +ls = sc.dict.lines(dr)
+  +f = Sp.sp.dict.form(w)
+  +mine = Sp.sp.dict.has(ls, f)
+  +known = Sp.sp.known(sc.sp(s), w)
+  +k = Bool.pick(Nat, Bool.not(sc.dr.ok(dr)), 3n, Bool.pick(Nat, mine, 1n, Bool.pick(Nat, known, 2n, 0n)))
+  sc.words.toggle.go(k, s, w, f, ls, sc.dr.why(dr))
+
+def sc.dict.w.text(m: Maybe<&2, Sp.sp.W>) -> Maybe<&2, String>:
+  match m:
+    case Some{w}:
+      Some{Sp.sp.w.text(w)}
+    case None{}:
+      None{}
+
+def sc.dict.word.of(m: Maybe<&2, Sp.sp.F>, +t: String, +cur: Nat) -> Maybe<&2, String>:
+  match m:
+    case Some{f}:
+      Some{Sp.sp.f.text(f)}
+    case None{}:
+      sc.dict.w.text(Sp.sp.cur.word(t, cur))
+
+# the word M-a is for: the red one the box is for (the mouse's, else the
+# cursor's), else any the cursor is in or just after
+def sc.dict.word(+s: sc.S) -> Maybe<&2, String>:
+  +e = sc.ed(s)
+  sc.dict.word.of(sc.sl.tgt(sc.low.sl(sc.low(s))), D.ed.text(e), String.length(D.ed.pre(e)))
+
+def sc.words.key.go(m: Maybe<&2, String>, +s: sc.S) -> IO(sc.S):
+  match m:
+    case None{}:
+      IO.pure(sc.S, sc.say(s, "M-a: put the cursor on a word (or the mouse on a red one) to add it to your words, or take it out"))
+    case Some{+w}:
+      IO.bind(Result<&1, &1, U32 & String, String>, sc.S, S.mu.read_file(sc.dict.path(s)), r => sc.words.toggle(s, w, sc.dict.got(r)))
+
+# M-a, or a click on the box's + add row
+def sc.words.key(+s: sc.S) -> IO(sc.S):
+  sc.words.key.go(sc.dict.word(s), s)
+
+# what a change said: the words changed, those left
+def sc.words.said(+x: Sp.sp.Dx, +did: String, +left: String) -> String:
+  +d = Sp.sp.dx.done(x)
+  +l = Sp.sp.dx.left(x)
+  +a = Bool.pick(String, List.is_empty(&2, String, d), "", did ++ String.join(d, ", "))
+  +b = Bool.pick(String, List.is_empty(&2, String, l), "", Bool.pick(String, List.is_empty(&2, String, d), "", " \u{b7} ") ++ left ++ String.join(l, ", "))
+  a ++ b
+
+def sc.words.change(none: Bool, +s: sc.S, +x: Sp.sp.Dx, +say: String) -> IO(sc.S):
+  match none:
+    case True{}:
+      IO.pure(sc.S, sc.say(s, say))
+    case False{}:
+      sc.words.save(s, x, say)
+
+def sc.words.apply(+s: sc.S, +x: Sp.sp.Dx, +say: String) -> IO(sc.S):
+  sc.words.change(List.is_empty(&2, String, Sp.sp.dx.done(x)), s, x, say)
+
+# a change made, if the file was read (else none: it would be lost)
+def sc.words.edit(ok: Bool, +s: sc.S, +x: Sp.sp.Dx, +say: String, +why: String) -> IO(sc.S):
+  match ok:
+    case True{}:
+      sc.words.apply(s, x, say)
+    case False{}:
+      IO.pure(sc.S, sc.say(s, "~/.hunspell_en_US can't be read (" ++ why ++ "), so it is left as it is"))
+
+# /words's page: your words, or how to have some
+def sc.words.page(+dr: sc.Dr) -> String:
+  +ws = Sp.sp.dict.words(sc.dict.lines(dr))
+  +n = List.length(&2, String, ws)
+  Bool.pick(String, Bool.not(sc.dr.ok(dr)), "Your words: `~/.hunspell_en_US` can't be read (" ++ sc.dr.why(dr) ++ ").",
+    Bool.pick(String, Nat.is_eq(n, 0n), "No words of yours yet. `M-a` on a red word adds it, `/words add WORD\u{2026}` any word; they go in `~/.hunspell_en_US`.",
+      "## Your words (" ++ Nat.show(n) ++ ", in ~/.hunspell_en_US)\n" ++ String.join(ws, ", ") ++ "\n\n`M-a` on one of them takes it out, as `/words rm WORD\u{2026}` does."))
+
+# /words: 0 the list, 1 add, 2 rm, 3 neither
+def sc.words.cmd.go(k: Nat, +s: sc.S, +ws: List<&2, String>, +dr: sc.Dr) -> IO(sc.S):
+  match k:
+    case 0n:
+      IO.pure(sc.S, sc.add(s, "", "help", sc.words.page(dr), False{}))
+    case 1n:
+      +x = Sp.sp.dict.add(ws, Sp.sp.dx.new(sc.dict.lines(dr)))
+      sc.words.edit(sc.dr.ok(dr), s, x, sc.words.said(x, "\u{2713} added to your words: ", "already yours (or no word): "), sc.dr.why(dr))
+    case 2n:
+      +x = Sp.sp.dict.rm(ws, Sp.sp.dx.new(sc.dict.lines(dr)))
+      sc.words.edit(sc.dr.ok(dr), s, x, sc.words.said(x, "taken out of your words: ", "not yours: "), sc.dr.why(dr))
+    case _:
+      IO.pure(sc.S, sc.say(s, "/words alone lists your words; /words add WORD\u{2026} and /words rm WORD\u{2026} change them"))
+
+def sc.nonempty(xs: List<&2, String>) -> List<&2, String>:
+  match xs:
+    case []:
+      []
+    case +x <> rest:
+      List.append(&2, String, Bool.pick(List<&2, String>, String.is_empty(x), [], [x]), sc.nonempty(rest))
+
+# /words [add|rm WORD...]
+def sc.words.cmd(+s: sc.S, +arg: String) -> IO(sc.S):
+  +ts = sc.nonempty(String.split(arg, ' '))
+  +verb = Maybe.default(&2, String, List.get(&2, String, ts, 0n), "")
+  +ws = List.drop(&2, String, ts, 1n)
+  +some = Bool.not(List.is_empty(&2, String, ws))
+  +k = Bool.pick(Nat, List.is_empty(&2, String, ts), 0n, Bool.pick(Nat, Bool.and(some, String.eq(verb, "add")), 1n, Bool.pick(Nat, Bool.and(some, String.eq(verb, "rm")), 2n, 3n)))
+  IO.bind(Result<&1, &1, U32 & String, String>, sc.S, S.mu.read_file(sc.dict.path(s)), r => sc.words.cmd.go(k, s, ws, sc.dict.got(r)))
+
 # Enter: a "\" before the cursor at the text's end is a new line; an empty
-# text, nothing; /mouse, /image and /spell are the screen's; else sent
+# text, nothing; /mouse, /image, /spell and /words are the screen's; else sent
 def sc.enter.k(+s: sc.S) -> Nat:
   +e = sc.ed(s)
   +t = D.ed.text(e)
   Bool.pick(Nat, Bool.and(String.is_empty(D.ed.post(e)), String.starts_with(D.ed.pre(e), "\\")), 0n,
     Bool.pick(Nat, String.is_empty(String.trim(t)), 1n, Bool.pick(Nat, String.eq(String.trim(t), "/mouse"), 2n, Bool.pick(Nat, sc.img.is(t), 4n,
-      Bool.pick(Nat, String.eq(sc.cmd.word(t), "/spell"), 5n, 3n)))))
+      Bool.pick(Nat, String.eq(sc.cmd.word(t), "/spell"), 5n, Bool.pick(Nat, String.eq(sc.cmd.word(t), "/words"), 6n, 3n))))))
 
 # /spell [on|off]: the spellcheck on or off (alone: switched)
 def sc.spell.cmd(+s: sc.S, +arg: String) -> sc.S:
   +sp = sc.sp(s)
   +on = Bool.pick(Bool, String.eq(arg, "on"), True{}, Bool.pick(Bool, String.eq(arg, "off"), False{}, Bool.not(Sp.sp.on(sp))))
   +ok = Bool.or(String.is_empty(arg), Bool.or(String.eq(arg, "on"), String.eq(arg, "off")))
-  +say = Bool.pick(String, on, "spellcheck on: point at a red-underlined word, or put the cursor on it, for suggestions \u{b7} M-s fixes it, M-S all", "spellcheck off (/spell on brings it back)")
+  +say = Bool.pick(String, on, "spellcheck on: point at a red-underlined word, or put the cursor on it, for suggestions \u{b7} M-s fixes it, M-S all, M-a adds it to your words", "spellcheck off (/spell on brings it back)")
   Bool.pick(sc.S, ok, sc.dirty(sc.with.hint(sc.with.sp(s, Sp.sp.with.on(sp, on)), say), 2), sc.dirty(sc.with.hint(s, "/spell takes on or off"), 1))
 
 def sc.enter(k: Nat, +s: sc.S) -> IO(sc.S):
@@ -1722,6 +1904,9 @@ def sc.enter(k: Nat, +s: sc.S) -> IO(sc.S):
     case 5n:
       +t = String.trim(D.ed.text(sc.ed(s)))
       IO.pure(sc.S, sc.spell.cmd(sc.with.ed(s, D.ed.sent(sc.ed(s))), String.trim(String.drop(t, 6n))))
+    case 6n:
+      +t = String.trim(D.ed.text(sc.ed(s)))
+      sc.words.cmd(sc.with.ed(s, D.ed.sent(sc.ed(s))), String.trim(String.drop(t, 6n)))
     case _:
       sc.sent(s, D.ed.text(sc.ed(s)))
 
@@ -1742,6 +1927,30 @@ def sc.tab(+s: sc.S) -> sc.S:
   +e = D.ed.complete(sc.ed(s))
   +ms = D.ed.matches(e)
   sc.dirty(sc.with.hint(sc.with.ed(s, e), Bool.pick(String, Nat.is_gt(List.length(&2, String, ms), 1n), String.join(ms, "  "), "")), 1)
+
+# Tab after /words rm: a word of yours completed (the text's last word)
+def sc.tab.words(+s: sc.S, +ws: List<&2, String>) -> sc.S:
+  +e = sc.ed(s)
+  +t = D.ed.text(e)
+  +p = Maybe.default(&2, String, List.get(&2, String, List.reverse(&2, String, String.split(t, ' ')), 0n), "")
+  +head = String.take(t, Nat.sub(String.length(t), String.length(p)))
+  +ms = D.ed.starting(ws, p)
+  +n = List.length(&2, String, ms)
+  +first = Maybe.default(&2, String, List.get(&2, String, ms, 0n), p)
+  +t2 = Bool.pick(String, Nat.is_eq(n, 0n), t, head ++ Bool.pick(String, Nat.is_eq(n, 1n), first ++ " ", D.ed.prefix(ms, first)))
+  +say = Bool.pick(String, Nat.is_gt(n, 1n), String.join(ms, "  "), Bool.pick(String, Nat.is_eq(n, 0n), "no word of yours starts with " ++ sc.quote(p), ""))
+  sc.say(sc.with.ed(s, D.ed.set(e, t2)), say)
+
+# Tab: 1 after /words rm (the file read), 0 any other
+def sc.tab.k(+s: sc.S) -> Nat:
+  Bool.pick(Nat, String.starts_with(D.ed.text(sc.ed(s)), "/words rm "), 1n, 0n)
+
+def sc.tab.go(k: Nat, +s: sc.S) -> IO(sc.S):
+  match k:
+    case 1n:
+      IO.bind(Result<&1, &1, U32 & String, String>, sc.S, S.mu.read_file(sc.dict.path(s)), r => IO.pure(sc.S, sc.tab.words(s, Sp.sp.dict.words(sc.dict.lines(sc.dict.got(r))))))
+    case _:
+      IO.pure(sc.S, sc.tab(s))
 
 def sc.blk.n.of(bs: List<&2, sc.Blk>, +id: U32) -> U32:
   match bs:
@@ -1784,8 +1993,8 @@ def sc.all(+s: sc.S) -> sc.S:
 # nothing, 18 a drag, 19 a let go, 20 Up on an empty input with messages
 # waiting, 21 M-Left and 22 M-Right with tabs shown, 23 M-s, 24 M-S, 25 M-1
 # to M-9 (the spellcheck's), 27 Shift-Tab (plan or auto), 28 the mouse moved
-# (no button held). While searching, Enter, C-g, Esc and Shift-Tab are the
-# search's.
+# (no button held), 29 M-a (a word to your words, or out), 30 M-? (/help).
+# While searching, Enter, C-g, Esc and Shift-Tab are the search's.
 def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool) -> Nat:
   match key:
     case K.ky.Nav{1, m}:
@@ -1832,6 +2041,10 @@ def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool)
       23n
     case K.ky.Meta{83}:
       24n
+    case K.ky.Meta{97}:
+      29n
+    case K.ky.Meta{63}:
+      30n
     case K.ky.Meta{+c}:
       Bool.pick(Nat, P.pp.in(c, 49, 57), 25n, 0n)
     case K.ky.Mouse{35, x, y, up}:
@@ -1976,17 +2189,20 @@ def sc.click.go(k: Nat, +s: sc.S, +sl: sc.Sl, +x: U32, +y: U32) -> IO(sc.S):
       IO.pure(sc.S, sc.dirty(sc.with.sp(s, Sp.sp.with.shut(Sp.sp.with.mx(sc.sp(s), sc.word.at(sl, x, y)), 0n)), 1))
     case 3n:
       IO.pure(sc.S, s)
+    case 4n:
+      sc.words.key(s)
     case _:
       Bool.pick(IO(sc.S), U32.is_eq(y, sc.status.y(s)), IO.pure(sc.S, sc.dirty(sc.tab.click(s, x), 2)),
         IO.pure(sc.S, sc.click.at(Bool.pick(Nat, Bool.and(U32.is_eq(y, 1), Bool.not(U32.is_eq(sc.sel.pin(sc.z(s)), 0))), 1n, 0n), s, y)))
 
 # what a click is: 1 on a suggestion in the box, 2 on a misspelled word
 # of the input (its box opens: a phone has no pointer), 3 on the box's
-# keys (nothing), 0 any other (sc.up)
+# keys (nothing), 4 on its + add row (M-a), 0 any other (sc.up)
 def sc.click.k(+sl: sc.Sl, +x: U32, +y: U32) -> Nat:
   +b = sc.sl.box(sl)
   +i = (y - U32.min(y, sc.bx.y(b)) : U32)
-  Bool.pick(Nat, sc.bx.on(b, x, y), Bool.pick(Nat, U32.is_lt((i + 1 : U32), sc.bx.n(b)), 1n, 3n),
+  +n = sc.bx.n(b)
+  Bool.pick(Nat, sc.bx.on(b, x, y), Bool.pick(Nat, U32.is_lt((i + 2 : U32), n), 1n, Bool.pick(Nat, U32.is_eq((i + 2 : U32), n), 4n, 3n)),
     Bool.pick(Nat, Nat.is_eq(sc.word.at(sl, x, y), 0n), 0n, 2n))
 
 def sc.up(k: Nat, +s: sc.S, +x: U32, +y: U32) -> IO(sc.S):
@@ -2073,7 +2289,7 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
     case 8n:
       sc.esc.or(Bool.not(List.is_empty(&2, String, sc.bx.rows(sc.low.box(sc.low(s))))), s)
     case 9n:
-      IO.pure(sc.S, sc.tab(s))
+      sc.tab.go(sc.tab.k(s), s)
     case 10n:
       IO.pure(sc.S, sc.scroll(s, True{}, sc.page(s)))
     case 11n:
@@ -2108,6 +2324,10 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
       sc.mode.flip(s)
     case 28n:
       IO.pure(sc.S, sc.hover(s, sc.mouse.x(key), sc.mouse.y(key)))
+    case 29n:
+      sc.words.key(s)
+    case 30n:
+      IO.bind(Unit, sc.S, sc.send(s, "/help"), u => IO.pure(sc.S, sc.dirty(sc.with.off(sc.with.hint(s, ""), 0), 2)))
     case _:
       IO.pure(sc.S, s)
 
