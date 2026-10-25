@@ -214,12 +214,15 @@ def tl.chomp(+s: String) -> String:
 # Shell ---------------------------------------------------------------------
 
 # $1 the pid file, $2 the dir, $3 the shell, $4 the command, $5 the output,
-# $6 the exit code's file, $7 the list of groups: the job, a pipeline in a
-# group of its own (set -m) led by an sh that names it, runs $SHELL -c on
-# "exec 2>&1" and the command, and keeps its status; cat takes the output
-# till all that holds it ends
+# $6 the exit code's file, $7 the list of groups. It runs under setsid (a
+# session of its own, so its group is the job's, and no terminal: nothing in
+# it can take mugen's, read its keys or draw over the screen; a prompt for a
+# password fails at once). It names itself, then a pipeline: an sh runs
+# $SHELL -c on "exec 2>&1" and the command and keeps its status; cat takes
+# the output till all that holds it ends. No job control (`set -m`), which
+# under dash gives the shell the terminal (issue #1)
 def tl.shell.script() -> String:
-  "set -m\ncd \"$2\" || exit 125\nsh -c 'echo $$ > \"$1\"; echo \"$$ $(cut -d\\  -f22 /proc/$$/stat 2> /dev/null)\" >> \"$5\"; \"$2\" -c \"exec 2>&1\n$3\" < /dev/null; echo $? > \"$4\"' sh \"$1\" \"$3\" \"$4\" \"$6\" \"$7\" 2>&1 | cat > \"$5\" &\nwait $!"
+  "cd \"$2\" || exit 125\necho $$ > \"$1\"\necho \"$$ $(cut -d' ' -f22 /proc/$$/stat 2> /dev/null)\" >> \"$7\"\nsh -c '\"$0\" -c \"exec 2>&1\n$1\" < /dev/null; echo $? > \"$2\"' \"$3\" \"$4\" \"$6\" 2>&1 | cat > \"$5\""
 
 def tl.text.of(r: Result<&1, &1, U32 & String, String>) -> String:
   match r:
@@ -280,7 +283,7 @@ def tl.shell(+env: tl.Env, +cwd: String, +command: String) -> IO(E.ev.Out):
         r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(code)
         r0 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".cut")
         t0 : Nat <- IO.now()
-        o : S.mu.Out <- S.mu.run("sh", ["-c", tl.shell.script(), "sh", ctl ++ ".pid", cwd, shell, command, out, code, groups], "", 65536, 4294967295)
+        o : S.mu.Out <- S.mu.run("setsid", ["-w", "sh", "-c", tl.shell.script(), "sh", ctl ++ ".pid", cwd, shell, command, out, code, groups], "", 65536, 4294967295)
         t1 : Nat <- IO.now()
         un : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".pid")
         +units : Nat <- IO.bind(Result<&1, &1, U32 & String, Nat>, Nat, S.mu.units(out), r => IO.pure(Nat, tl.nat.of(r)))

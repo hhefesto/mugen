@@ -686,6 +686,40 @@ static void __attribute__((constructor)) mu_pid_use(void) {
 }
 #endif
 
+// mu.fg(): who holds the terminal on stdin, asked after a read of it
+// failed. 0 our own process group (the failure is something else); 1 a
+// group with no process left (one that took the terminal died with it):
+// taken back; 2 another living group (a shell with job control gave it to
+// itself or a job, and gives it back when that ends); 3 no terminal any
+// more (hung up, closed). Taking it back is tcsetpgrp from what is now a
+// background group, so SIGTTOU is held off meanwhile.
+#ifdef CID(mu.fg)
+Term mu_fg_run(Env e, Term* f, IoWork* w) {
+  pid_t fg = tcgetpgrp(0);
+  if (fg < 0) {
+    return (Term)(u32)3;
+  }
+  pid_t me = getpgrp();
+  if (fg == me) {
+    return (Term)(u32)0;
+  }
+  if (kill(-fg, 0) == 0 || errno == EPERM) {
+    return (Term)(u32)2;
+  }
+  sigset_t ttou, old;
+  sigemptyset(&ttou);
+  sigaddset(&ttou, SIGTTOU);
+  pthread_sigmask(SIG_BLOCK, &ttou, &old);
+  int r = tcsetpgrp(0, me);
+  pthread_sigmask(SIG_SETMASK, &old, NULL);
+  return (Term)(u32)(r == 0 ? 1 : 3);
+}
+
+static void __attribute__((constructor)) mu_fg_use(void) {
+  io_eff(CID(mu.fg), mu_fg_run);
+}
+#endif
+
 // mu.exec(program, args): this process becomes program (looked up on PATH)
 // with args, its terminal and environment kept, SIGPIPE back to its default
 // (the runtime ignores it); answers only if that failed: the errno.

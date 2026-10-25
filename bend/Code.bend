@@ -379,7 +379,9 @@ def cc.once(+c: cc.Cfg, +id: String, +effort: String, +system: String, +blocks: 
 # a watchdog in it kills the group if mugen dies; the groups file has its
 # start time too, /proc/PID/stat's field 22, so that no other group that
 # took its number is killed). Once it is gone the wrapper adds a last line
-# (cc.gone) with its exit status.
+# (cc.gone) with its exit status. The wrapper is bash's: its `set -m` gives
+# the call a group of its own and leaves the terminal to mugen, where dash's
+# takes the terminal for itself (issue #1)
 #
 #   $0 ctl, $1 run/groups, $2 the work dir, the rest env's arguments
 
@@ -396,4 +398,4 @@ def cc.mcp(+ctl: String) -> String:
 
 # the call started in the background: env's arguments
 def cc.start(+c: cc.Cfg, +ctl: String, +cwd: String, args: List<String>) -> IO(S.mu.Out):
-  S.mu.run("sh", List.append(&1, String, ["-c", cc.launch(), ctl, cc.cfg.run(c) ++ "/groups", cwd, "env"], args), "", 65536, 30000)
+  S.mu.run("bash", List.append(&1, String, ["-c", cc.launch(), ctl, cc.cfg.run(c) ++ "/groups", cwd, "env"], args), "", 65536, 30000)

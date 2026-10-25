@@ -68,12 +68,15 @@
           bend = bendFor pkgs;
           mugen-unwrapped = bendBinary pkgs "mugen" "Main.bend";
           # the app: curl (>= 8.3, for --variable), coreutils and hunspell
-          # (with en_US, for the spellcheck) on its PATH. The terminal is all
-          # mugen's own (bend/Screen.bend: the input, its keys and history, the
-          # screen), so the wrapper only sets PATH.
+          # (with en_US, for the spellcheck) on its PATH; after the PATH it
+          # had, bash (Claude Code's launch, the watchdog) and util-linux
+          # (setsid, for the shell tool), where the system has none. The
+          # terminal is all mugen's own (bend/Screen.bend: the input, its keys
+          # and history, the screen), so the wrapper only sets PATH.
           mugen = pkgs.runCommand "mugen" { nativeBuildInputs = [ pkgs.makeWrapper ]; } ''
             makeWrapper ${self.packages.${system}.mugen-unwrapped}/bin/mugen $out/bin/mugen \
-              --prefix PATH : ${lib.makeBinPath [ pkgs.curl pkgs.coreutils (hunspellFor pkgs) ]}
+              --prefix PATH : ${lib.makeBinPath [ pkgs.curl pkgs.coreutils (hunspellFor pkgs) ]} \
+              --suffix PATH : ${lib.makeBinPath [ pkgs.bash pkgs.util-linux ]}
           '';
           default = self.packages.${system}.mugen;
           # the Bend sides of the differential tests (tools/memdiff)
@@ -135,6 +138,7 @@
                   pkgs.jq
                   pkgs.procps
                   pkgs.diffutils
+                  pkgs.util-linux
                 ];
               }
               ''
@@ -150,7 +154,10 @@
           goldens =
             pkgs.runCommand "goldens"
               {
-                nativeBuildInputs = [ pkgs.bun ];
+                nativeBuildInputs = [
+                  pkgs.bun
+                  pkgs.util-linux
+                ];
               }
               ''
                 export HOME=$TMPDIR UNII_DIR=$TMPDIR/unii

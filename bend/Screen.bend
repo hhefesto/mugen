@@ -2505,6 +2505,25 @@ def sc.keys(ks: List<&2, K.ky.Key>, +at: Nat, +me: Chan(sc.In)) -> IO(Unit):
     case k <> rest:
       IO.bind(Result<&1, &1, sc.In, Unit>, Unit, Chan.send(sc.In, me, sc.Key{k, at}), r => sc.keys(rest, at, me))
 
+# after a read failed: 0 the end, 1 read again, 2 read again in a while.
+# The terminal held by another process group (a shell with job control that
+# took it, as dash's `set -m` does) or a read cut short (EINTR, EAGAIN) is
+# no end: only a terminal gone is (mu.fg 3), or a failure while ours (0)
+def sc.read.k(+fg: U32, +code: U32) -> Nat:
+  Bool.pick(Nat, U32.is_eq(fg, 1), 1n,
+    Bool.pick(Nat, Bool.or(U32.is_eq(fg, 2), Bool.and(U32.is_eq(fg, 0), Bool.or(U32.is_eq(code, 4), U32.is_eq(code, 11)))), 2n, 0n))
+
+# the read after a failed one (k as sc.read.k gives it): an empty one, the
+# end, for 0
+def sc.read.again(k: Nat, file: File) -> IO(File & Result<&1, &1, U32 & String, String>):
+  match k:
+    case 0n:
+      IO.pure(File & Result<&1, &1, U32 & String, String>, (file, Done{""}))
+    case 1n:
+      File.read(file, 65536)
+    case _:
+      IO.bind(Unit, File & Result<&1, &1, U32 & String, String>, IO.sleep(100), u => File.read(file, 65536))
+
 def sc.read(fuel: Nat, +me: Chan(sc.In), st: K.ky.St, r: File & Result<&1, &1, U32 & String, String>) -> IO(Unit):
   match fuel r:
     case 1n+f Tuple{file, Done{SCon{h, t}}}:
@@ -2514,6 +2533,11 @@ def sc.read(fuel: Nat, +me: Chan(sc.In), st: K.ky.St, r: File & Result<&1, &1, U
         Unit <- sc.keys(K.ky.out.keys(o), now, me)
         r2 : File & Result<&1, &1, U32 & String, String> <- File.read(file, 65536)
         sc.read(f, me, K.ky.out.st(o), r2)
+    case 1n+f Tuple{file, Fail{(code, text)}}:
+      do IO<Unit>:
+        v : U32 <- S.mu.fg()
+        r2 : File & Result<&1, &1, U32 & String, String> <- sc.read.again(sc.read.k(v, code), file)
+        sc.read(f, me, st, r2)
     case _ Tuple{file, _}:
       do IO<Unit>:
         x : Result<&1, &1, sc.In, Unit> <- Chan.send(sc.In, me, sc.Eof{})

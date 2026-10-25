@@ -2086,7 +2086,8 @@ def hb.kill.groups(+path: String) -> IO(Unit):
   IO.bind(Result<&1, &1, U32 & String, String>, Unit, S.mu.read_file(path), r => hb.kill.all(String.lines(L.tl.text.of(r))))
 
 # a watchdog of mugen's: once mugen is gone, by any way, the groups it
-# started are killed as above, within a second ($0 run/groups)
+# started are killed as above, within a second ($0 run/groups). Run by
+# bash, as cc.launch is: dash's `set -m` takes the terminal (issue #1)
 def hb.watch() -> String:
   "set -m\nm=$PPID g=$0\n(\n  trap '' HUP INT TERM\n  while kill -0 \"$m\" 2> /dev/null; do sleep 1; done\n  while read -r p t; do\n    [ -n \"$p\" ] || continue\n    s=$(cut -d' ' -f22 \"/proc/$p/stat\" 2> /dev/null)\n    [ -z \"$s\" ] || [ -z \"$t\" ] || [ \"$s\" = \"$t\" ] || continue\n    kill -KILL -\"$p\" 2> /dev/null\n  done < \"$g\"\n) < /dev/null > /dev/null 2>&1 &\n"
 
@@ -2259,7 +2260,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     Unit <- hb.kill.groups(groups)
     +mem : M.me.Mem <- M.me.load(dir, hb.cfg.sync(c), hb.cfg.jobs(c))
     Unit <- S.mu.must(Unit, "run/groups", S.mu.save(groups, "", 0))
-    wd : S.mu.Out <- S.mu.run("sh", ["-c", hb.watch(), groups], "", 4096, 10000)
+    wd : S.mu.Out <- S.mu.run("bash", ["-c", hb.watch(), groups], "", 4096, 10000)
     +inbox : Chan(E.ev.Ev) <- Chan.new(E.ev.Ev, 4096)
     +junk : Chan(String) <- Chan.new(String, 1)
     +pick : A.ap.Pick = hb.pick.of(M.me.kept.pick(M.me.kept(mem)), chat)

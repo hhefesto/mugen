@@ -2,6 +2,23 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.8.2 (2026-10-25)
+
+- mugen no longer quits at a key or a click while a shell tool runs where
+  `sh` is dash (Ubuntu, Debian; issue #1). Under dash, `set -m` in the
+  shell tool's wrapper took mugen's terminal, mugen's next read of it
+  failed, and that was taken for the end of input. The shell tool now runs
+  without job control under `setsid`: a session of its own, so stopping
+  it still kills all of it, and no terminal, so nothing it runs can take
+  mugen's, read its keys or draw over the screen (a prompt for a password
+  fails at once instead of waiting). Claude Code's launch and the watchdog
+  keep `set -m`, run by bash. And a failed read of the terminal ends
+  mugen only when the terminal is gone: while another process group holds
+  it, mugen waits for it back (the keys typed meanwhile come then), and
+  takes it back if that group died holding it. The Nix package puts bash
+  and util-linux (`setsid`) after the PATH it is given, for systems
+  without them.
+
 ## 0.8.1 (2026-10-24)
 
 - A markdown table in a reply is drawn as a table: box lines, each column

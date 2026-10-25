@@ -103,6 +103,12 @@ def mu.winsize() -> IO(U32):
 def mu.pid() -> IO(U32):
   import "./effs/mu.c"
 
+# who holds the terminal, asked after a read of it failed: 0 we do, 1 a
+# group that died held it (taken back), 2 another living group (a shell's
+# job control: wait), 3 no terminal any more
+def mu.fg() -> IO(U32):
+  import "./effs/mu.c"
+
 # Results -------------------------------------------------------------------
 
 # a fallible effect's answer, or exit 1 with "mugen: <what>: <error>"
