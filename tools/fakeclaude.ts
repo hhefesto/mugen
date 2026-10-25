@@ -19,10 +19,11 @@ if (argv.includes("--version")) {
   console.log("2.1.304 (Claude Code, fake)");
   process.exit(0);
 }
-// `auth status` signed in, unless MUGEN_FAKE_SIGNED_OUT; `auth login` says so
+// `auth status` signed in, unless MUGEN_FAKE_SIGNED_OUT; `auth login` and
+// `auth logout` say so
 if (argv[0] === "auth") {
   const out = !!process.env.MUGEN_FAKE_SIGNED_OUT;
-  console.log(argv[1] === "status" ? JSON.stringify({ loggedIn: !out, authMethod: out ? "none" : "claude.ai" }) : "fake login: " + argv.slice(1).join(" "));
+  console.log(argv[1] === "status" ? JSON.stringify({ loggedIn: !out, authMethod: out ? "none" : "claude.ai" }) : "fake " + argv.slice(1).join(" "));
   process.exit(argv[1] === "status" && out ? 1 : 0);
 }
 const flag = (name: string) => {

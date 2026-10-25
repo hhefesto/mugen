@@ -1,0 +1,11 @@
+#!/bin/sh
+# `mugen login` says who is signed in now, if anyone, then becomes `claude
+# auth login`; `mugen logout` becomes `claude auth logout`, alone only.
+# What they print goes to account.out (the fake's path is in it), for check
+[ "$MUGEN_WIRE" = api ] && exit 0
+{
+  timeout 60 "$MUGEN" login; echo "exit $?"
+  MUGEN_FAKE_SIGNED_OUT=1 timeout 60 "$MUGEN" login; echo "exit $?"
+  timeout 60 "$MUGEN" logout; echo "exit $?"
+  timeout 60 "$MUGEN" logout now | head -1; echo "exit $?"
+} > account.out 2>&1

@@ -2,6 +2,20 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.9.0 (2026-10-25)
+
+- `mugen logout` signs Claude Code out (`claude auth logout`). `mugen
+  login` first says who is signed in now, if anyone (the email, the plan),
+  and that signing in again switches to the account you sign in with
+  (issue #2).
+- Copying a selection outside tmux also sends it to the terminal's own
+  clipboard, as an OSC 52, so copying works where there is no xclip or no
+  X: Windows Terminal (WSL; issue #2), kitty, WezTerm, foot, iTerm2, and
+  over ssh. The line under the chat says `✓ sent 3 lines to the
+  terminal's clipboard` when that is the only place it went (a terminal
+  that refuses OSC 52 gives no sign). In tmux, tmux's buffer carries it to
+  the terminal as before.
+
 ## 0.8.2 (2026-10-25)
 
 - mugen no longer quits at a key or a click while a shell tool runs where

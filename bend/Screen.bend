@@ -1237,9 +1237,12 @@ def sc.sel.show(+z: sc.Sel, +rows: List<&2, String>) -> List<&2, String>:
   sc.sel.show.go(Bool.pick(Nat, Bool.and(sc.sel.on(z), sc.sel.moved(z)), 1n, 0n), z, rows)
 
 # copying: X's clipboard (xclip), tmux's buffer (and so the terminal's, by
-# OSC 52); whichever is there. It says where it went: x X's, t tmux's.
+# OSC 52), or outside tmux the terminal's own, by an OSC 52 of ours (a
+# terminal that takes it, as Windows Terminal, kitty, WezTerm, foot, iTerm2
+# do, and over ssh too: issue #2); whichever is there. It says where it
+# went: x X's, t tmux's, o the terminal's (sent, not known taken).
 def sc.clip() -> String:
-  "t=$(cat); r=; if [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null && printf %s \"$t\" | xclip -selection clipboard >/dev/null 2>&1; then r=x; fi; if [ -n \"$TMUX\" ] && printf %s \"$t\" | tmux load-buffer -w - >/dev/null 2>&1; then r=${r}t; fi; printf %s \"$r\""
+  "t=$(cat); r=; if [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null && printf %s \"$t\" | xclip -selection clipboard >/dev/null 2>&1; then r=x; fi; if [ -n \"$TMUX\" ]; then if printf %s \"$t\" | tmux load-buffer -w - >/dev/null 2>&1; then r=${r}t; fi; elif { printf '\\033]52;c;%s\\a' \"$(printf %s \"$t\" | base64 | tr -d '\\n')\" > /dev/tty; } 2>/dev/null; then r=${r}o; fi; printf %s \"$r\""
 
 def sc.cursor(+r: U32, +c: U32) -> String:
   "\u{1B}[" ++ U32.show(r) ++ ";" ++ U32.show((c + 1 : U32)) ++ "H"
@@ -2100,14 +2103,16 @@ def sc.click.at(k: Nat, +s: sc.S, +y: U32) -> sc.S:
       sc.click(s, y)
 
 # what a copy says under the chat, from where sc.clip put it (x X's
-# clipboard, t tmux's buffer, none nowhere)
+# clipboard, t tmux's buffer, o the terminal's by OSC 52, none nowhere)
 def sc.copied(+n: Nat, +to: String) -> String:
   +what = Nat.show(n) ++ Bool.pick(String, Nat.is_eq(n, 1n), " line", " lines")
   +x = String.contains(to, "x")
   +t = String.contains(to, "t")
-  Bool.pick(String, Bool.or(x, t),
-    P.pp.paint("1;32", "\u{2713} copied " ++ what ++ Bool.pick(String, x, " to the clipboard", " to tmux's buffer (the terminal's clipboard too, if it takes OSC 52)")),
-    P.pp.paint("1;31", "\u{2717} not copied: no X display for xclip, and no tmux"))
+  +o = String.contains(to, "o")
+  Bool.pick(String, Bool.or(Bool.or(x, t), o),
+    P.pp.paint("1;32", Bool.pick(String, Bool.or(x, t), "\u{2713} copied " ++ what ++ Bool.pick(String, x, " to the clipboard", " to tmux's buffer (the terminal's clipboard too, if it takes OSC 52)"),
+      "\u{2713} sent " ++ what ++ " to the terminal's clipboard (by OSC 52, if it takes it)")),
+    P.pp.paint("1;31", "\u{2717} not copied: no X display for xclip, no tmux, no terminal"))
     ++ P.pp.paint("2", " \u{b7} Shift-drag selects with the terminal")
 
 def sc.copied.of(o: S.mu.Out, +n: Nat) -> String:

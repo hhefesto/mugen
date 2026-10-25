@@ -26,6 +26,7 @@ mugen runs on one of two backends:
 ```sh
 # On Claude Code's CLI (the default), signed in with a Claude plan
 mugen login                          # once: runs `claude auth login`
+mugen logout                         # signs it out (`claude auth logout`)
 mugen                                # or `nix run github:hhefesto/mugen`
 
 # On the Messages API, with an API key
@@ -38,6 +39,9 @@ mugen --version                      # e.g. `mugen 0.1.0`
 mugen checks that Claude Code is signed in when it starts, and if it isn't,
 says to run `mugen login`. If the sign-in lapses during a chat, run
 `mugen login` in another window; the chat goes on with the next message.
+To switch accounts, run `mugen login` again: it says who is signed in now,
+and the account you sign in with takes its place (`mugen logout` signs out
+first, if you'd rather).
 
 - **Claude Code (default).** mugen drives the official `claude` CLI in
   headless mode (`claude -p`), so it runs on a Pro or Max plan's login.
@@ -144,7 +148,10 @@ Keys:
   `hunspell` and `en_US` on the PATH, and says once if it can't run it.
 - The mouse is mugen's: drag over the chat to select text (shown reversed;
   letting go copies it to the clipboard by xclip, and to tmux's buffer, and
-  says so under the chat: `✓ copied 3 lines to the clipboard`).
+  says so under the chat: `✓ copied 3 lines to the clipboard`). Outside
+  tmux it also sends the text to the terminal's own clipboard by OSC 52,
+  which Windows Terminal (so WSL), kitty, WezTerm, foot and iTerm2 take,
+  over ssh too.
   `Shift`-drag is the terminal's own selection; `/mouse` hands the mouse
   to the terminal (and back).
 - Agents: while subagents work, tabs follow the status line (`all`,

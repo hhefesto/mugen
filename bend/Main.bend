@@ -11,7 +11,8 @@ import ./Code.bend as C
 # mugen: one chat with an AI that never ends, in the terminal (UniiChat, in
 # Bend). It runs on Claude Code's CLI (`claude -p`, the login of a Claude
 # plan), or with --api on the Messages API (an API key); `mugen login` signs
-# Claude Code in (claude auth login). Its settings come from the
+# Claude Code in (claude auth login), to another account too, and `mugen
+# logout` signs it out. Its settings come from the
 # environment:
 #
 #   ANTHROPIC_API_KEY     with --api, the API key (curl reads it; it is never
@@ -71,18 +72,19 @@ def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -
 # and prompts the model sees, the files under ~/.mugen, the wires to the
 # API or Claude Code), and only then; see AGENTS.md, Versions
 def mn.version() -> String:
-  "0.8.2"
+  "0.9.0"
 
 def mn.usage() -> String:
-  "usage: mugen [--api | login | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login)\n  mugen --version  says mugen's version"
+  "usage: mugen [--api | login | logout | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login), or to another account\n  mugen logout signs Claude Code out (claude auth logout)\n  mugen --version  says mugen's version"
 
 # what the arguments ask: 0 Claude Code, 1 the API (--api), 2 the usage
 # (anything else), 3 a sign-in (login, alone), 4 the version (--version or
-# -V, alone)
+# -V, alone), 5 a sign-out (logout, alone)
 def mn.flag(+v: U32, +x: String) -> U32:
   Bool.pick(U32, String.eq(x, "--api"), Bool.pick(U32, U32.is_ge(v, 3), 2, U32.max(v, 1)),
     Bool.pick(U32, String.eq(x, "login"), Bool.pick(U32, U32.is_eq(v, 0), 3, 2),
-      Bool.pick(U32, Bool.or(String.eq(x, "--version"), String.eq(x, "-V")), Bool.pick(U32, U32.is_eq(v, 0), 4, 2), 2)))
+      Bool.pick(U32, String.eq(x, "logout"), Bool.pick(U32, U32.is_eq(v, 0), 5, 2),
+        Bool.pick(U32, Bool.or(String.eq(x, "--version"), String.eq(x, "-V")), Bool.pick(U32, U32.is_eq(v, 0), 4, 2), 2))))
 
 def mn.flags(xs: List<String>, +v: U32) -> U32:
   match xs:
@@ -170,18 +172,42 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), tty, mn.nat(jobs, 48), mn.nat(sync, 1), home, acct, screen}
     H.hb.start(cfg, mn.pick(pick))
 
-# `mugen login`: this process becomes Claude Code's sign-in, on the
-# terminal (no API key, which would take its place)
+# the account Claude Code is signed in with: its email (else "an
+# account"), its plan
+def mn.who(+j: J.Json) -> String:
+  +email = Maybe.default(&2, String, J.js.str(j, "email"), "")
+  +plan = Maybe.default(&2, String, J.js.str(j, "subscriptionType"), "")
+  Bool.pick(String, String.is_empty(email), "an account", email)
+    ++ Bool.pick(String, String.is_empty(plan), "", " (" ++ String.to_upper(String.take(plan, 1n)) ++ String.drop(plan, 1n) ++ " plan)")
+
+# before a sign-in, who is signed in now, if anyone: a line ("" no one)
+def mn.login.now(o: S.mu.Out) -> String:
+  match o:
+    case S.mu.Out{status, +out, err}:
+      Bool.pick(String, Nat.is_eq(mn.signed(out), 2n),
+        "mugen: Claude Code is signed in now, with " ++ mn.who(Maybe.default(&2, J.Json, J.js.read(out), J.JNull{})) ++ "; signing in again switches it to the account you sign in with (`mugen logout` signs it out).\n", "")
+
+# `mugen login`: who is signed in now said, this process becomes Claude
+# Code's sign-in, on the terminal (no API key, which would take its place)
 def mn.login(+prog: String) -> IO(Unit):
   do IO<Unit>:
-    Unit <- IO.print("mugen: signing Claude Code in to your Claude plan (" ++ prog ++ " auth login). Run `mugen` once it says you are in.")
+    o : S.mu.Out <- S.mu.run("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "status", "--json"], "", 65536, 60000)
+    Unit <- IO.print(mn.login.now(o) ++ "mugen: signing Claude Code in to your Claude plan (" ++ prog ++ " auth login). Run `mugen` once it says you are in.")
     e : U32 <- S.mu.exec("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "login"])
+    IO.die(Unit, 1, "mugen: cannot run " ++ prog ++ " (MUGEN_CLAUDE), error " ++ U32.show(e))
+
+# `mugen logout`: this process becomes Claude Code's sign-out
+def mn.logout(+prog: String) -> IO(Unit):
+  do IO<Unit>:
+    Unit <- IO.print("mugen: signing Claude Code out (" ++ prog ++ " auth logout). `mugen login` signs it in again, with any account.")
+    e : U32 <- S.mu.exec("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "logout"])
     IO.die(Unit, 1, "mugen: cannot run " ++ prog ++ " (MUGEN_CLAUDE), error " ++ U32.show(e))
 
 def mn.go(+v: U32, +home: String, +wire: String, +prog: String) -> IO(Unit):
   Bool.pick(IO(Unit), U32.is_eq(v, 2), IO.print(mn.usage()),
     Bool.pick(IO(Unit), U32.is_eq(v, 4), IO.print("mugen " ++ mn.version()),
-    Bool.pick(IO(Unit), U32.is_eq(v, 3), mn.login(prog), mn.run(home, Bool.or(U32.is_eq(v, 1), String.eq(wire, "api"))))))
+    Bool.pick(IO(Unit), U32.is_eq(v, 3), mn.login(prog),
+    Bool.pick(IO(Unit), U32.is_eq(v, 5), mn.logout(prog), mn.run(home, Bool.or(U32.is_eq(v, 1), String.eq(wire, "api")))))))
 
 def main() -> IO(Unit):
   do IO<Unit>:

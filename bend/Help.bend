@@ -64,7 +64,7 @@ def hl.reading() -> String:
     "- `PgUp`, `PgDn` and the wheel scroll. On an empty input `Home` (or `M-<` anywhere) goes to the top, `End` (or `M->`) back to the end.",
     "- While you are scrolled up, nothing new moves what you read; `M->` follows the end again.",
     "- A click on a block folds or opens it; `M-o` (or `C-o`, unless tmux takes it as its prefix) folds or opens all of them.",
-    "- Drag over the chat to select text: letting go copies it to the clipboard (by xclip) and to tmux's buffer, and a line says how much. `Shift`-drag is the terminal's own selection.",
+    "- Drag over the chat to select text: letting go copies it to the clipboard (by xclip) and to tmux's buffer, or outside tmux to the terminal's clipboard (by OSC 52: Windows Terminal, kitty, WezTerm and others take it), and a line says how much. `Shift`-drag is the terminal's own selection.",
     "- `/mouse` hands the mouse to the terminal, and back.",
     "- `C-l` draws the screen anew.",
     "- `/tree` writes the memory tree as a page (`$MUGEN_DIR/tree.html`); `/export` the memory as `./mugen-memory.json`."])
@@ -127,7 +127,7 @@ def hl.commands() -> String:
 def hl.setup() -> String:
   hl.lines([
     "## Setup",
-    "- `mugen login` signs Claude Code in (the default backend, on a Claude plan); `mugen --api` uses the Messages API with `ANTHROPIC_API_KEY`. `mugen --version` says the version.",
+    "- `mugen login` signs Claude Code in (the default backend, on a Claude plan), or to another account (it says who is signed in now); `mugen logout` signs it out; `mugen --api` uses the Messages API with `ANTHROPIC_API_KEY`. `mugen --version` says the version.",
     "- `MUGEN_DIR` (default `~/.mugen`) is one chat, and one mugen holds it. For another chat beside it: `MUGEN_DIR=~/.mugen-2 mugen`.",
     "- `MUGEN_PLAIN=1` (or `TERM=dumb`, as in Emacs' shell) goes without the full screen: lines as they come, and a message of many lines between two lines of `\"\"\"`. From a pipe, each line is a message.",
     "- `MUGEN_PICK`, `MUGEN_RULES` (your instructions, default `$MUGEN_DIR/rules.md`) and the other settings: the README's Settings table.",

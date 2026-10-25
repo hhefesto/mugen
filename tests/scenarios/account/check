@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+[ "$MUGEN_WIRE" = api ] && exit 0
+sed "s#$MUGEN_CLAUDE#CLAUDE#g" account.out > account.masked
+diff -u - account.masked <<'END'
+mugen: Claude Code is signed in now, with an account; signing in again switches it to the account you sign in with (`mugen logout` signs it out).
+mugen: signing Claude Code in to your Claude plan (CLAUDE auth login). Run `mugen` once it says you are in.
+fake login
+exit 0
+mugen: signing Claude Code in to your Claude plan (CLAUDE auth login). Run `mugen` once it says you are in.
+fake login
+exit 0
+mugen: signing Claude Code out (CLAUDE auth logout). `mugen login` signs it in again, with any account.
+fake logout
+exit 0
+usage: mugen [--api | login | logout | --version]
+exit 0
+END
+test ! -d "$1/main"
