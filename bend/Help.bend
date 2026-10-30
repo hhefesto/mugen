@@ -63,6 +63,7 @@ def hl.reading() -> String:
     "## Reading the chat",
     "- `PgUp`, `PgDn` and the wheel scroll. On an empty input `Home` (or `M-<` anywhere) goes to the top, `End` (or `M->`) back to the end.",
     "- While you are scrolled up, nothing new moves what you read; `M->` follows the end again.",
+    "- `M-↑` and `M-↓` (or Emacs's `M-p` and `M-n`, or `M-{` and `M-}`) go to mugen's answer before and after the one you read, past its thoughts, its tools and what they said: the answer comes to the top, under the message it answers. Past the last one, `M-↓` goes to the end. On an agent's tab they go through the agent's answers.",
     "- A click on a block folds or opens it; `M-o` (or `C-o`, unless tmux takes it as its prefix) folds or opens all of them.",
     "- Drag over the chat to select text: letting go copies it to the clipboard (by xclip) and to tmux's buffer, or outside tmux to the terminal's clipboard (by OSC 52: Windows Terminal, kitty, WezTerm and others take it), and a line says how much. `Shift`-drag is the terminal's own selection.",
     "- `/mouse` hands the mouse to the terminal, and back.",
@@ -115,6 +116,7 @@ def hl.commands() -> String:
     "- `/model LABEL`, `/effort LEVEL`: the chat's model and its effort",
     "- `/plan`, `/auto`: plan mode, auto mode; `Shift-Tab`",
     "- `/status`: the account, limits, view, model, mode, summaries and agents",
+    "- `/login`: sign Claude Code in again, to switch accounts; `/login CODE` gives it the code its page shows (`/help setup`)",
     "- `/tree`: the memory tree as a page; `/export`: the memory as `./mugen-memory.json`",
     "- `/mouse`: the mouse to the terminal (and back)",
     "- `/image [PATH]`: an image with the message being written",
@@ -127,6 +129,7 @@ def hl.commands() -> String:
 def hl.setup() -> String:
   hl.lines([
     "## Setup",
+    "- `/login` switches Claude Code's account from inside the chat: it shows a link (copied too, on the full screen); sign in there with the account you want, and if the page shows a code, paste it as `/login CODE`. The chat goes on with that account from its next call. A `/login` ends any sign-in before it; one waits half an hour at most.",
     "- `mugen login` signs Claude Code in (the default backend, on a Claude plan), or to another account (it says who is signed in now); `mugen logout` signs it out; `mugen --api` uses the Messages API with `ANTHROPIC_API_KEY`. `mugen --version` says the version.",
     "- `MUGEN_DIR` (default `~/.mugen`) is one chat, and one mugen holds it. For another chat beside it: `MUGEN_DIR=~/.mugen-2 mugen`.",
     "- `MUGEN_PLAIN=1` (or `TERM=dumb`, as in Emacs' shell) goes without the full screen: lines as they come, and a message of many lines between two lines of `\"\"\"`. From a pipe, each line is a message.",
@@ -163,6 +166,7 @@ def hl.index() -> String:
     "- `C-g` stops mugen; `C-s` sends the messages waiting now",
     "- `↑` on an empty input takes a waiting message back to edit",
     "- `PgUp`, `PgDn` and the wheel scroll; on an empty input `Home` goes to the top, `End` to the end",
+    "- `M-p` and `M-n` (or `M-↑` and `M-↓`) go to mugen's answer before and after, past its thoughts and tools",
     "- a click folds or opens a block; `M-o` all of them",
     "- `Shift-Tab` switches plan and auto mode",
     "- `M-s` fixes a red word; `M-a` adds it to your words",

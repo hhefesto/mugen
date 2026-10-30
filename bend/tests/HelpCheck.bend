@@ -17,8 +17,8 @@ import ../Screen.bend as Sc
 type T is Data:
   T{name: String, got: String, want: String}
 
-# a key and its name as the help says it (with Alt, the arrows but ← and →
-# and Home, End, PgUp, PgDn are the keys alone)
+# a key and its name as the help says it (with Alt, Home, End, PgUp, PgDn
+# are the keys alone)
 type N is Data:
   N{name: String, key: K.ky.Key}
 
@@ -63,7 +63,7 @@ def ctrls(cs: List<&2, U32>) -> List<&2, N>:
 def navs() -> List<&2, N>:
   [N{"\u{2191}", K.ky.Nav{1, 0}}, N{"\u{2193}", K.ky.Nav{2, 0}}, N{"\u{2192}", K.ky.Nav{3, 0}}, N{"\u{2190}", K.ky.Nav{4, 0}},
    N{"Home", K.ky.Nav{5, 0}}, N{"End", K.ky.Nav{6, 0}}, N{"PgUp", K.ky.Nav{7, 0}}, N{"PgDn", K.ky.Nav{8, 0}},
-   N{"\u{2191}", K.ky.Nav{1, 2}}, N{"\u{2193}", K.ky.Nav{2, 2}}, N{"M-\u{2192}", K.ky.Nav{3, 2}}, N{"M-\u{2190}", K.ky.Nav{4, 2}},
+   N{"M-\u{2191}", K.ky.Nav{1, 2}}, N{"M-\u{2193}", K.ky.Nav{2, 2}}, N{"M-\u{2192}", K.ky.Nav{3, 2}}, N{"M-\u{2190}", K.ky.Nav{4, 2}},
    N{"Home", K.ky.Nav{5, 2}}, N{"End", K.ky.Nav{6, 2}}, N{"PgUp", K.ky.Nav{7, 2}}, N{"PgDn", K.ky.Nav{8, 2}},
    N{"Enter", K.ky.Enter{}}, N{"Alt-Enter", K.ky.Newline{}}, N{"Tab", K.ky.Tab{}}, N{"Shift-Tab", K.ky.BackTab{}}, N{"Esc", K.ky.Esc{}},
    N{"Backspace", K.ky.Back{}}, N{"M-Backspace", K.ky.MetaBack{}}]

@@ -65,6 +65,21 @@ def cc.cfg.work(c: cc.Cfg) -> String:
 def cc.on(+c: cc.Cfg) -> Bool:
   U32.is_eq(cc.cfg.wire(c), 1)
 
+# Claude Code's sign-in, from `claude auth status --json` (no API key in its
+# environment, as mugen runs it): 0 no answer (not there to run), 1 signed
+# out, 2 signed in (Main.bend at the start, /login after a sign-in)
+def cc.signed(+out: String) -> Nat:
+  +j = J.js.read(out)
+  Bool.pick(Nat, Maybe.is_none(&2, J.Json, j), 0n,
+    Bool.pick(Nat, Maybe.default(&2, Bool, J.js.bool(Maybe.default(&2, J.Json, j, J.JObj{[]}), "loggedIn"), False{}), 2n, 1n))
+
+# who Claude Code is signed in as: the account, its plan
+def cc.acct(+j: J.Json) -> String:
+  +email = Maybe.default(&2, String, J.js.str(j, "email"), "")
+  +plan = Maybe.default(&2, String, J.js.str(j, "subscriptionType"), "")
+  Bool.pick(String, String.is_empty(email), "signed in", email)
+    ++ Bool.pick(String, String.is_empty(plan), "", " · " ++ String.to_upper(String.take(plan, 1n)) ++ String.drop(plan, 1n) ++ " plan") ++ ", on Claude Code"
+
 # a call keeps its transcript: a chat call's (ctl, its control files, set)
 # unless none are kept, a compaction's when all are
 def cc.keeps(+c: cc.Cfg, +chat: Bool) -> Bool:

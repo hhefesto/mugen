@@ -1,0 +1,23 @@
+[no sign-in waits for a code: /login starts one]
+[signing Claude Code in again (claude auth login): its link comes in a moment]
+Switching Claude Code's account. Signed in now: signed in, on Claude Code.
+Open this link and sign in with the account you want:
+https://claude.example/oauth?code=true&state=s1
+If the page then shows a code, paste it here as /login CODE. The account you sign in with takes the place of the one in now, from the chat's next call.
+[the code went to Claude Code's sign-in: how it went comes in a moment]
+[the sign-in failed: Login failed: That code wasn't accepted. It may be incomplete, expired, already used, or from an earlier sign-in attempt. Sign in again to get a new code. Nothing changed; /login tries again]
+[signing Claude Code in again (claude auth login): its link comes in a moment]
+Switching Claude Code's account. Signed in now: signed in, on Claude Code.
+Open this link and sign in with the account you want:
+https://claude.example/oauth?code=true&state=s1
+If the page then shows a code, paste it here as /login CODE. The account you sign in with takes the place of the one in now, from the chat's next call.
+[the code went to Claude Code's sign-in: how it went comes in a moment]
+[signed in: fresh@example.com · Max plan, on Claude Code. The chat's next call goes with it]
+  account   fresh@example.com · Max plan, on Claude Code
+  limits    shown after the first reply
+  chat      0 messages · view 0 KB, 100% left before it folds · 0 summarizing
+  model     opus-5.5 · effort medium · summaries on haiku-5.5 (high)
+  mode      auto: mugen runs its tools as it needs them; /plan to plan first
+  work dir  @WORK@/main
+  goal      none
+  agents    none at work

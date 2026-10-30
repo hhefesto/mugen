@@ -31,6 +31,10 @@ type ev.Say is Data:
 #   Goal            a goal check's answer
 #   Ran             the user's own shell command (`!command`) ended: what
 #                   it printed, as the shell tool says it
+#   Login           /login's sign-in of Claude Code: (step 0) out, its
+#                   link, then what it printed; (1) it ended: out, its
+#                   exit status (or late, gone) then its last lines, and
+#                   status, `claude auth status --json` then
 type ev.Ev is Data:
   ev.Line{text: String}
   ev.Eof{}
@@ -41,6 +45,7 @@ type ev.Ev is Data:
   ev.End{who: String, ok: Bool, text: String, stop: U32, left: U32}
   ev.Goal{goal: String, ok: Bool, text: String}
   ev.Ran{command: String, out: String}
+  ev.Login{step: U32, out: String, status: String}
 
 # sent, whatever came of it (a hub gone ends the program anyway)
 def ev.send(+c: Chan(ev.Ev), e: ev.Ev) -> IO(Unit):

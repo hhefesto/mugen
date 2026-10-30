@@ -1,0 +1,8 @@
+#!/bin/sh
+# /login switches Claude Code's account from inside the chat: its link is
+# shown, the page's code comes back as /login CODE (a wrong one fails and
+# changes nothing; a code with no sign-in waiting is said so), and the
+# account signed in then is the one /status names. With --api, Claude
+# Code's sign-in plays no part: nothing to check
+[ "$MUGEN_WIRE" = api ] && exit 0
+( echo "/login c0de"; sleep 1; echo "/login"; sleep 4; echo "/login nope"; sleep 4; echo "/login"; sleep 4; echo "/login c0de"; sleep 5; echo "/status"; sleep 2 ) | MUGEN_FAKE_LOGIN=c0de timeout 60 "$MUGEN"

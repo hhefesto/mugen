@@ -72,7 +72,7 @@ def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -
 # and prompts the model sees, the files under ~/.mugen, the wires to the
 # API or Claude Code), and only then; see AGENTS.md, Versions
 def mn.version() -> String:
-  "0.9.0"
+  "0.10.0"
 
 def mn.usage() -> String:
   "usage: mugen [--api | login | logout | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login), or to another account\n  mugen logout signs Claude Code out (claude auth logout)\n  mugen --version  says mugen's version"
@@ -100,20 +100,6 @@ def mn.argv(xs: List<String>) -> U32:
     case x <> t:
       mn.flags(t, 0)
 
-# Claude Code there to run and signed in (its auth status, without an API
-# key, as mugen runs it), else said at once
-def mn.signed(+out: String) -> Nat:
-  +j = J.js.read(out)
-  Bool.pick(Nat, Maybe.is_none(&2, J.Json, j), 0n,
-    Bool.pick(Nat, Maybe.default(&2, Bool, J.js.bool(Maybe.default(&2, J.Json, j, J.JObj{[]}), "loggedIn"), False{}), 2n, 1n))
-
-# who Claude Code is signed in as: the account, its plan
-def mn.acct(+j: J.Json) -> String:
-  +email = Maybe.default(&2, String, J.js.str(j, "email"), "")
-  +plan = Maybe.default(&2, String, J.js.str(j, "subscriptionType"), "")
-  Bool.pick(String, String.is_empty(email), "signed in", email)
-    ++ Bool.pick(String, String.is_empty(plan), "", " · " ++ String.to_upper(String.take(plan, 1n)) ++ String.drop(plan, 1n) ++ " plan") ++ ", on Claude Code"
-
 def mn.claude.say(k: Nat, +prog: String, +err: String, +acct: String) -> IO(String):
   match k:
     case 2n:
@@ -126,7 +112,7 @@ def mn.claude.say(k: Nat, +prog: String, +err: String, +acct: String) -> IO(Stri
 def mn.claude.got(+prog: String, o: S.mu.Out) -> IO(String):
   match o:
     case S.mu.Out{status, +out, +err}:
-      mn.claude.say(mn.signed(out), prog, T.tx.trim(err), mn.acct(Maybe.default(&2, J.Json, J.js.read(out), J.JNull{})))
+      mn.claude.say(C.cc.signed(out), prog, T.tx.trim(err), C.cc.acct(Maybe.default(&2, J.Json, J.js.read(out), J.JNull{})))
 
 def mn.claude(on: Bool, +prog: String) -> IO(String):
   match on:
@@ -184,7 +170,7 @@ def mn.who(+j: J.Json) -> String:
 def mn.login.now(o: S.mu.Out) -> String:
   match o:
     case S.mu.Out{status, +out, err}:
-      Bool.pick(String, Nat.is_eq(mn.signed(out), 2n),
+      Bool.pick(String, Nat.is_eq(C.cc.signed(out), 2n),
         "mugen: Claude Code is signed in now, with " ++ mn.who(Maybe.default(&2, J.Json, J.js.read(out), J.JNull{})) ++ "; signing in again switches it to the account you sign in with (`mugen logout` signs it out).\n", "")
 
 # `mugen login`: who is signed in now said, this process becomes Claude

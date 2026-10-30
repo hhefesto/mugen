@@ -38,10 +38,13 @@ mugen --version                      # e.g. `mugen 0.1.0`
 
 mugen checks that Claude Code is signed in when it starts, and if it isn't,
 says to run `mugen login`. If the sign-in lapses during a chat, run
-`mugen login` in another window; the chat goes on with the next message.
-To switch accounts, run `mugen login` again: it says who is signed in now,
-and the account you sign in with takes its place (`mugen logout` signs out
-first, if you'd rather).
+`mugen login` in another window (or `/login` in the chat); the chat goes on
+with the next message. To switch accounts, run `mugen login` again: it says
+who is signed in now, and the account you sign in with takes its place
+(`mugen logout` signs out first, if you'd rather). From inside the chat,
+`/login` does the same: it shows a link (copied too, on the full screen);
+sign in there with the account you want, and if the page shows a code,
+paste it as `/login CODE`. The chat's next call goes with that account.
 
 - **Claude Code (default).** mugen drives the official `claude` CLI in
   headless mode (`claude -p`), so it runs on a Pro or Max plan's login.
@@ -100,7 +103,9 @@ unless tmux takes it as its prefix). `PgUp`,
 `PgDn` and the wheel scroll; `Home` on an empty input (or `M-<`) goes to
 the top, `End` (or `M->`) back to the end. While scrolled up, nothing that
 comes (a new entry, a result under its call) moves what you read, and `M->`
-follows the end again. Under the chat:
+follows the end again. `M-↑` and `M-↓` (or Emacs's `M-p` and `M-n`, or `M-{` and `M-}`) go to mugen's
+answer before and after the one you read, past its thoughts, its tools and
+what they said: the answer comes to the top, under the message it answers. Under the chat:
 what runs and for how long (the tool too), the messages waiting for mugen,
 the status line (where mugen works, the model, its effort, the context
 left before mugen folds its oldest lines at 128 KB, the mode), and the
@@ -190,6 +195,8 @@ Commands:
   call sends the images its new messages name; `zoom(id, 1)` gives a
   message's images again, and `read` gives an image file whole (png, jpeg,
   gif, webp; 5 MB at most).
+- `/login`: Claude Code signed in again, to switch accounts (`/login CODE`
+  gives it the code its page shows).
 - `/status`, `/mouse`, `/tree`, `/export`, `/quit`.
 
 Whatever is running when you quit resumes at the next start. Leaving kills

@@ -2,6 +2,25 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.10.0 (2026-10-30)
+
+- `M-p` and `M-n` (as in Emacs; or `M-↑` and `M-↓`, or `M-{` and `M-}`)
+  go to mugen's answer before and after the one you read, past its
+  thoughts, its tool calls and what they said: the answer comes to the
+  chat's top, under the pinned message it answers. Past the last one,
+  `M-n` goes to the end; on an agent's tab they go through that agent's
+  answers. The pinned message is now the newest at or above the chat's top
+  row (it was the newest above it), so an answer's own message is the one
+  pinned over it.
+- `/login` signs Claude Code in again from inside the chat, to switch
+  accounts: it runs `claude auth login` in the background and shows its
+  link (copied too, on the full screen); sign in there with the account you
+  want, and if the page shows a code, paste it as `/login CODE`. mugen says
+  who is signed in once it ends (and `/status` names that account); the
+  chat's next call goes with it. A wrong code fails and changes nothing; a
+  sign-in waits half an hour at most, and a new `/login` ends the one
+  before it.
+
 ## 0.9.0 (2026-10-25)
 
 - `mugen logout` signs Claude Code out (`claude auth logout`). `mugen

@@ -304,7 +304,7 @@ footer { color: var(--ink-2); font-size: var(--s-small); border-top: 1px solid v
           <pre data-copy><span class="c"># once: signs Claude Code in (claude auth login)</span>
 mugen login
 mugen
-<span class="c"># another account: mugen login again (mugen logout signs out)</span></pre>
+<span class="c"># another account: mugen login again, or /login in the chat (mugen logout signs out)</span></pre>
         </div>
         <div class="code">
           <span class="tag">On the Messages API, with a key</span>
@@ -355,6 +355,7 @@ mugen --api</pre>
         <li><strong>An edit or a write shows its diff,</strong> with the line numbers of the file, each taken-out line on a red background and each added one on a green one (so too the lines of a <code>```diff</code> block in a reply), long lines wrapped under their own text.</li>
         <li><strong>Blocks come open, whole.</strong> Click a block to fold it, click again to open it; its header stays where it is. <kbd>M-o</kbd> (or <kbd>C-o</kbd>, where tmux does not take it as its prefix) folds or opens all of them.</li>
         <li><strong>Scroll</strong> with <kbd>PgUp</kbd>, <kbd>PgDn</kbd> and the mouse wheel; <kbd>Home</kbd> on an empty input (or <kbd>M-&lt;</kbd>) goes to the top, <kbd>End</kbd> (or <kbd>M-&gt;</kbd>) back to the end. While you are scrolled up, nothing that comes moves what you read (a new entry, or a result filling in under its call): the top row stays where it is, and the rule says how far below the end is, and <kbd>M-&gt;</kbd> (or <kbd>End</kbd> on an empty input) follows it again.</li>
+        <li><strong>From answer to answer.</strong> <kbd>M-↑</kbd> and <kbd>M-↓</kbd> (or Emacs's <kbd>M-p</kbd> and <kbd>M-n</kbd>, or <kbd>M-{</kbd> and <kbd>M-}</kbd>) go to mugen's answer before and after the one you read, past its thoughts, its tools and what they said: the answer comes to the top, under the message it answers. Past the last one, <kbd>M-↓</kbd> goes to the end; on an agent's tab they go through the agent's answers.</li>
       </ul>
       <p>Under the chat, a rule, then what runs: a spinner, what mugen does and for how long, the tool it is running and for how long (a stuck command shows here at once), and the agents at work. Then the messages waiting for mugen, or handed to its running call, then the status line: where mugen works, the model, its effort, the context left before mugen folds the oldest lines of the view, and the mode. Last, the input.</p>
       <div class="note"><strong>Selecting text.</strong> The mouse goes to mugen, for clicks, the wheel and selecting: drag over the chat and the text shows reversed; let go and it is copied, to X's clipboard (by <code>xclip</code>, if it is there) and to tmux's buffer (which tmux hands the terminal too), or, outside tmux, straight to the terminal's clipboard by OSC 52 (Windows Terminal, so WSL, kitty, WezTerm, foot, iTerm2; over ssh too), and a green line under the chat says so (<code>✓ copied 3 lines to the clipboard</code>), or says it went nowhere. A click that doesn't move still opens or folds a block. To select with the terminal instead, hold <kbd>Shift</kbd> while you drag (most terminals), or type <code>/mouse</code> to hand the mouse to the terminal, and <code>/mouse</code> again to take it back.</div>
@@ -379,6 +380,7 @@ mugen --api</pre>
             <tr><td><kbd>Esc</kbd> <kbd>Esc</kbd></td><td>Leaves mugen. So do <kbd>C-d</kbd> and <kbd>C-c</kbd> on an empty input; <kbd>C-c</kbd> on text clears it (<kbd>C-y</kbd> brings it back).</td></tr>
             <tr><td><kbd>PgUp</kbd> <kbd>PgDn</kbd>, the wheel</td><td>Scroll the chat. <kbd>Home</kbd> on an empty input (or <kbd>M-&lt;</kbd>) goes to its top, <kbd>End</kbd> (or <kbd>M-&gt;</kbd>) back to its end; in a text they are its line's start and end.</td></tr>
             <tr><td>a click, <kbd>M-o</kbd> (<kbd>C-o</kbd>)</td><td>Opens or folds a block; all of them.</td></tr>
+            <tr><td><kbd>M-p</kbd> <kbd>M-n</kbd> (<kbd>M-↑</kbd> <kbd>M-↓</kbd>, <kbd>M-{</kbd> <kbd>M-}</kbd>)</td><td>mugen's answer before or after the one you read, at the top, past its thoughts and tools; past the last one, the end.</td></tr>
             <tr><td><kbd>↑</kbd> on an empty input</td><td>While a message waits for mugen (until its next tool call or its turn's end), takes it back to edit: only the version sent at last is logged and shown.</td></tr>
             <tr><td>a click on a tab, <kbd>M-←</kbd> <kbd>M-→</kbd></td><td>While subagents work, tabs follow the status line: <code>all</code>, <code>mugen</code>, each agent. The chat shows only that one's blocks; an agent's tab shows its whole log, so <kbd>Home</kbd> there reaches its first message however long it ran (the chat itself keeps its last 400 blocks).</td></tr>
             <tr><td><kbd>C-a</kbd> <kbd>C-e</kbd> <kbd>C-b</kbd> <kbd>C-f</kbd> <kbd>M-b</kbd> <kbd>M-f</kbd></td><td>Start and end of the line; back and forward a character, a word.</td></tr>
@@ -404,6 +406,7 @@ mugen --api</pre>
             <tr><td><code>/model LABEL</code></td><td><code>opus-5.5</code> (default), <code>sonnet-5.5</code>, <code>haiku-5.5</code>, or a model id.</td></tr>
             <tr><td><code>/effort LEVEL</code></td><td><code>low</code>, <code>medium</code> (default), <code>high</code>, <code>xhigh</code>, <code>max</code>.</td></tr>
             <tr><td><code>/plan</code>, <code>/auto</code></td><td>Plan mode: mugen reads and proposes a plan, and runs no shell, writes and edits nothing, starts no agents. Auto mode (the default) lets it act. The mode shows on the status line; <kbd>Shift-Tab</kbd> switches it.</td></tr>
+            <tr><td><code>/login</code></td><td>Signs Claude Code in again, to switch accounts from inside the chat: a link to sign in with the account you want (copied too); if its page shows a code, <code>/login CODE</code> gives it. The chat's next call goes with that account.</td></tr>
             <tr><td><code>/status</code></td><td>The opening status again: account, limits, chat and view, models, mode, work dir, goal, agents.</td></tr>
             <tr><td><code>/image PATH</code></td><td>The image at PATH (png, jpeg, gif or webp; <code>/image</code> alone: the clipboard's) goes with the message being written: a line <code>[image docs/images/NAME]</code> in it names it. The model sees it with that message; <code>zoom(id, 1)</code> shows it again.</td></tr>
             <tr><td><code>/mouse</code></td><td>The mouse to the terminal (its own selection), or back to mugen.</td></tr>
@@ -631,7 +634,7 @@ mugen --api</pre>
         <dt>"mugen: cannot run claude (MUGEN_CLAUDE)"</dt>
         <dd>mugen can't find Claude Code. Install it and check that <code>claude --version</code> works, or set <code>MUGEN_CLAUDE</code> to its path. On NixOS, a shell from before the switch may lack the new <code>PATH</code>: run <code>. /etc/set-environment</code>.</dd>
         <dt>"Claude Code is not signed in"</dt>
-        <dd>Run <code>mugen login</code>. At startup, mugen stops and tells you to. During a chat, run it in another window; the chat goes on with your next message.</dd>
+        <dd>Run <code>mugen login</code>. At startup, mugen stops and tells you to. During a chat, type <code>/login</code> (or run <code>mugen login</code> in another window); the chat goes on with your next message.</dd>
         <dt>"The AI service is busy: asking again in N s."</dt>
         <dd>The API is overloaded or your plan has hit a limit. A turn is retried a few times and then reports that the service is busy. Summaries keep retrying every minute, so they only get delayed.</dd>
         <dt>"No reply: stopped: refusal. Send a message to try again."</dt>

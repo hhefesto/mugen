@@ -465,7 +465,7 @@ def ed.key(+e: ed.Ed, +key: K.ky.Key) -> ed.Ed:
 # the commands (the first word of each; Help.bend names every one), and
 # what may follow some
 def ed.words() -> List<&2, String>:
-  List.append(&2, String, ["/help", "/quit", "/stop", "/now", "/goal", "/halt", "/model", "/effort", "/status", "/tree", "/export", "/plan", "/auto", "/mouse", "/image", "/spell", "/words",
+  List.append(&2, String, ["/help", "/quit", "/stop", "/now", "/goal", "/halt", "/model", "/effort", "/status", "/tree", "/export", "/plan", "/auto", "/login", "/mouse", "/image", "/spell", "/words",
     "/model opus-5.5", "/model sonnet-5.5", "/model haiku-5.5", "/effort low", "/effort medium", "/effort high", "/effort xhigh", "/effort max", "/spell on", "/spell off", "/words add", "/words rm"], Hl.hl.cmds())
 
 def ed.starting(ws: List<&2, String>, +p: String) -> List<&2, String>:

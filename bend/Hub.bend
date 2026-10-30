@@ -142,6 +142,11 @@ def hb.reqs(s: hb.S) -> List<&2, hb.W>:
     case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
       rq
 
+def hb.with.cfg(s: hb.S, c2: hb.Cfg) -> hb.S:
+  match s:
+    case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
+      hb.S{c2, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}
+
 def hb.with.mem(s: hb.S, m2: M.me.Mem) -> hb.S:
   match s:
     case hb.S{c, m, ib, jk, pk, tu, wa, se, ha, ag, rq, eo, qu, sh, ui}:
@@ -379,6 +384,11 @@ def hb.cfg.acct(c: hb.Cfg) -> String:
   match c:
     case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
       ac
+
+def hb.cfg.with.acct(c: hb.Cfg, ac2: String) -> hb.Cfg:
+  match c:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+      hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac2, sr}
 
 def hb.dir(+s: hb.S) -> String:
   hb.cfg.dir(hb.cfg(s))
@@ -1428,7 +1438,7 @@ def hb.cmd.code(+w: String) -> Nat:
     Bool.pick(Nat, String.eq(w, "/halt"), 4n, Bool.pick(Nat, String.eq(w, "/goal"), 5n, Bool.pick(Nat, String.eq(w, "/model"), 6n,
       Bool.pick(Nat, String.eq(w, "/effort"), 7n, Bool.pick(Nat, String.eq(w, "/status"), 8n, Bool.pick(Nat, String.eq(w, "/export"), 10n,
         Bool.pick(Nat, String.eq(w, "/tree"), 11n, Bool.pick(Nat, String.eq(w, "/plan"), 12n, Bool.pick(Nat, String.eq(w, "/auto"), 13n, Bool.pick(Nat, String.eq(w, "/now"), 14n,
-          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n)))))))))))))))
+          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.eq(w, "/login"), 17n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n))))))))))))))))
 
 def hb.pick.json(p: A.ap.Pick) -> J.Json:
   match p:
@@ -1753,6 +1763,146 @@ def hb.stop.cmd(k: Nat, +s: hb.S, +rest: String) -> IO(hb.S):
     case _:
       IO.bind(Unit, hb.S, hb.kill(hb.ctl(s, "user")), u => hb.stop(s, rest))
 
+# /login ------------------------------------------------------------------------------
+#
+# /login signs Claude Code in again, to switch accounts: `claude auth login`
+# (no API key in its environment, as `mugen login` runs it), in the
+# background. Its link is shown (on the full screen, copied too); the
+# account signed in there takes the place of the one in now, from the
+# chat's next call (each call is a `claude -p` of its own). A code the page
+# shows comes back as `/login CODE`, a line of the sign-in's stdin.
+# run/login/ID holds a sign-in: in, its stdin (a FIFO opened both ways, so
+# it never ends, and a code written to it is a line it reads), out, pid (its
+# group's leader and start time, in run/groups too, so it goes with mugen)
+# and, once it ended, code (its exit status); run/login/now names the
+# newest. A /login ends any sign-in before it.
+
+# a sign-in's last line, its link's escapes, the blank lines and the
+# prompt for a code before it ("Paste code here if prompted > Login failed:
+# That code wasn't accepted. ...") out ($w)
+def hb.login.tail() -> String:
+  "sed -e 's/\\x1b]8;;[^\\x07]*\\x07//g' -e 's/\\x1b\\[[0-9;?]*[A-Za-z]//g' \"$w/out\" 2> /dev/null | tr -d '\\r' | grep -v '^[[:space:]]*$' | tail -1 | sed 's/^.*if prompted > *//'\n"
+
+# started: $0 run/login, $1 ID, $2 Claude Code's program, $3 run/groups.
+# Prints its link (once out, 15 s at most; an empty line if none), then
+# its last lines
+def hb.login.start() -> String:
+  "d=$0 i=$1 p=$2 g=$3\nmkdir -p \"$d\" || exit 1\nfor x in \"$d\"/*/; do\n  [ -d \"$x\" ] || continue\n  read -r q t < \"$x/pid\" 2> /dev/null && [ -n \"$q\" ] && [ \"$(cut -d' ' -f22 /proc/$q/stat 2> /dev/null)\" = \"$t\" ] && kill -TERM -\"$q\" 2> /dev/null\n  rm -rf \"$x\"\ndone\nw=\"$d/$i\"\nmkdir -p \"$w\" && mkfifo \"$w/in\" || exit 1\necho \"$i\" > \"$d/now\"\nset -m\n( env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN \"$p\" auth login 0<> \"$w/in\" > \"$w/out\" 2>&1; echo $? > \"$w/code\" ) < /dev/null > /dev/null 2>&1 &\necho \"$! $(cut -d' ' -f22 /proc/$!/stat 2> /dev/null)\" > \"$w/pid\"\ncat \"$w/pid\" >> \"$g\"\nset +m\nn=0\nwhile [ $n -lt 150 ] && [ ! -s \"$w/code\" ] && ! grep -q 'https://' \"$w/out\" 2> /dev/null; do sleep 0.1; n=$((n+1)); done\nsleep 0.3\nu=$(grep -o 'https://[^[:space:][:cntrl:]]*' \"$w/out\" 2> /dev/null | head -1)\necho \"$u\"\n" ++ hb.login.tail()
+
+# its end waited for: $0 run/login, $1 ID. Prints its exit status (late: it
+# waited half an hour and was ended; gone: a later /login ended it), then
+# its last lines
+def hb.login.wait() -> String:
+  "d=$0 i=$1 w=\"$0/$1\" n=0\nwhile [ -d \"$w\" ] && [ ! -s \"$w/code\" ] && [ $n -lt 9000 ]; do sleep 0.2; n=$((n+1)); done\n[ -d \"$w\" ] || { echo gone; exit 0; }\nif [ -s \"$w/code\" ]; then cat \"$w/code\"; else read -r q t < \"$w/pid\"; kill -TERM -\"$q\" 2> /dev/null; echo late; fi\n" ++ hb.login.tail() ++ "rm -rf \"$w\"\n[ \"$(cat \"$d/now\" 2> /dev/null)\" = \"$i\" ] && rm -f \"$d/now\"\nexit 0\n"
+
+# a code to the newest sign-in, if it still waits: $0 run/login, $1 the
+# code. Prints sent, or none
+def hb.login.put() -> String:
+  "d=$0 i=$(cat \"$0/now\" 2> /dev/null) q=\nw=\"$d/$i\"\n[ -n \"$i\" ] && read -r q t < \"$w/pid\" 2> /dev/null\nif [ -n \"$q\" ] && [ -p \"$w/in\" ] && [ ! -s \"$w/code\" ] && kill -0 \"$q\" 2> /dev/null; then printf '%s\\n' \"$1\" 1<> \"$w/in\" && echo sent; else echo none; fi\n"
+
+def hb.login.text(o: S.mu.Out) -> String:
+  match o:
+    case S.mu.Out{st, out, err}:
+      out
+
+def hb.login.line(+out: String, +n: Nat) -> String:
+  Maybe.default(&2, String, List.get(&2, String, L.tl.split.lines(out), n), "")
+
+# its last lines, as one (": ..."; "" none)
+def hb.login.said(+out: String) -> String:
+  +t = T.tx.trim(T.tx.join(List.drop(&2, String, L.tl.split.lines(out), 1n), " "))
+  Bool.pick(String, String.is_empty(t), "", ": " ++ t)
+
+def hb.login.status(+inbox: Chan(E.ev.Ev), +prog: String, +out: String) -> IO(Unit):
+  do IO<Unit>:
+    st : S.mu.Out <- S.mu.run("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "status", "--json"], "", 65536, 60000)
+    E.ev.send(inbox, E.ev.Login{1, out, hb.login.text(st)})
+
+# a sign-in's thread: started, its link told the hub; then its end waited
+# for, and told with who is signed in then (unless a later /login ended it)
+def hb.login.run(+inbox: Chan(E.ev.Ev), +dir: String, +prog: String, +groups: String, +id: String) -> IO(Unit):
+  do IO<Unit>:
+    a : S.mu.Out <- S.mu.run("bash", ["-c", hb.login.start(), dir, id, prog, groups], "", 65536, 30000)
+    Unit <- E.ev.send(inbox, E.ev.Login{0, hb.login.text(a), ""})
+    b : S.mu.Out <- S.mu.run("bash", ["-c", hb.login.wait(), dir, id], "", 65536, 1900000)
+    +out : String = hb.login.text(b)
+    Bool.pick(IO(Unit), String.starts_with(out, "gone"), IO.pure(Unit, Unit{}), hb.login.status(inbox, prog, out))
+
+def hb.login.prog(+s: hb.S) -> String:
+  Cc.cc.cfg.prog(A.ap.cfg.cc(hb.cfg.api(hb.cfg(s))))
+
+def hb.login.begin(+s: hb.S) -> IO(hb.S):
+  do IO<hb.S>:
+    now : Nat <- IO.now()
+    Unit <- IO.spawn(Unit, hb.login.run(hb.inbox(s), hb.dir(s) ++ "/run/login", hb.login.prog(s), hb.dir(s) ++ "/run/groups", Nat.show(now)))
+    hb.tell.user(s, "signing Claude Code in again (claude auth login): its link comes in a moment")
+
+def hb.login.code.got(+s: hb.S, o: S.mu.Out) -> IO(hb.S):
+  Bool.pick(IO(hb.S), String.starts_with(hb.login.text(o), "sent"), hb.tell.user(s, "the code went to Claude Code's sign-in: how it went comes in a moment"),
+    hb.tell.user(s, "no sign-in waits for a code: /login starts one"))
+
+def hb.login.code(+s: hb.S, +code: String) -> IO(hb.S):
+  IO.bind(S.mu.Out, hb.S, S.mu.run("bash", ["-c", hb.login.put(), hb.dir(s) ++ "/run/login", code], "", 4096, 10000), o => hb.login.code.got(s, o))
+
+# /login alone starts a sign-in; /login CODE gives it the page's code
+def hb.login(+s: hb.S, +rest: String) -> IO(hb.S):
+  Bool.pick(IO(hb.S), String.is_empty(rest), hb.login.begin(s), hb.login.code(s, rest))
+
+# the link copied, on the full screen (what sc.clip says: "" nowhere)
+def hb.login.clip(m: Maybe<&2, Chan(Sc.sc.In)>, +url: String) -> IO(String):
+  match m:
+    case Some{c}:
+      IO.bind(S.mu.Out, String, S.mu.run("sh", ["-c", Sc.sc.clip()], url, 4096, 5000), o => IO.pure(String, hb.login.text(o)))
+    case None{}:
+      IO.pure(String, "")
+
+# the link's text: who is signed in now, the link, what to do with it
+def hb.login.msg(+s: hb.S, +url: String, +clip: String) -> String:
+  +now = Bool.pick(String, hb.on.cc(s), "Signed in now: " ++ hb.cfg.acct(hb.cfg(s)) ++ ".", "This chat runs on an API key (--api); the sign-in is Claude Code's, for mugen without --api.")
+  "Switching Claude Code's account. " ++ now ++ "\nOpen this link and sign in with the account you want" ++ Bool.pick(String, String.is_empty(clip), "", " (it is copied too)") ++ ":\n" ++ url
+    ++ "\nIf the page then shows a code, paste it here as /login CODE. The account you sign in with takes the place of the one in now, from the chat's next call."
+
+# shown whole: on the screen, mugen's word (wrapped); else printed
+def hb.login.show.on(m: Maybe<&2, Chan(Sc.sc.In)>, +text: String) -> IO(Unit):
+  match m:
+    case Some{+c}:
+      Sc.sc.tell(c, Sc.sc.Put{"", "say", text})
+    case None{}:
+      IO.print(text)
+
+def hb.login.show(+s: hb.S, +url: String) -> IO(hb.S):
+  do IO<hb.S>:
+    clip : String <- hb.login.clip(hb.scr(s), url)
+    Unit <- hb.login.show.on(hb.scr(s), hb.login.msg(s, url, clip))
+    return s
+
+def hb.login.link(+s: hb.S, +out: String) -> IO(hb.S):
+  +url = hb.login.line(out, 0n)
+  Bool.pick(IO(hb.S), String.is_empty(url), hb.tell.user(s, "Claude Code's sign-in shows no link" ++ hb.login.said(out)), hb.login.show(s, url))
+
+# signed in: the account mugen says it runs on (/status) is the new one,
+# where the chat runs on Claude Code
+def hb.login.as(on: Bool, +s: hb.S, +acct: String) -> IO(hb.S):
+  match on:
+    case True{}:
+      hb.tell.user(hb.with.cfg(s, hb.cfg.with.acct(hb.cfg(s), acct)), "signed in: " ++ acct ++ ". The chat's next call goes with it")
+    case False{}:
+      hb.tell.user(s, "Claude Code is signed in: " ++ acct ++ ". This chat goes on with its API key (--api)")
+
+def hb.login.in(+s: hb.S, +status: String) -> IO(hb.S):
+  Bool.pick(IO(hb.S), Nat.is_eq(Cc.cc.signed(status), 2n), hb.login.as(hb.on.cc(s), s, Cc.cc.acct(Maybe.default(&2, J.Json, J.js.read(status), J.JNull{}))),
+    hb.tell.user(s, "the sign-in ended, but Claude Code says it is not signed in: /login tries again"))
+
+def hb.login.end(+s: hb.S, +out: String, +status: String) -> IO(hb.S):
+  +v = hb.login.line(out, 0n)
+  Bool.pick(IO(hb.S), String.eq(v, "0"), hb.login.in(s, status),
+    Bool.pick(IO(hb.S), String.eq(v, "late"), hb.tell.user(s, "the sign-in waited half an hour for you and was ended; nothing changed. /login starts another"),
+      hb.tell.user(s, "the sign-in failed" ++ hb.login.said(out) ++ Bool.pick(String, String.ends_with(T.tx.trim(out), "."), " ", ". ") ++ "Nothing changed; /login tries again")))
+
+# what a sign-in's thread said (Ev.bend ev.Login)
+def hb.login.got(+k: U32, +s: hb.S, +out: String, +status: String) -> IO(hb.S):
+  Bool.pick(IO(hb.S), U32.is_eq(k, 0), hb.login.link(s, out), hb.login.end(s, out, status))
+
 def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
   match k:
     case 0n:
@@ -1795,6 +1945,8 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
       hb.back(s)
     case 16n:
       hb.bang(s, T.tx.trim(String.drop(t, 1n)))
+    case 17n:
+      hb.login(s, rest)
     case _:
       hb.tell.user(s, w ++ " is no command; nothing was sent. /help lists the commands.")
 
@@ -1853,6 +2005,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
       Bool.pick(IO(hb.S), hb.is.check(hb.turn(s), goal), hb.checked(s, goal, ok, text), IO.pure(hb.S, s))
     case Some{E.ev.Ran{+cmd, +out}}:
       hb.ran(s, cmd, out)
+    case Some{E.ev.Login{k, +out, +status}}:
+      hb.login.got(k, s, out, status)
 
 def hb.is.idle(t: hb.T) -> Bool:
   match t:

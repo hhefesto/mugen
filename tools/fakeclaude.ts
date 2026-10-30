@@ -20,10 +20,29 @@ if (argv.includes("--version")) {
   process.exit(0);
 }
 // `auth status` signed in, unless MUGEN_FAKE_SIGNED_OUT; `auth login` and
-// `auth logout` say so
+// `auth logout` say so. With MUGEN_FAKE_LOGIN (a code), `auth login` plays
+// the real one's way without a browser (mugen's /login): a link, then a
+// line of stdin, the code; the right one signs in as fresh@example.com
+// (MUGEN_FAKE_LOG.acct, which `auth status` says from then on)
 if (argv[0] === "auth") {
   const out = !!process.env.MUGEN_FAKE_SIGNED_OUT;
-  console.log(argv[1] === "status" ? JSON.stringify({ loggedIn: !out, authMethod: out ? "none" : "claude.ai" }) : "fake " + argv.slice(1).join(" "));
+  const acct = (process.env.MUGEN_FAKE_LOG ?? "/nonexistent") + ".acct";
+  const code = process.env.MUGEN_FAKE_LOGIN;
+  if (argv[1] === "login" && code) {
+    process.stdout.write("Opening browser to sign in…\nIf the browser didn't open, visit: \x1b]8;;https://claude.example/oauth?code=true&state=s1\x07https://claude.example/oauth?code=true&state=s1\x1b]8;;\x07\nPaste code here if prompted > ");
+    for await (const line of console) {
+      if (line.trim() === code) {
+        fs.writeFileSync(acct, "fresh@example.com");
+        console.log("Login successful.");
+        process.exit(0);
+      }
+      console.log("Login failed: That code wasn't accepted. It may be incomplete, expired, already used, or from an earlier sign-in attempt. Sign in again to get a new code.");
+      process.exit(1);
+    }
+    process.exit(1);
+  }
+  const email = fs.existsSync(acct) ? fs.readFileSync(acct, "utf8") : undefined;
+  console.log(argv[1] === "status" ? JSON.stringify({ loggedIn: !out, authMethod: out ? "none" : "claude.ai", ...(email ? { email, subscriptionType: "max" } : {}) }) : "fake " + argv.slice(1).join(" "));
   process.exit(argv[1] === "status" && out ? 1 : 0);
 }
 const flag = (name: string) => {

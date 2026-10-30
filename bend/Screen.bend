@@ -15,7 +15,8 @@ import ./Store.bend as St
 # hub (Hub.bend) the lines typed; the hub tells it what to show (sc.Put, as
 # it logs) and how it is (sc.State: mugen's work, the messages waiting, the
 # status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel
-# (Home and End on an empty input: its top and end), each tool call one
+# (Home and End on an empty input: its top and end; M-Up and M-Down: from
+# one of mugen's answers to the next, see Answers), each tool call one
 # block, open (a click folds or opens it, M-o all; a drag selects text and
 # copies it, see Selecting); then a rule, what runs (with a spinner and its
 # time), the messages waiting for mugen, the status line, and the input
@@ -1253,9 +1254,11 @@ def sc.with.drawn(+s: sc.S, +g: sc.G, +ids: List<&2, U32>, +off: U32, +an: sc.An
   +s1 = sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), off, ids, an, sc.tr.ag(t), sc.tr.abs(t)})
   sc.with.z(sc.with.tm(sc.with.vw(s1, sc.g.bs(g)), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low}), sc.sel.with.drawn(sc.z(s), rows, pin))
 
-# The prompt pinned on top: the newest of the user's messages above the
-# chat's top row (its block's id under it) stays on the first row, on its
-# background, while what answers it is read; a click there scrolls to it.
+# The prompt pinned on top: the newest of the user's messages at or above
+# the chat's top row (its block's id under it) stays on the first row, on
+# its background, while what answers it is read; a click there scrolls to
+# it. (At: an answer M-Up brings to the second row has its message's last
+# row on the first, and that message is the one pinned, not the one before.)
 
 def sc.blk.kind(b: sc.Blk) -> String:
   match b:
@@ -1268,7 +1271,7 @@ def sc.pin.v(bs: List<&2, sc.Blk>, +top: U32) -> Nat:
     case []:
       0n
     case +b <> rest:
-      Bool.pick(Nat, Bool.and(String.eq(sc.blk.kind(b), "user"), U32.is_lt(sc.blk.id(b), top)), 1n, 2n)
+      Bool.pick(Nat, Bool.and(String.eq(sc.blk.kind(b), "user"), U32.is_le(sc.blk.id(b), top)), 1n, 2n)
 
 def sc.pin.go(bs: List<&2, sc.Blk>, v: Nat, +top: U32) -> Maybe<&2, sc.Blk>:
   match bs v:
@@ -1321,6 +1324,83 @@ def sc.to.pin(+s: sc.S) -> sc.S:
   +h = sc.h(s)
   +t = (h - U32.min(h, sc.tm.low(sc.tm(s))) : U32)
   sc.dirty(sc.with.off(s, (total - U32.min(total, t) : U32)), 2)
+
+# Answers: M-Up and M-Down (or M-p and M-n, or M-{ and M-}, as Emacs's
+# previous and next, paragraph back and forward) go from one of mugen's answers to
+# the one before or after it, past its thoughts, its tools and what they
+# said. An answer is a "unii" block of mugen's (on an agent's tab, the
+# agent's). The one gone to is put on the chat's second row: the first is
+# the pinned prompt's, the message it answers.
+
+def sc.ans.is(+b: sc.Blk, +focus: String) -> Bool:
+  +who = sc.blk.who(b)
+  Bool.and(String.eq(sc.blk.kind(b), "unii"), Bool.pick(Bool, Bool.or(String.is_empty(focus), String.eq(focus, "mugen")), String.is_empty(who), String.eq(who, focus)))
+
+# a block's rows on the chat shown (0 where it is another's tab's)
+def sc.ans.n(+b: sc.Blk, +focus: String) -> U32:
+  Bool.pick(U32, sc.shows(focus, sc.blk.who(b)), sc.blk.n(b), 0)
+
+# the rows from the chat's end to the top of the nearest answer whose top
+# is above row ref (rows counted from the end too), the newest block first,
+# acc the rows of those passed; 0 none
+def sc.ans.up(bs: List<&2, sc.Blk>, hit: Bool, +ref: U32, +acc: U32, +w: U32, +home: String, +focus: String) -> U32:
+  match bs hit:
+    case _ True{}:
+      acc
+    case Nil{} False{}:
+      0
+    case b <> rest False{}:
+      +b2 = sc.blk.fresh(b, w, home)
+      +top = (acc + sc.ans.n(b2, focus) : U32)
+      sc.ans.up(rest, Bool.and(sc.ans.is(b2, focus), U32.is_gt(top, ref)), ref, top, w, home, focus)
+
+# the same for the nearest answer whose top is below row ref: the last one
+# passed (got) before a block's top reaches ref
+def sc.ans.down(bs: List<&2, sc.Blk>, more: Bool, +ref: U32, +acc: U32, +got: U32, +w: U32, +home: String, +focus: String) -> U32:
+  match bs more:
+    case _ False{}:
+      got
+    case Nil{} True{}:
+      got
+    case b <> rest True{}:
+      +b2 = sc.blk.fresh(b, w, home)
+      +top = (acc + sc.ans.n(b2, focus) : U32)
+      +below = U32.is_lt(top, ref)
+      sc.ans.down(rest, below, ref, top, Bool.pick(U32, Bool.and(below, sc.ans.is(b2, focus)), top, got), w, home, focus)
+
+def sc.ans.find(up: Bool, +bs: List<&2, sc.Blk>, +ref: U32, +w: U32, +home: String, +focus: String) -> U32:
+  match up:
+    case True{}:
+      sc.ans.up(bs, False{}, ref, 0, w, home, focus)
+    case False{}:
+      sc.ans.down(bs, True{}, ref, 0, 0, w, home, focus)
+
+# the chat's rows, the lines under it laid out as they will be drawn
+def sc.ans.t(+s: sc.S) -> U32:
+  +h = sc.h(s)
+  +nl = U32.from_nat(List.length(&2, String, sc.low.rows(sc.low(s))))
+  Bool.pick(U32, U32.is_gt(h, nl), (h - nl : U32), 0)
+
+# the chat scrolled to the answer found (top: the rows from the chat's end
+# to its top row), that row the chat's second, counted with the lines
+# under the chat as they will be (a hint said or gone changes how many);
+# none above: the top row as drawn (at) kept, and that said; none below:
+# the end
+def sc.ans.go(+s: sc.S, +up: Bool, +top: U32, +at: U32) -> sc.S:
+  +none = U32.is_eq(top, 0)
+  +s1 = sc.with.hint(s, Bool.pick(String, Bool.and(none, up), "no answer of mugen's above", ""))
+  +t = sc.ans.t(s1)
+  +want = Bool.pick(U32, none, Bool.pick(U32, up, at, 0), (top + 1 : U32))
+  sc.dirty(sc.with.off(s1, (want - U32.min(want, t) : U32)), 2)
+
+# M-Up (up) and M-Down: the answer before or after the one on the chat's
+# second row (where the one gone to last is), from the rows as drawn
+def sc.to.ans(+s: sc.S, +up: Bool) -> sc.S:
+  +h = sc.h(s)
+  +t = (h - U32.min(h, sc.tm.low(sc.tm(s))) : U32)
+  +at = (sc.off(s) + t : U32)
+  +ref = (at - U32.min(at, 1) : U32)
+  sc.ans.go(s, up, sc.ans.find(up, sc.vw(s), ref, sc.w(s), sc.home(s), sc.focus(s)), at)
 
 def sc.blk.has(bs: List<&2, sc.Blk>, +id: U32) -> Bool:
   match bs:
@@ -1996,10 +2076,16 @@ def sc.all(+s: sc.S) -> sc.S:
 # nothing, 18 a drag, 19 a let go, 20 Up on an empty input with messages
 # waiting, 21 M-Left and 22 M-Right with tabs shown, 23 M-s, 24 M-S, 25 M-1
 # to M-9 (the spellcheck's), 27 Shift-Tab (plan or auto), 28 the mouse moved
-# (no button held), 29 M-a (a word to your words, or out), 30 M-? (/help).
+# (no button held), 29 M-a (a word to your words, or out), 30 M-? (/help),
+# 31 M-Up, M-p or M-{ (mugen's answer before), 32 M-Down, M-n or M-} (the
+# one after).
 # While searching, Enter, C-g, Esc and Shift-Tab are the search's.
 def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool) -> Nat:
   match key:
+    case K.ky.Nav{1, 2}:
+      31n
+    case K.ky.Nav{2, 2}:
+      32n
     case K.ky.Nav{1, m}:
       Bool.pick(Nat, Bool.and(back, Bool.and(empty, Bool.not(find))), 20n, 0n)
     case K.ky.Nav{4, 2}:
@@ -2048,6 +2134,14 @@ def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool)
       29n
     case K.ky.Meta{63}:
       30n
+    case K.ky.Meta{112}:
+      31n
+    case K.ky.Meta{110}:
+      32n
+    case K.ky.Meta{123}:
+      31n
+    case K.ky.Meta{125}:
+      32n
     case K.ky.Meta{+c}:
       Bool.pick(Nat, P.pp.in(c, 49, 57), 25n, 0n)
     case K.ky.Mouse{35, x, y, up}:
@@ -2333,6 +2427,10 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
       sc.words.key(s)
     case 30n:
       IO.bind(Unit, sc.S, sc.send(s, "/help"), u => IO.pure(sc.S, sc.dirty(sc.with.off(sc.with.hint(s, ""), 0), 2)))
+    case 31n:
+      IO.pure(sc.S, sc.to.ans(s, True{}))
+    case 32n:
+      IO.pure(sc.S, sc.to.ans(s, False{}))
     case _:
       IO.pure(sc.S, s)
 
