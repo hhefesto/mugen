@@ -1982,6 +1982,51 @@ def hb.is.check(t: hb.T, +goal: String) -> Bool:
     case _:
       False{}
 
+def hb.older.put(keep: Bool, +k: String, +t: String, acc: List<&2, Sc.sc.OldM>) -> List<&2, Sc.sc.OldM>:
+  match keep:
+    case True{}:
+      Sc.sc.OldM{k, t} <> acc
+    case False{}:
+      acc
+
+# M-Up past the full screen's oldest answer (E.ev.Older): the log read back
+# from message before-1 to the answer before it and the message that
+# answer's turn began with; the user's messages, mugen's answers and the
+# agents' reports met on the way go to the screen (Sc.sc.Old, the oldest
+# first, with the message reading stopped at), at most 4000 read a time
+def hb.older.keep(+k: String) -> Bool:
+  Bool.or(String.eq(k, "user"), Bool.or(String.eq(k, "unii"), String.eq(k, "work")))
+
+def hb.older.text(m: Maybe<&2, St.st.Root>) -> String:
+  match m:
+    case Some{r}:
+      St.st.root.text(r)
+    case None{}:
+      ""
+
+def hb.older.go(n: Nat, stop: Bool, +dir: String, +before: U32, +i: U32, +got: Bool, +acc: List<&2, Sc.sc.OldM>) -> IO(Sc.sc.In):
+  match n stop:
+    case 1n+f False{}:
+      do IO<Sc.sc.In>:
+        +j : U32 = (i - U32.min(i, 1) : U32)
+        +m : Maybe<&2, St.st.Root> <- St.st.message(dir, j)
+        +k : String = M.me.kind.of(m)
+        +acc2 : List<&2, Sc.sc.OldM> = hb.older.put(hb.older.keep(k), k, hb.older.text(m), acc)
+        +turn : Bool = Bool.or(String.eq(k, "user"), String.eq(k, "work"))
+        hb.older.go(f, Bool.or(U32.is_eq(j, 0), Bool.and(got, turn)), dir, before, j, Bool.or(got, String.eq(k, "unii")), acc2)
+    case _ _:
+      IO.pure(Sc.sc.In, Sc.sc.Old{before, i, acc})
+
+def hb.older.on(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S, +before: U32) -> IO(hb.S):
+  match m:
+    case Some{+c}:
+      do IO<hb.S>:
+        +x : Sc.sc.In <- hb.older.go(4000n, U32.is_eq(before, 0), hb.dir(s), before, before, False{}, [])
+        Unit <- Sc.sc.tell(c, x)
+        return s
+    case None{}:
+      IO.pure(hb.S, s)
+
 def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
   match m:
     case None{}:
@@ -2007,6 +2052,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
       hb.ran(s, cmd, out)
     case Some{E.ev.Login{k, +out, +status}}:
       hb.login.got(k, s, out, status)
+    case Some{E.ev.Older{+before}}:
+      hb.older.on(hb.scr(s), s, before)
 
 def hb.is.idle(t: hb.T) -> Bool:
   match t:
@@ -2360,7 +2407,9 @@ def hb.recent.on(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S) -> IO(Unit):
     case Some{+c}:
       +count = M.me.count(hb.mem(s))
       +from = (count - U32.min(count, 60) : U32)
-      hb.recent(U32.to_nat((count - from : U32)), s, c, from)
+      do IO<Unit>:
+        Unit <- Sc.sc.tell(c, Sc.sc.Since{from})
+        hb.recent(U32.to_nat((count - from : U32)), s, c, from)
     case None{}:
       IO.pure(Unit, Unit{})
 

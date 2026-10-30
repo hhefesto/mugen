@@ -2,6 +2,16 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.10.1 (2026-10-30)
+
+- `M-p` (`M-↑`, `M-{`) goes on back through every answer of the chat: it
+  stopped at the oldest answer the screen still had, the newest 400
+  blocks (60 messages when mugen opens), so a turn of many tool calls hid
+  the answers before it. The chat now keeps its messages and answers past
+  those 400 blocks (tool calls still go), and past the oldest it has,
+  `M-p` reads the answer before it, and the message it answers, from the
+  chat's log.
+
 ## 0.10.0 (2026-10-30)
 
 - `M-p` and `M-n` (as in Emacs; or `M-↑` and `M-↓`, or `M-{` and `M-}`)

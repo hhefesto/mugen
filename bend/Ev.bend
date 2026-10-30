@@ -35,6 +35,9 @@ type ev.Say is Data:
 #                   link, then what it printed; (1) it ended: out, its
 #                   exit status (or late, gone) then its last lines, and
 #                   status, `claude auth status --json` then
+#   Older           M-Up past the full screen's oldest answer: the log's
+#                   answer before message `before`, and what it answers
+#                   (Hub.bend hb.older, Screen.bend sc.Old)
 type ev.Ev is Data:
   ev.Line{text: String}
   ev.Eof{}
@@ -46,6 +49,7 @@ type ev.Ev is Data:
   ev.Goal{goal: String, ok: Bool, text: String}
   ev.Ran{command: String, out: String}
   ev.Login{step: U32, out: String, status: String}
+  ev.Older{before: U32}
 
 # sent, whatever came of it (a hub gone ends the program anyway)
 def ev.send(+c: Chan(ev.Ev), e: ev.Ev) -> IO(Unit):

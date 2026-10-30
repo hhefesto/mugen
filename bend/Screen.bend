@@ -65,7 +65,13 @@ type sc.St is Data:
 # what the screen hears: a key (and when, IO.now), an entry to show, the
 # hub's state, a tick (5 a second), stdin's end, and the hub leaving (the
 # terminal given back, then `done` told); a message taken back from the
-# queue; hunspell's answer about the words asked (Spell.bend)
+# queue; hunspell's answer about the words asked (Spell.bend); the first of
+# the log's messages the chat opened with (Since), and older messages read
+# from the log for M-Up (Old: the user's, mugen's answers, the agents'
+# reports, the oldest first, from message `from` up to `before`)
+type sc.OldM is Data:
+  sc.OldM{kind: String, text: String}
+
 type sc.In is Data:
   sc.Key{key: K.ky.Key, at: Nat}
   sc.Put{who: String, kind: String, text: String}
@@ -75,6 +81,8 @@ type sc.In is Data:
   sc.Bye{done: Chan(Unit)}
   sc.Back{text: String}
   sc.Spelt{words: List<&2, String>, out: S.mu.Out}
+  sc.Since{from: U32}
+  sc.Old{before: U32, from: U32, ms: List<&2, sc.OldM>}
 
 # what never changes: the hub's inbox, our own, home (~ in paths), the
 # history's file
@@ -89,12 +97,14 @@ type sc.Cf is Data:
 type sc.An is Data:
   sc.An{id: U32, row: U32, off: U32}
 
-# the chat: its blocks (newest first; the last 400), the next id, the rows
-# scrolled up from its end, the ids of the blocks on its rows as drawn (top
-# down), and where its top row was; the agent whose tab shows ("" none) and
-# its blocks, all of its log's (Store.bend st.agent) and those since
+# the chat: its blocks (newest first; the last 400, and before them the
+# messages and answers only, sc.keep), the next id, the rows scrolled up
+# from its end, the ids of the blocks on its rows as drawn (top down), and
+# where its top row was; the agent whose tab shows ("" none) and its
+# blocks, all of its log's (Store.bend st.agent) and those since; the
+# first of the log's messages the chat has (0: all, or none sent)
 type sc.Tr is Data:
-  sc.Tr{blks: List<&2, sc.Blk>, next: U32, off: U32, ids: List<&2, U32>, an: sc.An, ag: String, abs: List<&2, sc.Blk>}
+  sc.Tr{blks: List<&2, sc.Blk>, next: U32, off: U32, ids: List<&2, U32>, an: sc.An, ag: String, abs: List<&2, sc.Blk>, old: U32}
 
 # the terminal: its columns and rows, what to draw (0 nothing, 1 the lines
 # under the chat, 2 all), the mouse's reports on, the rows under the chat as
@@ -289,50 +299,60 @@ def sc.home(+s: sc.S) -> String:
 
 def sc.tr.blks(t: sc.Tr) -> List<&2, sc.Blk>:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
       b
 
 def sc.tr.next(t: sc.Tr) -> U32:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
       n
 
 def sc.tr.off(t: sc.Tr) -> U32:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
       o
 
 def sc.tr.ids(t: sc.Tr) -> List<&2, U32>:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
       i
 
 def sc.tr.an(t: sc.Tr) -> sc.An:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
       a
 
 def sc.tr.ag(t: sc.Tr) -> String:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
       g
 
 def sc.tr.abs(t: sc.Tr) -> List<&2, sc.Blk>:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
       x
+
+def sc.tr.old(t: sc.Tr) -> U32:
+  match t:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
+      d
+
+def sc.tr.with.old(t: sc.Tr, +d2: U32) -> sc.Tr:
+  match t:
+    case sc.Tr{b, n, o, i, a, g, x, d}:
+      sc.Tr{b, n, o, i, a, g, x, d2}
 
 # the agent whose log is loaded, and its blocks
 def sc.tr.with.ag(t: sc.Tr, +g2: String, +x2: List<&2, sc.Blk>) -> sc.Tr:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
-      sc.Tr{b, n, o, i, a, g2, x2}
+    case sc.Tr{b, n, o, i, a, g, x, d}:
+      sc.Tr{b, n, o, i, a, g2, x2, d}
 
 # the next id, past k taken
 def sc.tr.took(t: sc.Tr, +k: U32) -> sc.Tr:
   match t:
-    case sc.Tr{b, n, o, i, a, g, x}:
-      sc.Tr{b, (n + k : U32), o, i, a, g, x}
+    case sc.Tr{b, n, o, i, a, g, x, d}:
+      sc.Tr{b, (n + k : U32), o, i, a, g, x, d}
 
 def sc.an.id(a: sc.An) -> U32:
   match a:
@@ -364,11 +384,11 @@ def sc.off(+s: sc.S) -> U32:
 
 def sc.with.blks(+s: sc.S, +bs: List<&2, sc.Blk>) -> sc.S:
   +t = sc.tr(s)
-  sc.with.tr(s, sc.Tr{bs, sc.tr.next(t), sc.tr.off(t), sc.tr.ids(t), sc.tr.an(t), sc.tr.ag(t), sc.tr.abs(t)})
+  sc.with.tr(s, sc.Tr{bs, sc.tr.next(t), sc.tr.off(t), sc.tr.ids(t), sc.tr.an(t), sc.tr.ag(t), sc.tr.abs(t), sc.tr.old(t)})
 
 def sc.with.off(+s: sc.S, +o: U32) -> sc.S:
   +t = sc.tr(s)
-  sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), o, sc.tr.ids(t), sc.tr.an(t), sc.tr.ag(t), sc.tr.abs(t)})
+  sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), o, sc.tr.ids(t), sc.tr.an(t), sc.tr.ag(t), sc.tr.abs(t), sc.tr.old(t)})
 
 def sc.u.focus(u: sc.U) -> String:
   match u:
@@ -1251,7 +1271,7 @@ def sc.cursor(+r: U32, +c: U32) -> String:
 def sc.with.drawn(+s: sc.S, +g: sc.G, +ids: List<&2, U32>, +off: U32, +an: sc.An, +low: U32, +rows: List<&2, String>, +pin: U32) -> sc.S:
   +t = sc.tr(s)
   +m = sc.tm(s)
-  +s1 = sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), off, ids, an, sc.tr.ag(t), sc.tr.abs(t)})
+  +s1 = sc.with.tr(s, sc.Tr{sc.tr.blks(t), sc.tr.next(t), off, ids, an, sc.tr.ag(t), sc.tr.abs(t), sc.tr.old(t)})
   sc.with.z(sc.with.tm(sc.with.vw(s1, sc.g.bs(g)), sc.Tm{sc.tm.w(m), sc.tm.h(m), 0, sc.tm.mouse(m), low}), sc.sel.with.drawn(sc.z(s), rows, pin))
 
 # The prompt pinned on top: the newest of the user's messages at or above
@@ -1402,6 +1422,65 @@ def sc.to.ans(+s: sc.S, +up: Bool) -> sc.S:
   +ref = (at - U32.min(at, 1) : U32)
   sc.ans.go(s, up, sc.ans.find(up, sc.vw(s), ref, sc.w(s), sc.home(s), sc.focus(s)), at)
 
+def sc.to.ans.ask(ask: Bool, +s: sc.S, +old: U32, +top: U32, +at: U32) -> IO(sc.S):
+  match ask:
+    case True{}:
+      IO.bind(Unit, sc.S, E.ev.send(sc.hub(s), E.ev.Older{old}), u => IO.pure(sc.S, sc.dirty(sc.with.hint(s, "reading older answers from the log\u{2026}"), 1)))
+    case False{}:
+      IO.pure(sc.S, sc.ans.go(s, True{}, top, at))
+
+# M-Up with no answer of mugen's above in the chat's blocks: on the chat
+# (not an agent's tab), the hub is asked for the log's answer before the
+# first message the chat has (sc.Old brings it, and this again), unless the
+# chat has the log's first message
+def sc.to.ans.up(+s: sc.S) -> IO(sc.S):
+  +h = sc.h(s)
+  +t = (h - U32.min(h, sc.tm.low(sc.tm(s))) : U32)
+  +at = (sc.off(s) + t : U32)
+  +ref = (at - U32.min(at, 1) : U32)
+  +focus = sc.focus(s)
+  +top = sc.ans.find(True{}, sc.vw(s), ref, sc.w(s), sc.home(s), focus)
+  +old = sc.tr.old(sc.tr(s))
+  +ask = Bool.and(U32.is_eq(top, 0), Bool.and(Bool.or(String.is_empty(focus), String.eq(focus, "mugen")), U32.is_gt(old, 0)))
+  sc.to.ans.ask(ask, s, old, top, at)
+
+# the lowest id of the chat's blocks (the oldest's), else n
+def sc.blk.low(bs: List<&2, sc.Blk>, +n: U32) -> U32:
+  match bs:
+    case []:
+      n
+    case b <> rest:
+      sc.blk.low(rest, sc.blk.id(b))
+
+# the log's older messages as blocks, the newest first, ids under id
+def sc.old.blks(ms: List<&2, sc.OldM>, +id: U32, +now: Nat, +w: U32, +home: String) -> List<&2, sc.Blk>:
+  match ms:
+    case []:
+      []
+    case sc.OldM{+kind, +text} <> rest:
+      +i = (id - U32.min(id, 1) : U32)
+      sc.blk.new(i, "", kind, text, False{}, now, w, home) <> sc.old.blks(rest, i, now, w, home)
+
+# older messages from the log (the oldest first), put before the chat's
+# oldest block, the chat's first message then `from`; an answer that is no
+# longer asked for (another came first) changes nothing
+def sc.old.put(+s: sc.S, +from: U32, ms: List<&2, sc.OldM>) -> sc.S:
+  +t = sc.tr(s)
+  +bs = sc.blks(s)
+  +olds = sc.old.blks(List.reverse(&2, sc.OldM, ms), sc.blk.low(bs, sc.tr.next(t)), sc.now(s), sc.w(s), sc.home(s))
+  +s2 = sc.with.blks(s, List.append(&2, sc.Blk, bs, olds))
+  sc.with.tr(s2, sc.tr.with.old(sc.tr(s2), from))
+
+def sc.old.got.on(on: Bool, +s: sc.S, +from: U32, ms: List<&2, sc.OldM>) -> IO(sc.S):
+  match on:
+    case True{}:
+      sc.to.ans.up(sc.old.put(s, from, ms))
+    case False{}:
+      IO.pure(sc.S, s)
+
+def sc.old.got(+s: sc.S, +before: U32, +from: U32, ms: List<&2, sc.OldM>) -> IO(sc.S):
+  sc.old.got.on(U32.is_eq(before, sc.tr.old(sc.tr(s))), s, from, ms)
+
 def sc.blk.has(bs: List<&2, sc.Blk>, +id: U32) -> Bool:
   match bs:
     case []:
@@ -1504,11 +1583,36 @@ def sc.draw(+s: sc.S) -> IO(sc.S):
 
 # Entries ------------------------------------------------------------------------
 
+# The chat keeps its newest 400 blocks, and of those before them the
+# messages and answers (the user's, mugen's, the agents' reports: mugen's
+# own, not an agent's tab's), so M-Up reaches every answer since the chat
+# opened, past any number of tool calls; older ones the log gives (sc.Old).
+def sc.keep.one(on: Bool, b: sc.Blk, rest: List<&2, sc.Blk>) -> List<&2, sc.Blk>:
+  match on:
+    case True{}:
+      b <> rest
+    case False{}:
+      rest
+
+def sc.keep.is(+b: sc.Blk) -> Bool:
+  +k = sc.blk.kind(b)
+  Bool.and(String.is_empty(sc.blk.who(b)), Bool.or(String.eq(k, "user"), Bool.or(String.eq(k, "unii"), String.eq(k, "work"))))
+
+def sc.keep.old(bs: List<&2, sc.Blk>) -> List<&2, sc.Blk>:
+  match bs:
+    case []:
+      []
+    case +b <> rest:
+      sc.keep.one(sc.keep.is(b), b, sc.keep.old(rest))
+
+def sc.keep(+bs: List<&2, sc.Blk>) -> List<&2, sc.Blk>:
+  List.append(&2, sc.Blk, List.take(&2, sc.Blk, bs, 400n), sc.keep.old(List.drop(&2, sc.Blk, bs, 400n)))
+
 def sc.tr.add(t: sc.Tr, +b: sc.Blk) -> sc.Tr:
   match t:
-    case sc.Tr{bs, n, +o, i, a, g, x}:
+    case sc.Tr{bs, n, +o, i, a, g, x, d}:
       +k = sc.blk.n(b)
-      sc.Tr{List.take(&2, sc.Blk, b <> bs, 400n), (n + 1 : U32), Bool.pick(U32, U32.is_eq(o, 0), 0, (o + k : U32)), i, sc.an.bump(a, o, k), g, x}
+      sc.Tr{sc.keep(b <> bs), (n + 1 : U32), Bool.pick(U32, U32.is_eq(o, 0), 0, (o + k : U32)), i, sc.an.bump(a, o, k), g, x, d}
 
 # a block more, at the chat's end (the view held where it is if scrolled up)
 def sc.add(+s: sc.S, +who: String, +kind: String, +text: String, +run: Bool) -> sc.S:
@@ -2428,7 +2532,7 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
     case 30n:
       IO.bind(Unit, sc.S, sc.send(s, "/help"), u => IO.pure(sc.S, sc.dirty(sc.with.off(sc.with.hint(s, ""), 0), 2)))
     case 31n:
-      IO.pure(sc.S, sc.to.ans(s, True{}))
+      sc.to.ans.up(s)
     case 32n:
       IO.pure(sc.S, sc.to.ans(s, False{}))
     case _:
@@ -2573,6 +2677,10 @@ def sc.on(+s: sc.S, m: Maybe<&1, sc.In>) -> IO(sc.S):
       IO.pure(sc.S, sc.spelt(s, ws, o))
     case Some{sc.Back{+text}}:
       IO.pure(sc.S, sc.dirty(sc.with.hint(sc.with.ed(s, D.ed.taken(sc.ed(s), text)), "taken back from the queue: edit it, Enter sends it"), 1))
+    case Some{sc.Since{+from}}:
+      IO.pure(sc.S, sc.with.tr(s, sc.tr.with.old(sc.tr(s), from)))
+    case Some{sc.Old{+before, +from, ms}}:
+      sc.old.got(s, before, from, ms)
 
 # what more came meanwhile, taken before drawing
 def sc.drain(n: Nat, p: Poll<&1, &1, Maybe<&1, sc.In>, Unit>, +s: sc.S) -> IO(sc.S):
@@ -2678,7 +2786,7 @@ def sc.run(+hub: Chan(E.ev.Ev), +me: Chan(sc.In), +home: String, +hfile: String)
     ws : U32 <- S.mu.winsize()
     hist : List<&2, String> <- sc.hist.load(hfile)
     now : Nat <- IO.now()
-    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 1, 0, [], sc.An{0, 0, 0}, "", []}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([]), Sp.sp.new()}, ws)
+    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 16777216, 0, [], sc.An{0, 0, 0}, "", [], 0}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([]), Sp.sp.new()}, ws)
     Unit <- IO.spawn(Unit, sc.reader(me))
     Unit <- IO.spawn(Unit, sc.ticker(sc.fuel(), me, Done{Unit{}}))
     +s0p : sc.S <- sc.phone(True{}, s0)

@@ -105,7 +105,8 @@ the top, `End` (or `M->`) back to the end. While scrolled up, nothing that
 comes (a new entry, a result under its call) moves what you read, and `M->`
 follows the end again. `M-↑` and `M-↓` (or Emacs's `M-p` and `M-n`, or `M-{` and `M-}`) go to mugen's
 answer before and after the one you read, past its thoughts, its tools and
-what they said: the answer comes to the top, under the message it answers. Under the chat:
+what they said: the answer comes to the top, under the message it answers, and on back
+through every answer of the chat (older ones read from its log). Under the chat:
 what runs and for how long (the tool too), the messages waiting for mugen,
 the status line (where mugen works, the model, its effort, the context
 left before mugen folds its oldest lines at 128 KB, the mode), and the

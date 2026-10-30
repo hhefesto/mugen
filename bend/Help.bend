@@ -63,7 +63,7 @@ def hl.reading() -> String:
     "## Reading the chat",
     "- `PgUp`, `PgDn` and the wheel scroll. On an empty input `Home` (or `M-<` anywhere) goes to the top, `End` (or `M->`) back to the end.",
     "- While you are scrolled up, nothing new moves what you read; `M->` follows the end again.",
-    "- `M-↑` and `M-↓` (or Emacs's `M-p` and `M-n`, or `M-{` and `M-}`) go to mugen's answer before and after the one you read, past its thoughts, its tools and what they said: the answer comes to the top, under the message it answers. Past the last one, `M-↓` goes to the end. On an agent's tab they go through the agent's answers.",
+    "- `M-↑` and `M-↓` (or Emacs's `M-p` and `M-n`, or `M-{` and `M-}`) go to mugen's answer before and after the one you read, past its thoughts, its tools and what they said: the answer comes to the top, under the message it answers. They go on past the chat's oldest answer, through every answer of the chat (older ones read from its log). Past the last one, `M-↓` goes to the end. On an agent's tab they go through the agent's answers.",
     "- A click on a block folds or opens it; `M-o` (or `C-o`, unless tmux takes it as its prefix) folds or opens all of them.",
     "- Drag over the chat to select text: letting go copies it to the clipboard (by xclip) and to tmux's buffer, or outside tmux to the terminal's clipboard (by OSC 52: Windows Terminal, kitty, WezTerm and others take it), and a line says how much. `Shift`-drag is the terminal's own selection.",
     "- `/mouse` hands the mouse to the terminal, and back.",

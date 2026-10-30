@@ -63,7 +63,9 @@ for name in "${names[@]}"; do
     k=$((k + 1))
     masks+=(-e "s/${f%.jsonl}/@AGENT$k@/g")
   done
-  sed -e "s#$w/d/work#@WORK@#g" -e "s#$w/d#@DIR@#g" -e "s/$HOST/@HOST@/g" -e 's/ in [0-9]*\.[0-9] s)/ in T s)/g' "${masks[@]}" "$w/raw" > "$w/out"
+  # (paths under $HOME are said with ~: /status's work dir in the sandbox)
+  tw="~${w#"$HOME"}"
+  sed -e "s#$w/d/work#@WORK@#g" -e "s#$w/d#@DIR@#g" -e "s#$tw/d/work#@WORK@#g" -e "s#$tw/d#@DIR@#g" -e "s/$HOST/@HOST@/g" -e 's/ in [0-9]*\.[0-9] s)/ in T s)/g' "${masks[@]}" "$w/raw" > "$w/out"
   ok=1
   expect="$src/expect"
   if [ -f "$src/expect.$WIRE" ]; then
