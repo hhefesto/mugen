@@ -178,8 +178,12 @@ Commands:
   A command that asks for a password (`sudo` in it, or in the alias its
   first word names, as `!ns`) runs in a tmux window of its own beside
   mugen's: type the password there, where only sudo reads it; mugen never
-  sees it, only what the command prints. Enter in that window, once the
-  command ends, brings you back. Outside tmux mugen won't run one.
+  sees it, only what the command prints. mugen says which window (`0:2`:
+  from another terminal, `tmux attach -t 0:2`), the window rings the bell,
+  and while it runs the status line starts with "!ns waits for your
+  password in tmux window 0:2" (sudo gives up after 5 minutes). Enter in
+  that window, once the command ends, brings you back. Outside tmux mugen
+  won't run one.
 - `/stop [name]`: stop the turn, or one agent (`/stop !`: your own command).
 - `/now`: as `C-s`.
 - `/goal TEXT`, `/halt`: set a goal, or drop it.

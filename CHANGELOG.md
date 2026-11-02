@@ -2,6 +2,16 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.12.1 (2026-11-02)
+
+- A `!` command waiting for a password in its tmux window is hard to miss:
+  mugen says which window ("window 0:2"; from another terminal, `tmux
+  attach -t 0:2`) and that sudo gives up after 5 minutes, the window rings
+  the bell as it opens, and until the command ends the status line starts
+  with "!ns waits for your password in tmux window 0:2". mugen-web shows a
+  bar above the box (and "password for !ns" in the top bar) and says, in
+  its panel, where to type it.
+
 ## 0.12.0 (2026-11-02)
 
 - A turn that stops at a usage limit ("You've hit your session limit ·

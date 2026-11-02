@@ -85,8 +85,10 @@ type hb.W is Data:
 # said to do and since when (IO.now), how many messages its call started
 # with (the rest it was handed as it ran), and the user's messages held,
 # not logged yet, while mugen works (Up takes the newest back to edit).
+# Whether the user's `!command` runs, and, while one runs in a tmux window
+# of its own for a password, the status line's word of where ("" none).
 type hb.Ui is Data:
-  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>, bang: Bool}
+  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>, bang: Bool, term: String}
 
 type hb.S is Data:
   hb.S{cfg: hb.Cfg, mem: M.me.Mem, inbox: Chan(E.ev.Ev), junk: Chan(String), pick: A.ap.Pick, turn: hb.T, wait: List<&2, hb.Msg>, sent: List<&2, hb.Msg>, halt: String, agents: List<&2, hb.Ag>, reqs: List<&2, hb.W>, eof: Bool, quit: Bool, shown: String, ui: hb.Ui}
@@ -235,49 +237,49 @@ def hb.with.ui(s: hb.S, ui2: hb.Ui) -> hb.S:
 
 def hb.ui.mode(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       m
 
 def hb.ui.due(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       d
 
 def hb.ui.busy(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       b
 
 def hb.ui.scr(u: hb.Ui) -> Maybe<&2, Chan(Sc.sc.In)>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       sc
 
 def hb.ui.force(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       fo
 
 def hb.ui.what(u: hb.Ui) -> String:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       wh
 
 def hb.ui.t0(u: hb.Ui) -> Nat:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       t0
 
 def hb.ui.set(u: hb.Ui, +k: Nat, +m2: U32, +b2: Bool, +wh2: String, +t2: Nat) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg}:
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw}:
       hb.Ui{Bool.pick(U32, Nat.is_eq(k, 0n), m2, m), Bool.pick(Bool, Nat.is_eq(k, 1n), b2, d), Bool.pick(Bool, Nat.is_eq(k, 2n), b2, b), sc,
         Bool.pick(Bool, Nat.is_eq(k, 3n), b2, fo), Bool.pick(String, Nat.is_eq(k, 4n), wh2, wh), Bool.pick(Nat, Nat.is_eq(k, 4n), t2, t0), Bool.pick(U32, Nat.is_eq(k, 5n), m2, ld), hd,
-        Bool.pick(Bool, Nat.is_eq(k, 6n), b2, bg)}
+        Bool.pick(Bool, Nat.is_eq(k, 6n), b2, bg), Bool.pick(String, Nat.is_eq(k, 7n), wh2, tw)}
 
 def hb.ui.lead(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       ld
 
 def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
@@ -285,13 +287,13 @@ def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
 
 def hb.ui.held(u: hb.Ui) -> List<&2, String>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       hd
 
 def hb.ui.with.held(u: hb.Ui, +h2: List<&2, String>) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd, +bg}:
-      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2, bg}
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd, +bg, +tw}:
+      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2, bg, tw}
 
 def hb.held(+s: hb.S) -> List<&2, String>:
   hb.ui.held(hb.ui(s))
@@ -299,7 +301,7 @@ def hb.held(+s: hb.S) -> List<&2, String>:
 # whether the user's own shell command (`!command`) runs
 def hb.ui.bang(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
       bg
 
 def hb.bang.on(+s: hb.S) -> Bool:
@@ -307,6 +309,15 @@ def hb.bang.on(+s: hb.S) -> Bool:
 
 def hb.with.bang(+s: hb.S, +b: Bool) -> hb.S:
   hb.with.ui(s, hb.ui.set(hb.ui(s), 6n, 0, b, "", 0n))
+
+# the status line's word of a `!command` waiting in a window of its own
+def hb.ui.term(u: hb.Ui) -> String:
+  match u:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+      tw
+
+def hb.with.term(+s: hb.S, +t: String) -> hb.S:
+  hb.with.ui(s, hb.ui.set(hb.ui(s), 7n, 0, False{}, t, 0n))
 
 def hb.with.held(+s: hb.S, +h: List<&2, String>) -> hb.S:
   hb.with.ui(s, hb.ui.with.held(hb.ui(s), h))
@@ -1841,7 +1852,7 @@ def hb.bang.needs(+s: hb.S, +cmd: String) -> IO(Bool):
 # the window's script: $1 the shell, $2 the command, $3 its output, $4 its
 # exit, $5 the channel mugen waits on
 def hb.term.script() -> String:
-  "trap 'tmux wait-for -S \"$5\"; exit' HUP TERM\nprintf '\\033[1m$ %s\\033[0m\\n' \"$2\"\n{ \"$1\" -ic \"$2\"; echo $? > \"$4.tmp\"; } 2>&1 | tee \"$3\"\nmv \"$4.tmp\" \"$4\" 2> /dev/null\ntrap - HUP TERM\ntmux wait-for -S \"$5\"\nprintf '\\n[exit %s] Enter goes back to mugen (this window closes by itself in 2 minutes). ' \"$(cat \"$4\" 2> /dev/null)\"\nread -r -t 120 _\n"
+  "trap 'tmux wait-for -S \"$5\"; exit' HUP TERM\nprintf '\\a\\033[1m$ %s\\033[0m\\n' \"$2\"\n{ \"$1\" -ic \"$2\"; echo $? > \"$4.tmp\"; } 2>&1 | tee \"$3\"\nmv \"$4.tmp\" \"$4\" 2> /dev/null\ntrap - HUP TERM\ntmux wait-for -S \"$5\"\nprintf '\\n[exit %s] Enter goes back to mugen (this window closes by itself in 2 minutes). ' \"$(cat \"$4\" 2> /dev/null)\"\nread -r -t 120 _\n"
 
 def hb.res.text(r: Result<&1, &1, U32 & String, String>) -> String:
   match r:
@@ -1870,6 +1881,15 @@ def hb.term.wait(+inbox: Chan(E.ev.Ev), +dir: String, +id: String, +cmd: String)
 def hb.term.win(+pane: String) -> IO(String):
   IO.bind(S.mu.Out, String, S.mu.run("tmux", ["display-message", "-p", "-t", pane, "#{window_id}"], "", 4096, 10000), o => IO.pure(String, T.tx.trim(Cc.cc.out.text(o))))
 
+# where a pane is, as tmux names it: session:window (`tmux attach -t 0:2`)
+def hb.term.at(+pane: String) -> IO(String):
+  IO.bind(S.mu.Out, String, S.mu.run("tmux", ["display-message", "-p", "-t", pane, "#{session_name}:#{window_index}"], "", 4096, 10000), o => IO.pure(String, T.tx.trim(Cc.cc.out.text(o))))
+
+# what mugen says as the window opens: where to type the password
+def hb.term.say(+cmd: String, +w: String, +at: String) -> String:
+  "!" ++ cmd ++ " asks for a password, so it runs in a tmux window of its own, beside mugen's: window " ++ at ++ " (" ++ w
+    ++ "; from another terminal, `tmux attach -t " ++ at ++ "`). Type the password there, or on mugen-web opened over the tailnet: only sudo reads it, mugen never sees it. sudo gives up after 5 minutes without it. Enter in that window, once it ends, comes back here."
+
 # 1 the window opened (tp its pane), else 0: nothing runs, the user is told
 def hb.term.opened(k: Nat, +s: hb.S, +cmd: String, +dir: String, +id: String, +tp: String) -> IO(hb.S):
   match k:
@@ -1878,7 +1898,9 @@ def hb.term.opened(k: Nat, +s: hb.S, +cmd: String, +dir: String, +id: String, +t
         r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(dir ++ "/run/term.json", J.js.write(J.JObj{[J.JKv{"id", J.JStr{id}}, J.JKv{"cmd", J.JStr{cmd}}, J.JKv{"pane", J.JStr{tp}}]}) ++ "\n", 0)
         Unit <- hb.print(s, "you", "run", hb.bang.call(cmd))
         Unit <- IO.spawn(Unit, hb.term.wait(hb.inbox(s), dir, id, cmd))
-        hb.tell.user(hb.with.bang(s, True{}), "!" ++ cmd ++ " asks for a password, so it runs in a tmux window of its own (" ++ "!" ++ hb.word.go(cmd, "") ++ "): type it there, where only sudo reads it; mugen never sees it. Enter in that window, once it ends, comes back here.")
+        +at : String <- hb.term.at(tp)
+        +w : String = "!" ++ hb.word.go(cmd, "")
+        hb.tell.user(hb.with.term(hb.with.bang(s, True{}), w ++ " waits for your password in tmux window " ++ at), hb.term.say(cmd, w, at))
     case _:
       hb.tell.user(s, "!" ++ cmd ++ " asks for a password, so it should run in a tmux window of its own, but tmux opened none (" ++ tp ++ "): nothing ran. Run it in another terminal.")
 
@@ -1942,7 +1964,7 @@ def hb.ran.show(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S, +call: String, +out: Str
 def hb.ran(+s: hb.S, +cmd: String, +out: String) -> IO(hb.S):
   do IO<hb.S>:
     Unit <- hb.ran.show(hb.scr(s), s, hb.bang.call(cmd), out)
-    p : hb.P <- hb.push(hb.with.bang(s, False{}), "user", "!" ++ cmd ++ "\n" ++ out)
+    p : hb.P <- hb.push(hb.with.term(hb.with.bang(s, False{}), ""), "user", "!" ++ cmd ++ "\n" ++ out)
     return hb.p.s(p)
 
 # /stop: 0 as it was, 1 the user's command stopped (all that runs, or `/stop
@@ -2321,9 +2343,12 @@ def hb.mode.text(plan: Bool) -> String:
 
 # the model, its effort, the context left and the mode (the work dir is
 # always ~/.mugen/work/main, so only /status shows it)
+def hb.status.term(+t: String, +dot: String) -> String:
+  Bool.pick(String, String.is_empty(t), "", Tm.tm.esc("1;33", t) ++ dot)
+
 def hb.status.line(+s: hb.S) -> String:
   +dot = Tm.tm.esc("2", " · ")
-  Tm.tm.esc("36", hb.pick.model(hb.pick(s))) ++ dot ++ A.ap.pick.effort(hb.pick(s)) ++ dot
+  hb.status.term(hb.ui.term(hb.ui(s)), dot) ++ Tm.tm.esc("36", hb.pick.model(hb.pick(s))) ++ dot ++ A.ap.pick.effort(hb.pick(s)) ++ dot
     ++ U32.show(hb.left(s)) ++ "% left" ++ dot ++ hb.mode.text(hb.plan(s))
 
 def hb.prompt.text(+s: hb.S) -> String:
@@ -2737,7 +2762,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     pane : String <- S.mu.env("TMUX_PANE", "")
     Unit <- hb.tmux.keys(Bool.and(hb.cfg.screen(c), Bool.not(String.is_empty(pane))))
     +scr : Maybe<&2, Chan(Sc.sc.In)> <- hb.screen.open(hb.cfg.screen(c), c, inbox)
-    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, [], False{}}}
+    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, [], False{}, ""}}
     w : hb.When <- hb.when()
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))
     +s1 : hb.S <- hb.mem.jobs(s0, r)
