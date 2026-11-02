@@ -51,7 +51,8 @@ paste it as `/login CODE`. The chat's next call goes with that account.
   Anthropic allows plan logins only in its own apps, which is why mugen calls
   `claude` instead of reusing its login. Claude Code runs each call's tool
   loop, and mugen serves its own tools to it over MCP. The plan's usage limits
-  apply, including to the summaries (one Haiku call each).
+  apply, including to the summaries (one Haiku call each). A turn stopped at
+  a usage limit goes on by itself a minute after the limit resets.
 - **API (`--api`, or `MUGEN_WIRE=api`).** mugen calls the Messages API with
   curl and runs the tool loop itself, as UniiChat does.
 

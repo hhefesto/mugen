@@ -485,7 +485,7 @@ mugen --api</pre>
             <li>Runs the official <code>claude -p</code>, signed in with your Claude plan. Anthropic allows plan logins only in its own apps, which is why mugen calls <code>claude</code> instead of using the login itself.</li>
             <li>Claude Code runs each turn's tool loop and calls mugen's tools over MCP.</li>
             <li>Each summary is one Haiku call through <code>claude</code>, at most 8 at a time.</li>
-            <li>Usage counts against your plan's limits, summaries included.</li>
+            <li>Usage counts against your plan's limits, summaries included. A turn stopped at a limit goes on by itself a minute after the limit resets.</li>
             <li>Cache marks last an hour.</li>
             <li>Turns, agents and goal checks are saved as Claude Code transcripts.</li>
           </ul>
@@ -633,7 +633,8 @@ mugen --api</pre>
       <p><a href="https://github.com/hhefesto/mugen-web">mugen-web</a> shows the chat in a browser, the phone's too, and types what you send into mugen's tmux pane, as if you typed it there. It runs beside mugen, on the same computer, and reads <code>~/.mugen</code>: on the tailnet at <code>http://HOSTNAME:3008/chat/</code>, and, if you set one up, on a public name through a reverse tunnel (this site's is <code>mugen.hhefesto.dev</code>). A password signs you in.</p>
       <ul>
         <li><strong>Tool calls</strong> show a line each, as on mugen's screen: the tool, what it ran or read, how it went. A tap opens a call's input and output (an edit as its diff); <kbd>Alt-O</kbd> opens or folds every run of them. mugen's thoughts (✻) sit between them, folded.</li>
-        <li><strong>Questions</strong> mugen asks you are marked and counted: a bar over the box says how many wait, and a tap (or <kbd>Alt-Q</kbd>) goes to the next one. Its choices are buttons (<kbd>1</kbd>–<kbd>9</kbd> pick one, <kbd>0</kbd> writes your own answer); answers to several questions go as one message, each under its question quoted.</li>
+        <li><strong>Questions</strong> mugen asks you are marked and counted: a bar over the box says how many wait, and a tap (or <kbd>Alt-Q</kbd>) goes to the next one. Its choices are buttons (<kbd>1</kbd>–<kbd>9</kbd> pick one, <kbd>0</kbd> writes your own answer); answers to several questions go as one message, each under its question quoted. A question stops waiting once you write anything after it, on the page or on mugen's own screen.</li>
+        <li><strong>mugen's state</strong> shows in the top bar: working, waiting for you, stopped at a usage limit ("limit till 03:01": mugen goes on by itself then), no reply, or not running.</li>
         <li><strong>The mode</strong> shows in the top bar, plan or auto; a tap (or <kbd>Alt-M</kbd>) switches it. <code>/status</code> opens a panel with mugen's whole state; other commands' replies show over the box.</li>
         <li><strong>Send now</strong> (as <kbd>C-s</kbd>) shows while messages wait for mugen; the menu also stops the turn, restarts mugen (<code>/restart</code>), and switches Claude Code's account (<code>/login</code>: Anthropic's page opens in a new tab).</li>
         <li><strong><code>!ns</code></strong>, from the menu or typed: the command runs in its own tmux window (as on the screen), and a panel shows that window. Its box types into the window, the password for sudo too, only on the page opened over the tailnet (WireGuard from the phone to the computer, end to end), never through the public name, where Cloudflare and the tunnel's host would carry it; the password goes from the page to the window by tmux's paste, never to mugen, never on a command line.</li>
@@ -657,6 +658,8 @@ mugen --api</pre>
         <dd>Run <code>mugen login</code>. At startup, mugen stops and tells you to. During a chat, type <code>/login</code> (or run <code>mugen login</code> in another window); the chat goes on with your next message.</dd>
         <dt>"The AI service is busy: asking again in N s."</dt>
         <dd>The API is overloaded or your plan has hit a limit. A turn is retried a few times and then reports that the service is busy. Summaries keep retrying every minute, so they only get delayed.</dd>
+        <dt>"You've hit your session limit · resets 3am", then "Usage limit: mugen goes on by itself at 03:01"</dt>
+        <dd>Your plan's limit stopped the turn. mugen waits until a minute after the limit resets (every 30 minutes if Claude Code gave no time) and goes on with what it was doing, if nothing came into the chat since. A message of yours goes on at once instead, and stops again if the limit still holds.</dd>
         <dt>"No reply: stopped: refusal. Send a message to try again."</dt>
         <dd>The model declined that turn. Messages you sent during it wait for the next turn.</dd>
         <dt>The terminal looks wrong after mugen was killed</dt>

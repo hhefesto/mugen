@@ -38,6 +38,9 @@ type ev.Say is Data:
 #   Older           M-Up past the full screen's oldest answer: the log's
 #                   answer before message `before`, and what it answers
 #                   (Hub.bend hb.older, Screen.bend sc.Old)
+#   Resume          the usage limit mugen's turn stopped at has reset: go
+#                   on, if the chat still has `at` messages (nothing came
+#                   since) and nothing runs (Hub.bend hb.limit.over)
 type ev.Ev is Data:
   ev.Line{text: String}
   ev.Eof{}
@@ -50,6 +53,7 @@ type ev.Ev is Data:
   ev.Ran{command: String, out: String}
   ev.Login{step: U32, out: String, status: String}
   ev.Older{before: U32}
+  ev.Resume{at: U32}
 
 # sent, whatever came of it (a hub gone ends the program anyway)
 def ev.send(+c: Chan(ev.Ev), e: ev.Ev) -> IO(Unit):

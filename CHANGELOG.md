@@ -2,6 +2,15 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.12.0 (2026-11-02)
+
+- A turn that stops at a usage limit ("You've hit your session limit ·
+  resets 3am") goes on by itself: mugen notes when ("Usage limit: mugen
+  goes on by itself at 08:01, a minute after it resets"; the time from the
+  limits Claude Code reports, else every 30 minutes) and then tells itself
+  to go on with what it was doing, if nothing came into the chat since and
+  nothing runs. A message of yours before then goes on at once.
+
 ## 0.11.0 (2026-11-02)
 
 - `/restart`: mugen leaves as `/quit` does and starts again at once, in

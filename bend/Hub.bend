@@ -899,6 +899,102 @@ def hb.ended.goal(+s: hb.S, check: Bool, g: Maybe<&2, String>) -> IO(hb.S):
     case _ _:
       hb.go.on(s)
 
+# Usage limits -------------------------------------------------------------------------
+#
+# A turn that stopped at a usage limit (its answer "You've hit your session
+# limit · resets 3am (...)", or run/limits.json "rejected" until a time to
+# come) goes on by itself: a minute after the limit resets (resetsAt), or,
+# with no time known, every 30 minutes, mugen tells itself to go on, if the
+# chat has had nothing since and nothing runs. A message of the user's before
+# then goes on at once (and stops at the limit again if it still holds).
+
+def hb.is.idle(t: hb.T) -> Bool:
+  match t:
+    case hb.Idle{}:
+      True{}
+    case _:
+      False{}
+
+# a local time (ms) as its hour and minute, or its date
+def hb.hm(+ms: Nat, +tz: U32) -> String:
+  String.take(String.drop(C.ck.show(ms, tz), 11n), 5n)
+
+# when a limit holds until (ms), from limits.json: 0 when none does
+def hb.limit.of(+j: J.Json) -> Nat:
+  +info = Maybe.default(&2, J.Json, J.js.field(j, "info"), J.JObj{[]})
+  +status = Maybe.default(&2, String, J.js.str(info, "status"), "")
+  Bool.pick(Nat, String.eq(status, "rejected"), Nat.mul(Maybe.default(&2, Nat, J.js.num(info, "resetsAt"), 0n), 1000n), 0n)
+
+def hb.limit.json(m: Maybe<&2, J.Json>) -> Nat:
+  match m:
+    case Some{+j}:
+      hb.limit.of(j)
+    case None{}:
+      0n
+
+def hb.limit.got(r: Result<&1, &1, U32 & String, String>) -> Nat:
+  match r:
+    case Done{t}:
+      hb.limit.json(J.js.read(t))
+    case Fail{e}:
+      0n
+
+# the turn's last answer says it hit a limit
+def hb.limit.said(m: Maybe<&2, St.st.Root>) -> Bool:
+  match m:
+    case Some{+r}:
+      Bool.and(String.eq(St.st.root.kind(r), "unii"), String.starts_with(St.st.root.text(r), "You've hit your "))
+    case None{}:
+      False{}
+
+# a local time as HH:MM, or as YYYY-MM-DD HH:MM when it is 20 hours or more away
+def hb.limit.when(+wake: Nat, +now: Nat, +tz: U32) -> String:
+  Bool.pick(String, Nat.is_ge(Nat.sub(wake, now), 72000000n), String.take(C.ck.show(wake, tz), 16n), hb.hm(wake, tz))
+
+# (a computation of its own: sleeps, then tells the hub)
+def hb.limit.wait(+inbox: Chan(E.ev.Ev), +at: U32, +secs: U32) -> IO(Unit):
+  do IO<Unit>:
+    o : S.mu.Out <- S.mu.run("sleep", [U32.show(secs)], "", 64, (secs * 1000 + 60000 : U32))
+    E.ev.send(inbox, E.ev.Resume{at})
+
+def hb.limited(+s: hb.S, +now: Nat, +tz: U32, +at: Nat) -> IO(hb.S):
+  +known = Nat.is_gt(at, now)
+  +wake = Bool.pick(Nat, known, Nat.add(at, 60000n), Nat.add(now, 1800000n))
+  do IO<hb.S>:
+    +s2 : hb.S <- hb.note(s, "Usage limit: mugen goes on by itself at " ++ hb.limit.when(wake, now, tz)
+      ++ Bool.pick(String, known, ", a minute after it resets", " (it tries again every 30 minutes)") ++ ". A message of yours goes on sooner.")
+    Unit <- IO.spawn(Unit, hb.limit.wait(hb.inbox(s2), M.me.count(hb.mem(s2)), U32.from_nat(Nat.div(Nat.sub(wake, now), 1000n))))
+    return s2
+
+# the turn's call failed: at a usage limit, mugen goes on by itself later;
+# else it waits for a message
+def hb.failed(+s: hb.S, +text: String) -> IO(hb.S):
+  do IO<hb.S>:
+    +now : Nat <- S.mu.wall()
+    tz : U32 <- S.mu.tzoff(now)
+    r : Result<&1, &1, U32 & String, String> <- S.mu.read_file(hb.dir(s) ++ "/run/limits.json")
+    +at : Nat = hb.limit.got(r)
+    +n : U32 = M.me.count(hb.mem(s))
+    m : Maybe<&2, St.st.Root> <- St.st.message(hb.dir(s), Bool.pick(U32, U32.is_eq(n, 0), 0, (n - 1 : U32)))
+    +hit : Bool = Bool.or(Nat.is_gt(at, now), Bool.and(Bool.not(U32.is_eq(n, 0)), hb.limit.said(m)))
+    Bool.pick(IO(hb.S), hit, hb.limited(s, now, tz, at), hb.note(s, "No reply: " ++ hb.chop(text) ++ ". Send a message to try again."))
+
+# what mugen says for itself when the limit has reset (not UniiChat's: its
+# prompts, word for word, are Prompts.bend's alone)
+def hb.limit.say() -> String:
+  "(mugen, not the user) The usage limit you stopped at has reset: go on with what you were doing."
+
+def hb.limit.go(+s: hb.S) -> IO(hb.S):
+  do IO<hb.S>:
+    +p : hb.P <- hb.push(s, "user", hb.limit.say())
+    return hb.queue(hb.p.s(p), hb.p.msg(p))
+
+# the limit reset: mugen goes on, with a message of its own, if the chat has
+# had nothing since it stopped and nothing runs or waits
+def hb.limit.over(+s: hb.S, +at: U32) -> IO(hb.S):
+  +still = Bool.and(Bool.and(hb.is.idle(hb.turn(s)), U32.is_eq(M.me.count(hb.mem(s)), at)), List.is_empty(&2, hb.Msg, hb.wait(s)))
+  Bool.pick(IO(hb.S), still, hb.limit.go(s), IO.pure(hb.S, s))
+
 # the turn's call ended (Chat.ended): what it never took waits again; a
 # failure noted; met its end well with a goal set and nothing waiting, the
 # goal is checked
@@ -906,7 +1002,7 @@ def hb.ended(+s: hb.S, +ok: Bool, +text: String, +left: U32) -> IO(hb.S):
   +s1 = hb.with.due(hb.with.sent(hb.with.wait(s, hb.requeue(hb.sent(s), left, hb.wait(s))), []), True{})
   +on = String.is_empty(hb.halt(s))
   do IO<hb.S>:
-    +s2 : hb.S <- Bool.pick(IO(hb.S), Bool.and(Bool.not(ok), on), hb.note(s1, "No reply: " ++ hb.chop(text) ++ ". Send a message to try again."), IO.pure(hb.S, s1))
+    +s2 : hb.S <- Bool.pick(IO(hb.S), Bool.and(Bool.not(ok), on), hb.failed(s1, text), IO.pure(hb.S, s1))
     hb.ended.goal(s2, Bool.and(ok, Bool.and(on, List.is_empty(&2, hb.Msg, hb.wait(s2)))), hb.goal(s2))
 
 def hb.kept.goal(k: M.me.Kept, g: Maybe<&2, String>) -> M.me.Kept:
@@ -1502,10 +1598,6 @@ def hb.pct(+raw: String) -> U32:
   +ip = Maybe.default(&2, String, List.get(&2, String, ps, 0n), "0")
   +fp = String.take(Maybe.default(&2, String, List.get(&2, String, ps, 1n), "") ++ "00", 2n)
   Bool.pick(U32, String.contains(raw, "e"), 0, (U32.from_nat(Maybe.default(&2, Nat, Nat.read(ip), 0n)) * 100 + U32.from_nat(Maybe.default(&2, Nat, Nat.read(fp), 0n)) : U32))
-
-# a local time (ms) as its hour and minute, or its date
-def hb.hm(+ms: Nat, +tz: U32) -> String:
-  String.take(String.drop(C.ck.show(ms, tz), 11n), 5n)
 
 def hb.ymd(+ms: Nat, +tz: U32) -> String:
   String.take(C.ck.show(ms, tz), 10n)
@@ -2175,13 +2267,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
       hb.login.got(k, s, out, status)
     case Some{E.ev.Older{+before}}:
       hb.older.on(hb.scr(s), s, before)
-
-def hb.is.idle(t: hb.T) -> Bool:
-  match t:
-    case hb.Idle{}:
-      True{}
-    case _:
-      False{}
+    case Some{E.ev.Resume{+at}}:
+      hb.limit.over(s, at)
 
 def hb.is.settle(t: hb.T) -> Bool:
   match t:

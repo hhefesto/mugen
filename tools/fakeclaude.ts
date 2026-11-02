@@ -186,6 +186,15 @@ const turn = async () => {
   for (;;) {
     const body = { model, max_tokens: 128000, system: [{ type: "text", text: system }], output_config: { effort }, ...(chat ? { tools } : {}), messages: structuredClone(messages) };
     const a = await ask(body);
+    // a usage limit hit, as Claude Code says it: the limits rejected till a
+    // time (resetsIn seconds from now), its words as a reply, a failed result
+    if (a.limit) {
+      const at = Math.floor(Date.now() / 1000) + Number(a.limit.resetsIn ?? 0);
+      out({ type: "rate_limit_event", rate_limit_info: { status: "rejected", resetsAt: at, rateLimitType: "five_hour", unifiedWindows: { five_hour: { utilization: 1, resetsAt: at, status: "rejected" } } } });
+      out({ type: "assistant", message: { id: "msg_limit", type: "message", role: "assistant", model: "<synthetic>", content: [{ type: "text", text: a.limit.text }], stop_reason: "stop_sequence", usage } });
+      out({ type: "result", subtype: "success", is_error: true, result: a.limit.text, stop_reason: null, usage });
+      return;
+    }
     const code = (a.exit ?? 0) !== 0 ? 0 : a.code ?? 200;
     if (code !== 200 && (code === 0 || passing(code)) && tries < 10) {
       tries += 1;
