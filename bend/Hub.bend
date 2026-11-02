@@ -21,6 +21,7 @@ import ./Export.bend as X
 import ./Code.bend as Cc
 import ./Pic.bend as Pc
 import ./Screen.bend as Sc
+import ./Pretty.bend as Pp
 
 # Hub: the chat (UniiChat's Server.ts Chat, for one user in one process). One
 # computation owns the memory and all of the chat's state; everything else
@@ -49,7 +50,7 @@ def hb.searches() -> U32:
 # whether this is a terminal (stdin and stdout), the jobs at once, fsync,
 # home, the account, whether the terminal is a full screen (Screen.bend).
 type hb.Cfg is Data:
-  hb.Cfg{api: A.ap.Cfg, dir: String, work: String, host: String, shell: String, rules: String, compactor: A.ap.Pick, tty: Bool, jobs: U32, sync: U32, home: String, acct: String, screen: Bool}
+  hb.Cfg{api: A.ap.Cfg, dir: String, work: String, host: String, shell: String, rules: String, compactor: A.ap.Pick, tty: Bool, jobs: U32, sync: U32, home: String, acct: String, screen: Bool, version: String}
 
 # a message logged: its pages [id, end), and a line of it for the screen
 type hb.Msg is Data:
@@ -337,58 +338,63 @@ def hb.plan(+s: hb.S) -> Bool:
 
 def hb.cfg.api(c: hb.Cfg) -> A.ap.Cfg:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       a
 
 def hb.cfg.dir(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       d
 
 def hb.cfg.work(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       w
 
 def hb.cfg.host(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       h
 
 def hb.cfg.shell(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       sh
 
 def hb.cfg.rules(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       r
 
 def hb.cfg.compactor(c: hb.Cfg) -> A.ap.Pick:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       cp
 
 def hb.cfg.tty(c: hb.Cfg) -> Bool:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       t
 
 def hb.cfg.home(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       ho
 
 def hb.cfg.acct(c: hb.Cfg) -> String:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       ac
 
 def hb.cfg.with.acct(c: hb.Cfg, ac2: String) -> hb.Cfg:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
-      hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac2, sr}
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
+      hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac2, sr, ve}
+
+def hb.cfg.version(c: hb.Cfg) -> String:
+  match c:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
+      ve
 
 def hb.dir(+s: hb.S) -> String:
   hb.cfg.dir(hb.cfg(s))
@@ -463,6 +469,23 @@ def hb.print.on(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S, +who: String, +kind: Str
 def hb.print(+s: hb.S, +who: String, +kind: String, +text: String) -> IO(Unit):
   hb.print.on(hb.scr(s), s, who, kind, text)
 
+# What mugen shows only on its screen (a command's reply, /status, /help),
+# for mugen-web: run/said.jsonl, a JSON line each (when, what kind, the text
+# without its colors); its thoughts too, in run/thoughts.jsonl (the log's
+# length as it thought, when, the text)
+def hb.pub.line(+path: String, +j: J.Json) -> IO(Unit):
+  IO.bind(Result<&1, &1, U32 & String, Nat>, Unit, S.mu.append(path, J.js.write(j) ++ "\n", 0), r => IO.pure(Unit, Unit{}))
+
+def hb.said.pub(+s: hb.S, +kind: String, +text: String) -> IO(Unit):
+  do IO<Unit>:
+    now : Nat <- S.mu.wall()
+    hb.pub.line(hb.dir(s) ++ "/run/said.jsonl", J.JObj{[J.JKv{"date", J.JStr{C.ck.iso(now)}}, J.JKv{"kind", J.JStr{kind}}, J.JKv{"text", J.JStr{Pp.pp.clean(text)}}]})
+
+def hb.thought.pub(+s: hb.S, +text: String) -> IO(Unit):
+  do IO<Unit>:
+    now : Nat <- S.mu.wall()
+    hb.pub.line(hb.dir(s) ++ "/run/thoughts.jsonl", J.JObj{[J.JKv{"i", J.js.u32(M.me.count(hb.mem(s)))}, J.JKv{"date", J.JStr{C.ck.iso(now)}}, J.JKv{"text", J.JStr{text}}]})
+
 # mugen's own word to the user: a line of the screen's, else a status line
 def hb.say.on(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S, +text: String) -> IO(Unit):
   match m:
@@ -472,7 +495,7 @@ def hb.say.on(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S, +text: String) -> IO(Unit)
       IO.print(Tm.tm.status(hb.tty(s), text))
 
 def hb.say(+s: hb.S, +text: String) -> IO(Unit):
-  hb.say.on(hb.scr(s), s, text)
+  IO.bind(Unit, Unit, hb.say.on(hb.scr(s), s, text), u => hb.said.pub(s, "say", text))
 
 # mugen's own text (the help, the status): a block of the screen's, else written
 def hb.info.on(m: Maybe<&2, Chan(Sc.sc.In)>, +text: String) -> IO(Unit):
@@ -483,7 +506,7 @@ def hb.info.on(m: Maybe<&2, Chan(Sc.sc.In)>, +text: String) -> IO(Unit):
       IO.print(text)
 
 def hb.info(+s: hb.S, +text: String) -> IO(Unit):
-  hb.info.on(hb.scr(s), text)
+  IO.bind(Unit, Unit, hb.info.on(hb.scr(s), text), u => hb.said.pub(s, "info", text))
 
 # a page of help (Help.bend: markdown, the screen wraps it), told the
 # screen, or printed as it is
@@ -503,7 +526,7 @@ def hb.info.w.on(m: Maybe<&2, Chan(Sc.sc.In)>, +text: String) -> IO(Unit):
       IO.write(text)
 
 def hb.info.w(+s: hb.S, +text: String) -> IO(Unit):
-  hb.info.w.on(hb.scr(s), text)
+  IO.bind(Unit, Unit, hb.info.w.on(hb.scr(s), text), u => hb.said.pub(s, "info", text))
 
 # Compactions -----------------------------------------------------------------------
 
@@ -1438,7 +1461,7 @@ def hb.cmd.code(+w: String) -> Nat:
     Bool.pick(Nat, String.eq(w, "/halt"), 4n, Bool.pick(Nat, String.eq(w, "/goal"), 5n, Bool.pick(Nat, String.eq(w, "/model"), 6n,
       Bool.pick(Nat, String.eq(w, "/effort"), 7n, Bool.pick(Nat, String.eq(w, "/status"), 8n, Bool.pick(Nat, String.eq(w, "/export"), 10n,
         Bool.pick(Nat, String.eq(w, "/tree"), 11n, Bool.pick(Nat, String.eq(w, "/plan"), 12n, Bool.pick(Nat, String.eq(w, "/auto"), 13n, Bool.pick(Nat, String.eq(w, "/now"), 14n,
-          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.eq(w, "/login"), 17n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n))))))))))))))))
+          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.eq(w, "/login"), 17n, Bool.pick(Nat, String.eq(w, "/restart"), 18n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n)))))))))))))))))
 
 def hb.pick.json(p: A.ap.Pick) -> J.Json:
   match p:
@@ -1709,19 +1732,105 @@ def hb.bang.run(+env: L.tl.Env, +inbox: Chan(E.ev.Ev), +cmd: String) -> IO(Unit)
     o : E.ev.Out <- L.tl.shell(env, cwd, cmd)
     E.ev.send(inbox, E.ev.Ran{cmd, hb.out.text(o)})
 
+# A command that asks for a password (sudo in it, or in what its first
+# word is an alias of: `!ns`) runs in a terminal of its own instead, a tmux
+# window beside mugen's: the password goes from your keys to sudo there,
+# never through mugen (sudo reads it from that terminal, without echo; mugen
+# reads only what the command prints, kept in run/term/ID.out). mugen-web
+# shows that window and types into it (run/term.json says which), from the
+# tailnet only. Its end (or the window closed) logs it as any `!` command.
+def hb.bang.needs.got(o: S.mu.Out) -> Bool:
+  String.contains(Cc.cc.out.text(o), "sudo")
+
+def hb.bang.needs(+s: hb.S, +cmd: String) -> IO(Bool):
+  Bool.pick(IO(Bool), String.contains(cmd, "sudo"), IO.pure(Bool, True{}),
+    IO.bind(S.mu.Out, Bool, S.mu.run(hb.cfg.shell(hb.cfg(s)), ["-ic", "alias -- " ++ hb.word.go(cmd, "")], "", 65536, 8000), o => IO.pure(Bool, hb.bang.needs.got(o))))
+
+# the window's script: $1 the shell, $2 the command, $3 its output, $4 its
+# exit, $5 the channel mugen waits on
+def hb.term.script() -> String:
+  "trap 'tmux wait-for -S \"$5\"; exit' HUP TERM\nprintf '\\033[1m$ %s\\033[0m\\n' \"$2\"\n{ \"$1\" -ic \"$2\"; echo $? > \"$4.tmp\"; } 2>&1 | tee \"$3\"\nmv \"$4.tmp\" \"$4\" 2> /dev/null\ntrap - HUP TERM\ntmux wait-for -S \"$5\"\nprintf '\\n[exit %s] Enter goes back to mugen (this window closes by itself in 2 minutes). ' \"$(cat \"$4\" 2> /dev/null)\"\nread -r -t 120 _\n"
+
+def hb.res.text(r: Result<&1, &1, U32 & String, String>) -> String:
+  match r:
+    case Done{t}:
+      t
+    case Fail{e}:
+      ""
+
+def hb.term.text(o: Result<&1, &1, U32 & String, String>, c: Result<&1, &1, U32 & String, String>) -> String:
+  +out = Pp.pp.clean(hb.res.text(o))
+  +n = String.length(out)
+  +code = T.tx.trim(hb.res.text(c))
+  Bool.pick(String, Nat.is_gt(n, 12000n), "[" ++ Nat.show(Nat.sub(n, 12000n)) ++ " characters cut]\n" ++ String.drop(out, Nat.sub(n, 12000n)), out)
+    ++ "\n(" ++ Bool.pick(String, String.is_empty(code), "its window was closed", "exit " ++ code) ++ ", in a terminal of its own)"
+
+def hb.term.wait(+inbox: Chan(E.ev.Ev), +dir: String, +id: String, +cmd: String) -> IO(Unit):
+  +base = dir ++ "/run/term/" ++ id
+  do IO<Unit>:
+    w : S.mu.Out <- S.mu.run("tmux", ["wait-for", "mugen-term-" ++ id], "", 4096, 86400000)
+    o : Result<&1, &1, U32 & String, String> <- S.mu.read_file(base ++ ".out")
+    c : Result<&1, &1, U32 & String, String> <- S.mu.read_file(base ++ ".code")
+    u : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(dir ++ "/run/term.json")
+    E.ev.send(inbox, E.ev.Ran{cmd, hb.term.text(o, c)})
+
+# the window a pane is in (new-window's -t takes a window, not a pane)
+def hb.term.win(+pane: String) -> IO(String):
+  IO.bind(S.mu.Out, String, S.mu.run("tmux", ["display-message", "-p", "-t", pane, "#{window_id}"], "", 4096, 10000), o => IO.pure(String, T.tx.trim(Cc.cc.out.text(o))))
+
+# 1 the window opened (tp its pane), else 0: nothing runs, the user is told
+def hb.term.opened(k: Nat, +s: hb.S, +cmd: String, +dir: String, +id: String, +tp: String) -> IO(hb.S):
+  match k:
+    case 1n:
+      do IO<hb.S>:
+        r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(dir ++ "/run/term.json", J.js.write(J.JObj{[J.JKv{"id", J.JStr{id}}, J.JKv{"cmd", J.JStr{cmd}}, J.JKv{"pane", J.JStr{tp}}]}) ++ "\n", 0)
+        Unit <- hb.print(s, "you", "run", hb.bang.call(cmd))
+        Unit <- IO.spawn(Unit, hb.term.wait(hb.inbox(s), dir, id, cmd))
+        hb.tell.user(hb.with.bang(s, True{}), "!" ++ cmd ++ " asks for a password, so it runs in a tmux window of its own (" ++ "!" ++ hb.word.go(cmd, "") ++ "): type it there, where only sudo reads it; mugen never sees it. Enter in that window, once it ends, comes back here.")
+    case _:
+      hb.tell.user(s, "!" ++ cmd ++ " asks for a password, so it should run in a tmux window of its own, but tmux opened none (" ++ tp ++ "): nothing ran. Run it in another terminal.")
+
+def hb.term.open(+s: hb.S, +cmd: String, +pane: String) -> IO(hb.S):
+  +dir = hb.dir(s)
+  do IO<hb.S>:
+    now : Nat <- S.mu.wall()
+    +id : String = Nat.show(now)
+    +base : String = dir ++ "/run/term/" ++ id
+    m : Result<&1, &1, U32 & String, Unit> <- S.mu.mkdirs(dir ++ "/run/term")
+    +home : String <- S.mu.env("HOME", "/")
+    +cwd : String <- S.mu.env("PWD", home)
+    +win : String <- hb.term.win(pane)
+    o : S.mu.Out <- S.mu.run("tmux", ["new-window", "-a", "-t", win, "-P", "-F", "#{pane_id}", "-n", "!" ++ hb.word.go(cmd, ""), "-c", cwd,
+      "sh", "-c", hb.term.script(), "sh", hb.cfg.shell(hb.cfg(s)), cmd, base ++ ".out", base ++ ".code", "mugen-term-" ++ id], "", 4096, 10000)
+    +tp : String = T.tx.trim(Cc.cc.out.text(o))
+    hb.term.opened(Bool.pick(Nat, String.starts_with(tp, "%"), 1n, 0n), s, cmd, dir, id, tp)
+
+# 0 run here, 1 in a terminal of its own, 2 it needs one and there is no tmux
+def hb.bang.where(k: Nat, +s: hb.S, +cmd: String, +pane: String) -> IO(hb.S):
+  match k:
+    case 0n:
+      do IO<hb.S>:
+        Unit <- hb.print(s, "you", "run", hb.bang.call(cmd))
+        Unit <- IO.spawn(Unit, hb.bang.run(hb.tools.env(s, "user"), hb.inbox(s), cmd))
+        return hb.with.bang(s, True{})
+    case 1n:
+      hb.term.open(s, cmd, pane)
+    case _:
+      hb.tell.user(s, "!" ++ cmd ++ " asks for a password: mugen runs such a command in a tmux window of its own, so that it never sees the password, and mugen runs outside tmux. Run it in another terminal.")
+
 # 0 no command, 1 one runs already, 2 run it
 def hb.bang.go(k: Nat, +s: hb.S, +cmd: String) -> IO(hb.S):
   match k:
     case 0n:
       hb.tell.user(s, "! runs a shell command of yours: !ls")
     case 1n:
-      hb.tell.user(s, "your command still runs: /stop ! cuts it")
+      hb.tell.user(s, "your command still runs: /stop ! cuts it (one in a window of its own: close the window)")
     case _:
       do IO<hb.S>:
         r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(hb.ctl(s, "user") ++ ".stop")
-        Unit <- hb.print(s, "you", "run", hb.bang.call(cmd))
-        Unit <- IO.spawn(Unit, hb.bang.run(hb.tools.env(s, "user"), hb.inbox(s), cmd))
-        return hb.with.bang(s, True{})
+        t : Bool <- hb.bang.needs(s, cmd)
+        +pane : String <- S.mu.env("TMUX_PANE", "")
+        hb.bang.where(Bool.pick(Nat, t, Bool.pick(Nat, String.is_empty(pane), 2n, 1n), 0n), s, cmd, pane)
 
 def hb.bang(+s: hb.S, +cmd: String) -> IO(hb.S):
   hb.bang.go(Bool.pick(Nat, String.is_empty(cmd), 0n, Bool.pick(Nat, hb.bang.on(s), 1n, 2n)), s, cmd)
@@ -1908,7 +2017,10 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
     case 0n:
       Bool.pick(IO(hb.S), String.is_empty(t), Bool.pick(IO(hb.S), hb.busy(hb.turn(s)), hb.stop(s, "turn"), IO.pure(hb.S, s)), hb.said.user(s, t))
     case 1n:
-      IO.bind(Unit, hb.S, hb.help.on(hb.scr(s), Hl.hl.page(rest)), u => IO.pure(hb.S, s))
+      do IO<hb.S>:
+        Unit <- hb.help.on(hb.scr(s), Hl.hl.page(rest))
+        Unit <- hb.said.pub(s, "help", Hl.hl.page(rest))
+        return s
     case 2n:
       IO.bind(hb.S, hb.S, hb.release(s), s2 => IO.pure(hb.S, hb.with.quit(s2)))
     case 3n:
@@ -1947,6 +2059,12 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
       hb.bang(s, T.tx.trim(String.drop(t, 1n)))
     case 17n:
       hb.login(s, rest)
+    case 18n:
+      do IO<hb.S>:
+        r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(hb.dir(s) ++ "/run/restart", "", 0)
+        +s2 : hb.S <- hb.release(s)
+        Unit <- hb.say(s2, "mugen restarts: the mugen the system has now starts in its place")
+        return hb.with.quit(s2)
     case _:
       hb.tell.user(s, w ++ " is no command; nothing was sent. /help lists the commands.")
 
@@ -2039,8 +2157,11 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
       hb.built(s, l, i, line)
     case Some{E.ev.Entry{who, kind, text}}:
       hb.entry(s, who, kind, text)
-    case Some{E.ev.Show{who, kind, text}}:
-      IO.bind(Unit, hb.S, hb.print(s, who, kind, text), u => IO.pure(hb.S, s))
+    case Some{E.ev.Show{+who, +kind, +text}}:
+      do IO<hb.S>:
+        Unit <- hb.print(s, who, kind, text)
+        Unit <- Bool.pick(IO(Unit), Bool.and(String.eq(kind, "mind"), String.is_empty(who)), hb.thought.pub(s, text), IO.pure(Unit, Unit{}))
+        return s
     case Some{E.ev.Req{who, name, input, reply}}:
       hb.req(s, who, name, input, reply)
     case Some{E.ev.End{+who, +ok, +text, stop, +left}}:
@@ -2215,6 +2336,42 @@ def hb.state(+s: hb.S) -> IO(hb.S):
 def hb.prompt(+s: hb.S) -> IO(hb.S):
   IO.bind(hb.S, hb.S, hb.tmux.sync(s), +s2 => Bool.pick(IO(hb.S), hb.on.screen(s2), hb.state(s2), hb.prompt.if(s2)))
 
+# mugen's state for mugen-web (run/state.json), rewritten when it changes:
+# the mode, the model and its effort, the room left, the goal, the agents
+# at work, whether it works, the messages waiting, the account, the limits,
+# the chat's size, the work dir, the version
+def hb.pub.strs(xs: List<&2, String>) -> List<&2, J.Json>:
+  match xs:
+    case []:
+      []
+    case +x <> t:
+      J.JStr{x} <> hb.pub.strs(t)
+
+def hb.pub.state(+s: hb.S, +lim: String) -> String:
+  +p = hb.pick(s)
+  J.js.write(J.JObj{[J.JKv{"plan", J.JBool{hb.plan(s)}}, J.JKv{"model", J.JStr{hb.pick.model(p)}}, J.JKv{"effort", J.JStr{A.ap.pick.effort(p)}},
+    J.JKv{"left", J.js.u32(hb.left(s))}, J.JKv{"goal", J.JStr{Maybe.default(&2, String, hb.goal(s), "")}},
+    J.JKv{"agents", J.JArr{hb.pub.strs(hb.working(hb.agents(s)))}}, J.JKv{"busy", J.JBool{hb.working.now(s)}},
+    J.JKv{"held", J.JArr{hb.pub.strs(List.append(&2, String, hb.peeks(hb.wait(s)), hb.held.peeks(hb.held(s))))}},
+    J.JKv{"account", J.JStr{hb.cfg.acct(hb.cfg(s))}}, J.JKv{"limits", J.JStr{lim}}, J.JKv{"count", J.js.u32(M.me.count(hb.mem(s)))},
+    J.JKv{"work", J.JStr{hb.workdir(s)}}, J.JKv{"version", J.JStr{hb.cfg.version(hb.cfg(s))}}]}) ++ "\n"
+
+def hb.pub.same(r: Result<&1, &1, U32 & String, String>, +t: String) -> Bool:
+  match r:
+    case Done{x}:
+      String.eq(x, t)
+    case Fail{e}:
+      False{}
+
+def hb.publish(+s: hb.S) -> IO(hb.S):
+  +path = hb.dir(s) ++ "/run/state.json"
+  do IO<hb.S>:
+    lim : String <- hb.limits(s)
+    +t : String = hb.pub.state(s, lim)
+    r : Result<&1, &1, U32 & String, String> <- S.mu.read_file(path)
+    Unit <- Bool.pick(IO(Unit), hb.pub.same(r, t), IO.pure(Unit, Unit{}), IO.bind(Result<&1, &1, U32 & String, Unit>, Unit, S.mu.save(path, t, 0), w => IO.pure(Unit, Unit{})))
+    return s
+
 def hb.loop(n: Nat, go: Bool, +s: hb.S) -> IO(hb.S):
   match n go:
     case 1n+f True{}:
@@ -2223,7 +2380,8 @@ def hb.loop(n: Nat, go: Bool, +s: hb.S) -> IO(hb.S):
         +s1 : hb.S <- hb.on(s, m)
         +s2 : hb.S <- hb.after(s1)
         +s3 : hb.S <- hb.prompt(s2)
-        hb.loop(f, hb.alive(s3), s3)
+        +s4 : hb.S <- hb.publish(s3)
+        hb.loop(f, hb.alive(s4), s4)
     case _ _:
       IO.pure(hb.S, s)
 
@@ -2307,17 +2465,39 @@ def hb.leave(+s: hb.S) -> IO(Unit):
     Unit <- hb.kill.groups(hb.dir(s) ++ "/run/groups")
     hb.tmux.back(s)
 
+# /restart: this process becomes mugen again (the one on PATH: after a
+# rebuild, the new one), with the same arguments; else it ends
+def hb.tail(xs: List<String>) -> List<String>:
+  match xs:
+    case []:
+      []
+    case x <> t:
+      t
+
+def hb.end.go(r: Result<&1, &1, U32 & String, Unit>, +dir: String) -> IO(Unit):
+  match r:
+    case Done{u}:
+      do IO<Unit>:
+        args : List<String> <- IO.args()
+        e : U32 <- S.mu.exec("mugen", hb.tail(args))
+        IO.die(Unit, 1, "mugen: cannot start mugen again (error " ++ U32.show(e) ++ "): run mugen")
+    case Fail{e}:
+      IO.exit(0)
+
+def hb.end(+dir: String) -> IO(Unit):
+  IO.bind(Result<&1, &1, U32 & String, Unit>, Unit, S.mu.unlink(dir ++ "/run/restart"), r => hb.end.go(r, dir))
+
 # the screen told to give the terminal back, and waited for
-def hb.bye.on(m: Maybe<&2, Chan(Sc.sc.In)>) -> IO(Unit):
+def hb.bye.on(m: Maybe<&2, Chan(Sc.sc.In)>, +dir: String) -> IO(Unit):
   match m:
     case Some{+c}:
       do IO<Unit>:
         +done : Chan(Unit) <- Chan.new(Unit, 1)
         Unit <- Sc.sc.tell(c, Sc.sc.Bye{done})
         d : Maybe<&1, Unit> <- Chan.recv(Unit, done)
-        IO.exit(0)
+        hb.end(dir)
     case None{}:
-      IO.pure(Unit, Unit{})
+      hb.end(dir)
 def hb.resume.one(turn: Bool, +s: hb.S, +w: String, +msg: hb.Msg, +text: String) -> IO(hb.S):
   match turn:
     case True{}:
@@ -2351,12 +2531,12 @@ def hb.pick.of(+j: J.Json, +d: A.ap.Pick) -> A.ap.Pick:
 
 def hb.cfg.jobs(c: hb.Cfg) -> U32:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       j
 
 def hb.cfg.sync(c: hb.Cfg) -> U32:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       sy
 
 # A data dir is one chat, and one mugen holds it (flock on lock, which
@@ -2426,7 +2606,7 @@ def hb.screen.open(on: Bool, +c: hb.Cfg, +inbox: Chan(E.ev.Ev)) -> IO(Maybe<&2, 
 
 def hb.cfg.screen(c: hb.Cfg) -> Bool:
   match c:
-    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr}:
+    case hb.Cfg{a, d, w, h, sh, r, cp, t, j, sy, ho, ac, sr, ve}:
       sr
 
 def hb.tmux.keys.set(off: Bool) -> IO(Unit):
@@ -2475,10 +2655,13 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))
     +s1 : hb.S <- hb.mem.jobs(s0, r)
     Unit <- hb.recent.on(scr, s1)
+    r0 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(dir ++ "/run/restart")
+    r1 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(dir ++ "/run/term.json")
     Unit <- hb.welcome(s1)
     +s2 : hb.S <- hb.resume(s1)
     +s3 : hb.S <- hb.after(s2)
     +s4 : hb.S <- hb.prompt(s3)
-    +s5 : hb.S <- hb.loop(U32.to_nat(4294967295), hb.alive(s4), s4)
+    +s4p : hb.S <- hb.publish(s4)
+    +s5 : hb.S <- hb.loop(U32.to_nat(4294967295), hb.alive(s4p), s4p)
     Unit <- hb.leave(s5)
-    hb.bye.on(scr)
+    hb.bye.on(scr, dir)

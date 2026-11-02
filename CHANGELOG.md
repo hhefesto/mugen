@@ -2,6 +2,23 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.11.0 (2026-11-02)
+
+- `/restart`: mugen leaves as `/quit` does and starts again at once, in
+  the same terminal with the same chat: after a rebuild, the new mugen.
+- A `!` command that asks for a password (`sudo` in it, or in the alias
+  its first word names, as `!ns`) runs in a tmux window of its own beside
+  mugen's: the password goes from your keys to sudo there, never through
+  mugen, which reads only what the command prints (`run/term/ID.out`).
+  Enter in that window, once it ends, comes back; its output goes into the
+  chat as any `!` command's. Outside tmux mugen won't run such a command.
+- For mugen-web, new files in `~/.mugen/run/`: `state.json` (the mode,
+  model, effort, room left, goal, agents at work, messages waiting,
+  account, limits; rewritten when it changes), `said.jsonl` (what mugen
+  shows only on its screen: commands' replies, `/status`, `/help`),
+  `thoughts.jsonl` (its thoughts, by their place in the log) and
+  `term.json` (the `!` command in a window of its own).
+
 ## 0.10.1 (2026-10-30)
 
 - `M-p` (`M-↑`, `M-{`) goes on back through every answer of the chat: it

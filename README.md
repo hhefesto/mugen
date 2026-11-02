@@ -174,6 +174,11 @@ Commands:
   and the chat logs it as your message (the command, then its output,
   clipped as mugen's own shell output is), so mugen reads it at its next
   turn; it starts none. One runs at a time; `/stop !` (or `/stop`) kills it.
+  A command that asks for a password (`sudo` in it, or in the alias its
+  first word names, as `!ns`) runs in a tmux window of its own beside
+  mugen's: type the password there, where only sudo reads it; mugen never
+  sees it, only what the command prints. Enter in that window, once the
+  command ends, brings you back. Outside tmux mugen won't run one.
 - `/stop [name]`: stop the turn, or one agent (`/stop !`: your own command).
 - `/now`: as `C-s`.
 - `/goal TEXT`, `/halt`: set a goal, or drop it.
@@ -198,7 +203,16 @@ Commands:
   gif, webp; 5 MB at most).
 - `/login`: Claude Code signed in again, to switch accounts (`/login CODE`
   gives it the code its page shows).
+- `/restart`: leave, and start mugen again at once in the same terminal
+  with the same chat (after a rebuild, the new mugen).
 - `/status`, `/mouse`, `/tree`, `/export`, `/quit`.
+
+For [mugen-web](https://github.com/hhefesto/mugen-web) (the chat in a
+browser), mugen writes its state beside the log, in `~/.mugen/run/`:
+`state.json` (mode, model, effort, room left, goal, agents, the messages
+waiting, account, limits), `said.jsonl` (what it shows only on its screen:
+commands' replies, `/status`, `/help`), `thoughts.jsonl` (its thoughts),
+and `term.json` while a `!` command runs in a window of its own.
 
 Whatever is running when you quit resumes at the next start. Leaving kills
 every process the tools started; if mugen dies any other way, a watchdog

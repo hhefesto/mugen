@@ -72,7 +72,7 @@ def mn.key(+api: Bool, +curl: String, r: Result<&1, &1, U32 & String, String>) -
 # and prompts the model sees, the files under ~/.mugen, the wires to the
 # API or Claude Code), and only then; see AGENTS.md, Versions
 def mn.version() -> String:
-  "0.10.1"
+  "0.11.0"
 
 def mn.usage() -> String:
   "usage: mugen [--api | login | logout | --version]\n  mugen        runs on Claude Code's CLI (claude -p), signed in with a Claude plan\n  mugen --api  runs on the Messages API, with ANTHROPIC_API_KEY\n  mugen login  signs Claude Code in to your Claude plan (claude auth login), or to another account\n  mugen logout signs Claude Code out (claude auth logout)\n  mugen --version  says mugen's version"
@@ -155,7 +155,7 @@ def mn.run(+home: String, +api: Bool) -> IO(Unit):
     +wire : A.ap.Cfg = A.ap.Cfg{curl, url, mn.nat(max, 16000), web, mn.nat(unit, 1000), cc}
     +tty : Bool = Bool.and(U32.is_eq(i, 1), U32.is_eq(o, 1))
     +screen : Bool = Bool.and(tty, Bool.not(Bool.or(String.eq(plain, "1"), String.eq(term, "dumb"))))
-    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), tty, mn.nat(jobs, 48), mn.nat(sync, 1), home, acct, screen}
+    +cfg : H.hb.Cfg = H.hb.Cfg{wire, dir, work, host, shell, mn.text.of(rules), mn.pick(comp), tty, mn.nat(jobs, 48), mn.nat(sync, 1), home, acct, screen, mn.version()}
     H.hb.start(cfg, mn.pick(pick))
 
 # the account Claude Code is signed in with: its email (else "an
