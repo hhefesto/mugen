@@ -125,6 +125,8 @@ Keys:
 - `C-s` (`/now`): send the waiting messages now. A shell command mugen is
   running is cut, and mugen gets its output and your messages; else its
   turn stops and one starts with them.
+  A message that has waited 5 minutes with no tool returned does this by
+  itself when a shell command is what holds it, and tells you.
 - `C-g` (`/stop`): stop mugen's turn.
 - `Shift-Tab`: plan mode, or back to auto mode (as `/plan` and `/auto`),
   as in Claude Code; the status line and a line under the chat say which.
@@ -321,6 +323,7 @@ tmux's history, not the chat.
 | `MUGEN_JOBS` | `8` (`48` with `--api`) | summaries at once (each is a `claude` process on Claude Code) |
 | `MUGEN_SYNC` | `1` | fsync each log write |
 | `MUGEN_MAX_TOKENS` | `16000` | a reply's most tokens |
+| `MUGEN_LATE` | `300` | seconds a message of yours waits before the shell command keeping mugen from reading it is cut |
 | `MUGEN_WEB_SEARCH` | `web_search_20260209` | the web search tool's type (`--api`) |
 | `MUGEN_WIRE` | | `api`: the same as `--api` |
 | `MUGEN_CLAUDE` | `claude` | the Claude Code CLI to run |

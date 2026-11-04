@@ -41,6 +41,8 @@ type ev.Say is Data:
 #   Resume          the usage limit mugen's turn stopped at has reset: go
 #                   on, if the chat still has `at` messages (nothing came
 #                   since) and nothing runs (Hub.bend hb.limit.over)
+#   Late            a message's clock ran out: cut a command that keeps the
+#                   call from reading it (Hub.bend hb.late.over)
 type ev.Ev is Data:
   ev.Line{text: String}
   ev.Eof{}
@@ -54,6 +56,7 @@ type ev.Ev is Data:
   ev.Login{step: U32, out: String, status: String}
   ev.Older{before: U32}
   ev.Resume{at: U32}
+  ev.Late{}
 
 # sent, whatever came of it (a hub gone ends the program anyway)
 def ev.send(+c: Chan(ev.Ev), e: ev.Ev) -> IO(Unit):

@@ -88,7 +88,7 @@ type hb.W is Data:
 # Whether the user's `!command` runs, and, while one runs in a tmux window
 # of its own for a password, the status line's word of where ("" none).
 type hb.Ui is Data:
-  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>, bang: Bool, term: String}
+  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>, bang: Bool, term: String, late: Nat}
 
 type hb.S is Data:
   hb.S{cfg: hb.Cfg, mem: M.me.Mem, inbox: Chan(E.ev.Ev), junk: Chan(String), pick: A.ap.Pick, turn: hb.T, wait: List<&2, hb.Msg>, sent: List<&2, hb.Msg>, halt: String, agents: List<&2, hb.Ag>, reqs: List<&2, hb.W>, eof: Bool, quit: Bool, shown: String, ui: hb.Ui}
@@ -237,49 +237,49 @@ def hb.with.ui(s: hb.S, ui2: hb.Ui) -> hb.S:
 
 def hb.ui.mode(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       m
 
 def hb.ui.due(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       d
 
 def hb.ui.busy(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       b
 
 def hb.ui.scr(u: hb.Ui) -> Maybe<&2, Chan(Sc.sc.In)>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       sc
 
 def hb.ui.force(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       fo
 
 def hb.ui.what(u: hb.Ui) -> String:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       wh
 
 def hb.ui.t0(u: hb.Ui) -> Nat:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       t0
 
 def hb.ui.set(u: hb.Ui, +k: Nat, +m2: U32, +b2: Bool, +wh2: String, +t2: Nat) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw}:
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw, +lt}:
       hb.Ui{Bool.pick(U32, Nat.is_eq(k, 0n), m2, m), Bool.pick(Bool, Nat.is_eq(k, 1n), b2, d), Bool.pick(Bool, Nat.is_eq(k, 2n), b2, b), sc,
         Bool.pick(Bool, Nat.is_eq(k, 3n), b2, fo), Bool.pick(String, Nat.is_eq(k, 4n), wh2, wh), Bool.pick(Nat, Nat.is_eq(k, 4n), t2, t0), Bool.pick(U32, Nat.is_eq(k, 5n), m2, ld), hd,
-        Bool.pick(Bool, Nat.is_eq(k, 6n), b2, bg), Bool.pick(String, Nat.is_eq(k, 7n), wh2, tw)}
+        Bool.pick(Bool, Nat.is_eq(k, 6n), b2, bg), Bool.pick(String, Nat.is_eq(k, 7n), wh2, tw), lt}
 
 def hb.ui.lead(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       ld
 
 def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
@@ -287,13 +287,13 @@ def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
 
 def hb.ui.held(u: hb.Ui) -> List<&2, String>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       hd
 
 def hb.ui.with.held(u: hb.Ui, +h2: List<&2, String>) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd, +bg, +tw}:
-      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2, bg, tw}
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd, +bg, +tw, +lt}:
+      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2, bg, tw, lt}
 
 def hb.held(+s: hb.S) -> List<&2, String>:
   hb.ui.held(hb.ui(s))
@@ -301,7 +301,7 @@ def hb.held(+s: hb.S) -> List<&2, String>:
 # whether the user's own shell command (`!command`) runs
 def hb.ui.bang(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       bg
 
 def hb.bang.on(+s: hb.S) -> Bool:
@@ -313,7 +313,7 @@ def hb.with.bang(+s: hb.S, +b: Bool) -> hb.S:
 # the status line's word of a `!command` waiting in a window of its own
 def hb.ui.term(u: hb.Ui) -> String:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
       tw
 
 def hb.with.term(+s: hb.S, +t: String) -> hb.S:
@@ -321,6 +321,24 @@ def hb.with.term(+s: hb.S, +t: String) -> hb.S:
 
 def hb.with.held(+s: hb.S, +h: List<&2, String>) -> hb.S:
   hb.with.ui(s, hb.ui.with.held(hb.ui(s), h))
+
+# since when (IO.now) a message of the user's waits for mugen's call to read
+# it, 0 if none does (the section Late messages)
+def hb.ui.late(u: hb.Ui) -> Nat:
+  match u:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+      lt
+
+def hb.ui.with.late(u: hb.Ui, +l2: Nat) -> hb.Ui:
+  match u:
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw, lt}:
+      hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, l2}
+
+def hb.late(+s: hb.S) -> Nat:
+  hb.ui.late(hb.ui(s))
+
+def hb.with.late(+s: hb.S, +l: Nat) -> hb.S:
+  hb.with.ui(s, hb.ui.with.late(hb.ui(s), l))
 
 def hb.with.mode(+s: hb.S, +m2: U32) -> hb.S:
   hb.with.ui(s, hb.ui.set(hb.ui(s), 0n, m2, False{}, "", 0n))
@@ -787,7 +805,7 @@ def hb.call(+s: hb.S, +from: U32) -> IO(hb.S):
     +says : Chan(E.ev.Say) <- Chan.new(E.ev.Say, 256)
     Unit <- hb.fresh(hb.ctl(s, ""))
     Unit <- IO.spawn(Unit, G.ag.run(hb.env(s, ""), hb.turn.ask(s, from, T.tx.join(texts, "\n\n"), pics), says))
-    return hb.with.lead(hb.with.shown(hb.with.halt(hb.with.sent(hb.with.wait(hb.with.turn(s, hb.Call{says}), []), msgs), ""), ""), U32.from_nat(List.length(&2, hb.Msg, msgs)))
+    return hb.with.lead(hb.with.shown(hb.with.halt(hb.with.sent(hb.with.wait(hb.with.turn(hb.with.late(s, 0n), hb.Call{says}), []), msgs), ""), ""), U32.from_nat(List.length(&2, hb.Msg, msgs)))
 
 def hb.wait.first(ws: List<&2, hb.Msg>, +d: U32) -> U32:
   match ws:
@@ -843,7 +861,7 @@ def hb.take(+s: hb.S, +msg: hb.Msg) -> IO(hb.S):
 
 # the turn ends: its stop's note, if any; nothing waits
 def hb.rest(+s: hb.S) -> IO(hb.S):
-  +s2 = hb.with.force(hb.with.wait(hb.with.sent(hb.with.turn(s, hb.Idle{}), []), []), False{})
+  +s2 = hb.with.force(hb.with.wait(hb.with.sent(hb.with.turn(hb.with.late(s, 0n), hb.Idle{}), []), []), False{})
   Bool.pick(IO(hb.S), String.is_empty(hb.halt(s)), IO.pure(hb.S, s2), IO.bind(hb.S, hb.S, hb.note(s2, hb.halt(s)), s3 => IO.pure(hb.S, hb.with.halt(s3, ""))))
 
 # a stop to send the messages waiting (/now): its note, and on with them
@@ -1747,9 +1765,49 @@ def hb.with.effort(p: A.ap.Pick, +e2: String) -> A.ap.Pick:
     case A.ap.Pick{m, e, sp}:
       A.ap.Pick{m, e2, sp}
 
+# Late messages ---------------------------------------------------------------------
+#
+# A message of the user's is read when a tool returns after mugen's call got
+# it, and a shell command has no time limit: one that never ended held every
+# message for 6 hours. So once a message has waited MUGEN_LATE seconds (5
+# minutes) with no tool returned since, and a command of mugen's runs, the
+# command is cut as /now cuts it, and the user is told. A command that
+# starts after the messages were read runs as long as it likes. A wait with
+# no command to cut (mugen thinks) is looked at again; a turn is never stopped.
+
+def hb.late.secs() -> IO(U32):
+  IO.bind(String, U32, S.mu.env("MUGEN_LATE", "300"), t => IO.pure(U32, U32.from_nat(Maybe.default(&2, Nat, Nat.read(T.tx.trim(t)), 300n))))
+
+# (a computation of its own: sleeps, then tells the hub)
+def hb.late.wait(+inbox: Chan(E.ev.Ev), +secs: U32) -> IO(Unit):
+  do IO<Unit>:
+    o : S.mu.Out <- S.mu.run("sleep", [U32.show(secs)], "", 64, (secs * 1000 + 60000 : U32))
+    E.ev.send(inbox, E.ev.Late{})
+
+def hb.late.start(on: Bool, +s: hb.S) -> IO(hb.S):
+  match on:
+    case False{}:
+      IO.pure(hb.S, s)
+    case True{}:
+      do IO<hb.S>:
+        +now : Nat <- IO.now()
+        +secs : U32 <- hb.late.secs()
+        Unit <- IO.spawn(Unit, hb.late.wait(hb.inbox(s), secs))
+        return hb.with.late(s, now)
+
+# a message came as the call runs: its clock starts, unless an older one's runs
+def hb.late.arm(+s: hb.S) -> IO(hb.S):
+  hb.late.start(Bool.and(Nat.is_eq(hb.turn.k(hb.turn(s)), 2n), Nat.is_eq(hb.late(s), 0n)), s)
+
+# a tool returned: the messages it was handed are read; those still held or
+# waiting keep the clock
+def hb.late.heard(+s: hb.S, +kind: String) -> hb.S:
+  +none = Bool.and(List.is_empty(&2, String, hb.held(s)), List.is_empty(&2, hb.Msg, hb.wait(s)))
+  Bool.pick(hb.S, Bool.and(String.eq(kind, "echo"), none), hb.with.late(s, 0n), s)
+
 # the user's words logged, taken by the turn
 def hb.said(+s: hb.S, +text: String) -> IO(hb.S):
-  IO.bind(hb.P, hb.S, hb.push(s, "user", text), +p => hb.take(hb.p.s(p), hb.p.msg(p)))
+  IO.bind(hb.S, hb.S, hb.late.arm(s), +s1 => IO.bind(hb.P, hb.S, hb.push(s1, "user", text), +p => hb.take(hb.p.s(p), hb.p.msg(p))))
 
 # Held messages ---------------------------------------------------------------------
 #
@@ -1772,7 +1830,7 @@ def hb.said.shown(+s: hb.S, +t: String) -> IO(hb.S):
   IO.bind(Unit, hb.S, hb.shown.user(hb.scr(s), t), u => hb.said(s, t))
 
 def hb.said.user(+s: hb.S, +t: String) -> IO(hb.S):
-  Bool.pick(IO(hb.S), Bool.and(hb.on.screen(s), Bool.not(Nat.is_eq(hb.turn.k(hb.turn(s)), 0n))), IO.pure(hb.S, hb.with.held(s, List.append(&2, String, hb.held(s), [t]))),
+  Bool.pick(IO(hb.S), Bool.and(hb.on.screen(s), Bool.not(Nat.is_eq(hb.turn.k(hb.turn(s)), 0n))), hb.late.arm(hb.with.held(s, List.append(&2, String, hb.held(s), [t]))),
     hb.said.shown(s, t))
 
 def hb.release.go(+ts: List<&2, String>, +s: hb.S) -> IO(hb.S):
@@ -1787,6 +1845,36 @@ def hb.release.go(+ts: List<&2, String>, +s: hb.S) -> IO(hb.S):
 # every message held, logged and taken, oldest first
 def hb.release(+s: hb.S) -> IO(hb.S):
   hb.release.go(hb.held(s), hb.with.held(s, []))
+
+# 0 nothing waits any more, 1 look again, 2 cut the command
+def hb.late.k(+s: hb.S, +now: Nat, +secs: U32, +pid: U32) -> Nat:
+  +on = Bool.and(Nat.is_eq(hb.turn.k(hb.turn(s)), 2n), Nat.is_gt(hb.late(s), 0n))
+  +due = Bool.and(Nat.is_ge(Nat.sub(now, hb.late(s)), Nat.mul(U32.to_nat(secs), 1000n)), U32.is_gt(pid, 0))
+  Bool.pick(Nat, on, Bool.pick(Nat, due, 2n, 1n), 0n)
+
+def hb.late.words(+secs: U32) -> String:
+  Bool.pick(String, U32.is_ge(secs, 60), U32.show((secs / 60 : U32)) ++ " minutes", U32.show(secs) ++ " seconds")
+
+def hb.late.fire(k: Nat, +s: hb.S, +secs: U32, +pid: U32) -> IO(hb.S):
+  match k:
+    case 0n:
+      IO.pure(hb.S, hb.with.late(s, 0n))
+    case 1n:
+      IO.bind(Unit, hb.S, IO.spawn(Unit, hb.late.wait(hb.inbox(s), Bool.pick(U32, U32.is_lt(secs, 30), secs, 30))), u => IO.pure(hb.S, s))
+    case _:
+      do IO<hb.S>:
+        +s2 : hb.S <- hb.release(s)
+        r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(hb.ctl(s2, "") ++ ".cut", "cut by mugen for the user's waiting messages", 0)
+        x : U32 <- S.mu.kill(pid, 1, 9)
+        hb.tell.user(hb.with.late(s2, 0n), "your messages waited " ++ hb.late.words(secs) ++ ", so mugen's command was cut: it reads them with what the command printed")
+
+# (the clock's event, E.ev.Late)
+def hb.late.over(+s: hb.S) -> IO(hb.S):
+  do IO<hb.S>:
+    +now : Nat <- IO.now()
+    +secs : U32 <- hb.late.secs()
+    +pid : U32 <- IO.bind(Result<&1, &1, U32 & String, String>, U32, S.mu.read_file(hb.ctl(s, "") ++ ".pid"), r => IO.pure(U32, hb.pid.of(r)))
+    hb.late.fire(hb.late.k(s, now, secs, pid), s, secs, pid)
 
 def hb.back.tell(m: Maybe<&2, Chan(Sc.sc.In)>, +t: String) -> IO(Unit):
   match m:
@@ -2211,7 +2299,7 @@ def hb.line(+s: hb.S, +text: String) -> IO(hb.S):
 # the turn's tool call logged, then the messages held, which it reads after
 # that tool
 def hb.entry.then(+s: hb.S, +kind: String) -> IO(hb.S):
-  Bool.pick(IO(hb.S), Bool.and(String.eq(kind, "tool"), Nat.is_eq(hb.turn.k(hb.turn(s)), 2n)), hb.release(s), IO.pure(hb.S, s))
+  Bool.pick(IO(hb.S), Bool.and(String.eq(kind, "tool"), Nat.is_eq(hb.turn.k(hb.turn(s)), 2n)), hb.release(s), IO.pure(hb.S, hb.late.heard(s, kind)))
 
 def hb.entry(+s: hb.S, +who: String, +kind: String, +text: String) -> IO(hb.S):
   Bool.pick(IO(hb.S), String.eq(kind, "user"), IO.pure(hb.S, s),
@@ -2309,6 +2397,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
       hb.older.on(hb.scr(s), s, before)
     case Some{E.ev.Resume{+at}}:
       hb.limit.over(s, at)
+    case Some{E.ev.Late{}}:
+      hb.late.over(s)
 
 def hb.is.settle(t: hb.T) -> Bool:
   match t:
@@ -2780,7 +2870,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     pane : String <- S.mu.env("TMUX_PANE", "")
     Unit <- hb.tmux.keys(Bool.and(hb.cfg.screen(c), Bool.not(String.is_empty(pane))))
     +scr : Maybe<&2, Chan(Sc.sc.In)> <- hb.screen.open(hb.cfg.screen(c), c, inbox)
-    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, [], False{}, ""}}
+    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, [], False{}, "", 0n}}
     w : hb.When <- hb.when()
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))
     +s1 : hb.S <- hb.mem.jobs(s0, r)

@@ -1,0 +1,7 @@
+user: run a long job
+user: are you there
+[your messages waited 2 seconds, so mugen's command was cut: it reads them with what the command printed]
+tool: shell {"device":"@HOST@","command":"sleep 30 & sleep 31; echo never"}
+echo: error: (cut by mugen for the user's waiting messages in T s)
+unii: Here.
+unii: Here.

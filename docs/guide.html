@@ -606,6 +606,7 @@ mugen --api</pre>
             <tr><td><code>MUGEN_PICK</code></td><td><code>opus-5.5:medium:slow</code></td><td>The chat's model, effort and speed, until <code>/model</code> or <code>/effort</code>.</td></tr>
             <tr><td><code>MUGEN_COMPACTOR</code></td><td><code>haiku-5.5:high:slow</code></td><td>The summaries' model and effort.</td></tr>
             <tr><td><code>MUGEN_JOBS</code></td><td><code>8</code> / <code>48</code></td><td>Summaries at once: 8 on Claude Code, 48 with <code>--api</code>.</td></tr>
+            <tr><td><code>MUGEN_LATE</code></td><td><code>300</code></td><td>Seconds a message of yours waits before the shell command keeping mugen from reading it is cut.</td></tr>
             <tr><td><code>MUGEN_RULES</code></td><td><code>~/.mugen/rules.md</code></td><td>Your instructions, added to mugen's prompt.</td></tr>
             <tr><td><code>MUGEN_SYNC</code></td><td><code>1</code></td><td>Flush each log write to disk.</td></tr>
           </tbody>
@@ -651,7 +652,7 @@ mugen --api</pre>
         <dt>"mugen: ~/.mugen is open already, by mugen 1234 in tmux pane %3"</dt>
         <dd>A data dir is one chat, and one mugen holds it. Go to that one (<code>tmux switch-client -t %3</code>, as the message says), quit it, or run a second, separate chat beside it with <code>MUGEN_DIR=~/.mugen-2 mugen</code>.</dd>
         <dt>mugen seems stuck</dt>
-        <dd>The line under the chat says what runs and for how long: a shell command that never ends shows its time growing. <kbd>C-s</kbd> cuts it and sends what you typed; <kbd>C-g</kbd> stops the turn.</dd>
+        <dd>The line under the chat says what runs and for how long: a shell command that never ends shows its time growing. <kbd>C-s</kbd> cuts it and sends what you typed; <kbd>C-g</kbd> stops the turn. If you do nothing, a message that has waited 5 minutes cuts the command by itself, and mugen tells you.</dd>
         <dt><kbd>Shift-Enter</kbd> sends instead of making a new line</dt>
         <dd>The terminal sends it as a plain Enter (GNOME Terminal and other VTE terminals do). Use <kbd>Alt-Enter</kbd>.</dd>
         <dt>"mugen: cannot run claude (MUGEN_CLAUDE)"</dt>

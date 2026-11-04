@@ -2,6 +2,15 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.15.0 (2026-11-04)
+
+- A shell command can no longer hold your messages forever: once one has
+  waited 5 minutes with no tool returned since, the command mugen runs is cut,
+  as `C-s` cuts it, and you're told. Its result says `cut by mugen for the
+  user's waiting messages`. `MUGEN_LATE` sets the seconds. A command that
+  starts after mugen read your messages can run as long as it likes, and a
+  turn that's only thinking is never stopped.
+
 ## 0.14.0 (2026-11-03)
 
 - Search the chat, as Emacs's isearch: `C-r` back, `C-s` forward. Type and it

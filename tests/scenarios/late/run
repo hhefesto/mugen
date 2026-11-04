@@ -1,0 +1,4 @@
+#!/bin/sh
+# a command keeping a message from being read is cut once it has waited
+# MUGEN_LATE seconds, its group killed, and the call reads the message
+( echo "run a long job"; sleep 1; echo "are you there"; sleep 5 ) | MUGEN_LATE=2 timeout 60 "$MUGEN"
