@@ -387,7 +387,8 @@ mugen --api</pre>
             <tr><td><kbd>C-a</kbd> <kbd>C-e</kbd> <kbd>C-b</kbd> <kbd>C-f</kbd> <kbd>M-b</kbd> <kbd>M-f</kbd></td><td>Start and end of the line; back and forward a character, a word.</td></tr>
             <tr><td><kbd>C-k</kbd> <kbd>C-u</kbd> <kbd>C-w</kbd> <kbd>M-d</kbd> <kbd>C-y</kbd></td><td>Cut to the line's end, to its start, the word before, the word after; paste what was cut.</td></tr>
             <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>C-p</kbd> <kbd>C-n</kbd></td><td>Move between the lines of a message; past its first or last line, the history (kept in <code>~/.mugen/history</code>).</td></tr>
-            <tr><td><kbd>C-r</kbd></td><td>Searches the history as you type; <kbd>C-r</kbd> again finds an older match, <kbd>C-g</kbd> goes back.</td></tr>
+            <tr><td><kbd>M-r</kbd></td><td>Searches the history as you type; <kbd>M-r</kbd> again finds an older match, <kbd>C-g</kbd> goes back.</td></tr>
+            <tr><td><kbd>C-r</kbd> <kbd>C-s</kbd></td><td>Search the chat, back and forward, as Emacs's isearch: type and it goes to the match; <kbd>C-r</kbd> and <kbd>C-s</kbd> go to the match before and after, <kbd>Enter</kbd> stays there, <kbd>C-g</kbd> goes back. With messages waiting <kbd>C-s</kbd> sends them instead.</td></tr>
             <tr><td><kbd>Tab</kbd></td><td>Completes a command, a model, an effort, a topic of <code>/help</code>, a word of yours after <code>/words rm</code>.</td></tr>
             <tr><td><kbd>M-s</kbd> <kbd>M-1</kbd>…<kbd>M-5</kbd> <kbd>M-S</kbd></td><td>The spellcheck: the red word under the mouse or the cursor replaced by its first suggestion, by the one numbered; every red word by its first.</td></tr>
             <tr><td><kbd>M-a</kbd></td><td>The red word under the mouse or the cursor added to your words (<code>~/.hunspell_en_US</code>); on a word of yours, taken out.</td></tr>
@@ -572,7 +573,7 @@ mugen --api</pre>
   docs/agent/&lt;Name&gt;.jsonl   <span class="c">each subagent's log</span>
   work/main  work/&lt;Name&gt;    <span class="c">where the tools run</span>
   rules.md                  <span class="c">your standing instructions (optional)</span>
-  history                   <span class="c">what you sent, for ↑, C-p and C-r</span>
+  history                   <span class="c">what you sent, for ↑, C-p and M-r</span>
   run/                      <span class="c">the running calls' files</span>
     limits.json             <span class="c">the plan's limits, as the last call reported them</span>
     main.cc.out             <span class="c">the current turn's events from claude</span>

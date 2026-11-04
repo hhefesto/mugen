@@ -132,7 +132,7 @@ Keys:
   text clears it (`C-y` brings it back).
 - Emacs keys (`C-a`, `C-e`, `C-k`, `C-u`, `C-w`, `C-y`, `M-b`, `M-f`,
   `M-d`; `Home` and `End` in a text: its line's start and end), the
-  history (`↑`, `↓`, `C-p`, `C-n`, `C-r`, kept in `$MUGEN_DIR/history`),
+  history (`↑`, `↓`, `C-p`, `C-n`, `M-r`, kept in `$MUGEN_DIR/history`),
   `Tab` completes a command (a `/help` topic, a word for `/words rm`).
 - `Home` and `End` on an empty input: the chat's top and end (`M-<`,
   `M->` anywhere).

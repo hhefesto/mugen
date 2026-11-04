@@ -9,7 +9,7 @@ import ./Help.bend as Hl
 # it; the text last cut (C-k, C-u, C-w, M-d, M-Backspace; C-y yanks it
 # back); the history, newest first, and where in it the text is (0: the one
 # being written, kept as the draft while the history is browsed); and a
-# reverse search (C-r), when one is on: what it looks for.
+# the history search (M-r), when one is on: what it looks for.
 #
 # Every def is prefixed `ed.` (a program's defs share one namespace).
 
@@ -317,8 +317,8 @@ def ed.find.off(e: ed.Ed) -> ed.Ed:
     case ed.Ed{p, q, c, h, a, d, f}:
       ed.Ed{p, q, c, h, a, d, None{}}
 
-# a key while searching: a character narrows it, Backspace widens it, C-r
-# finds an older match, C-g and Esc leave it as it was; any other key ends it
+# a key while searching: a character narrows it, Backspace widens it, M-r or
+# C-r finds an older match, C-g and Esc leave it as it was; any other key ends it
 # (the text found kept) and is then a key of its own: 0 taken, 1 it ends
 def ed.find.k(+key: K.ky.Key) -> Nat:
   match key:
@@ -327,6 +327,8 @@ def ed.find.k(+key: K.ky.Key) -> Nat:
     case K.ky.Back{}:
       0n
     case K.ky.Ctrl{114}:
+      0n
+    case K.ky.Meta{114}:
       0n
     case K.ky.Ctrl{103}:
       0n
@@ -342,6 +344,8 @@ def ed.find.key(+e: ed.Ed, +q: String, key: K.ky.Key) -> ed.Ed:
     case K.ky.Back{}:
       ed.search(e, String.take(q, Nat.sub(String.length(q), 1n)), 0n)
     case K.ky.Ctrl{114}:
+      ed.search(e, q, ed.at.n(e))
+    case K.ky.Meta{114}:
       ed.search(e, q, ed.at.n(e))
     case _:
       ed.find.off(ed.at(e, 0n, "", ed.draft(e)))
@@ -390,7 +394,7 @@ def ed.ctrl(k: Nat, +e: ed.Ed) -> ed.Ed:
     case _:
       e
 
-# M-b, M-f, M-d
+# M-b, M-f, M-d, M-r (the history searched: C-r is the chat's now, Screen.bend)
 def ed.meta(k: Nat, +e: ed.Ed) -> ed.Ed:
   match k:
     case 1n:
@@ -399,11 +403,13 @@ def ed.meta(k: Nat, +e: ed.Ed) -> ed.Ed:
       ed.wright(e)
     case 3n:
       ed.kill.wfwd(e)
+    case 4n:
+      ed.search(e, "", 0n)
     case _:
       e
 
 def ed.meta.k(+c: U32) -> Nat:
-  Bool.pick(Nat, U32.is_eq(c, 98), 1n, Bool.pick(Nat, U32.is_eq(c, 102), 2n, Bool.pick(Nat, U32.is_eq(c, 100), 3n, 0n)))
+  Bool.pick(Nat, U32.is_eq(c, 114), 4n, Bool.pick(Nat, U32.is_eq(c, 98), 1n, Bool.pick(Nat, U32.is_eq(c, 102), 2n, Bool.pick(Nat, U32.is_eq(c, 100), 3n, 0n))))
 
 # the cursor keys and Delete (Keys.bend ky.Nav)
 def ed.nav(k: U32, +e: ed.Ed) -> ed.Ed:

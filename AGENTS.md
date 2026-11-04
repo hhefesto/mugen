@@ -36,6 +36,8 @@ first: each says what it owns.
 - `spell`: Spell.bend's words, answers and fixes, the keys the spellcheck,
   Shift-Tab and Home take (Keys.bend's decoding, Screen.bend's map), and
   the real hunspell (`bend/tests/SpellCheck.bend`), with a words file too.
+- `find`: the chat's search (`bend/tests/FindCheck.bend`): where a text is
+  found, the walk up and down the rows, where the view goes, the paint, its keys.
 - `help`: every command Tab completes and every key the screen takes is
   named in Help.bend's pages (`bend/tests/HelpCheck.bend`). A new key or
   command needs its line there.

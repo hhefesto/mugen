@@ -16,7 +16,8 @@ import ./Store.bend as St
 # it logs) and how it is (sc.State: mugen's work, the messages waiting, the
 # status line). Top down: the chat, scrolled with PgUp, PgDn and the wheel
 # (Home and End on an empty input: its top and end; M-Up and M-Down: from
-# one of mugen's answers to the next, see Answers), each tool call one
+# one of mugen's answers to the next, see Answers; C-r and C-s search it, see
+# Searching the chat), each tool call one
 # block, open (a click folds or opens it, M-o all; a drag selects text and
 # copies it, see Selecting); then a rule, what runs (with a spinner and its
 # time), the messages waiting for mugen, the status line, and the input
@@ -25,7 +26,7 @@ import ./Store.bend as St
 #
 # Keys: Enter sends; Shift-, Alt-, Ctrl-Enter or C-j make a new line (so
 # does a "\" ending the text); C-s sends the waiting messages now (Hub's
-# /now); C-g stops mugen's turn; Shift-Tab switches plan and auto mode;
+# /now), and with none it searches; C-g stops mugen's turn; Shift-Tab switches plan and auto mode;
 # Esc twice, C-c on an empty input or C-d leave. The terminal comes back as it was on every way out, a signal's
 # too (Sys.bend mu.raw).
 #
@@ -112,11 +113,21 @@ type sc.Tr is Data:
 type sc.Tm is Data:
   sc.Tm{w: U32, h: U32, draw: U32, mouse: Bool, low: U32}
 
+# a search of the chat (C-r, C-s; see Searching the chat): whether one is on;
+# what it looks for; its match, as the rows from the chat's end to it (1 the
+# last, 0 none); which way it looks (up: older); from where (a match is above
+# or below ref, those rows counted from the end too); the rows scrolled up
+# when it began (C-g goes back there); whether it found nothing; what the last
+# search looked for (C-r or C-s on no text takes it again); whether the log
+# was asked for older messages to look in
+type sc.Fd is Data:
+  sc.Fd{on: Bool, q: String, at: U32, up: Bool, ref: U32, off0: U32, fail: Bool, last: String, more: Bool}
+
 # the moment: now (IO.now), the last Esc (0 none), a word for the user
 # under the chat, leaving asked, the terminal given back, whose blocks the
-# chat shows ("" all, "mugen" its own, else an agent's name)
+# chat shows ("" all, "mugen" its own, else an agent's name), its search
 type sc.U is Data:
-  sc.U{now: Nat, esc: Nat, hint: String, quit: Bool, done: Bool, focus: String}
+  sc.U{now: Nat, esc: Nat, hint: String, quit: Bool, done: Bool, focus: String, fd: sc.Fd}
 
 # a selection by the mouse: on (the left button is down), moved (dragged),
 # where it began and where it is (column, row; from 1), and the chat's rows
@@ -392,11 +403,67 @@ def sc.with.off(+s: sc.S, +o: U32) -> sc.S:
 
 def sc.u.focus(u: sc.U) -> String:
   match u:
-    case sc.U{n, e, h, q, d, f}:
+    case sc.U{n, e, h, q, d, f, g}:
       f
 
 def sc.focus(+s: sc.S) -> String:
   sc.u.focus(sc.u(s))
+
+def sc.u.fd(u: sc.U) -> sc.Fd:
+  match u:
+    case sc.U{n, e, h, q, d, f, g}:
+      g
+
+def sc.fd(+s: sc.S) -> sc.Fd:
+  sc.u.fd(sc.u(s))
+
+def sc.fd.none() -> sc.Fd:
+  sc.Fd{False{}, "", 0, True{}, 0, 0, False{}, "", False{}}
+
+def sc.fd.on(f: sc.Fd) -> Bool:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      on
+
+def sc.fd.q(f: sc.Fd) -> String:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      q
+
+def sc.fd.at(f: sc.Fd) -> U32:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      at
+
+def sc.fd.up(f: sc.Fd) -> Bool:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      up
+
+def sc.fd.ref(f: sc.Fd) -> U32:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      ref
+
+def sc.fd.off0(f: sc.Fd) -> U32:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      off0
+
+def sc.fd.fail(f: sc.Fd) -> Bool:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      fail
+
+def sc.fd.last(f: sc.Fd) -> String:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      last
+
+def sc.fd.more(f: sc.Fd) -> Bool:
+  match f:
+    case sc.Fd{on, q, at, up, ref, off0, fail, last, more}:
+      more
 
 # whether the chat shows the loaded agent's tab (its whole log)
 def sc.ag.on(+s: sc.S) -> Bool:
@@ -461,27 +528,27 @@ def sc.dirty(+s: sc.S, +k: U32) -> sc.S:
 
 def sc.u.now(u: sc.U) -> Nat:
   match u:
-    case sc.U{n, e, h, q, d, f}:
+    case sc.U{n, e, h, q, d, f, g}:
       n
 
 def sc.u.esc(u: sc.U) -> Nat:
   match u:
-    case sc.U{n, e, h, q, d, f}:
+    case sc.U{n, e, h, q, d, f, g}:
       e
 
 def sc.u.hint(u: sc.U) -> String:
   match u:
-    case sc.U{n, e, h, q, d, f}:
+    case sc.U{n, e, h, q, d, f, g}:
       h
 
 def sc.u.quit(u: sc.U) -> Bool:
   match u:
-    case sc.U{n, e, h, q, d, f}:
+    case sc.U{n, e, h, q, d, f, g}:
       q
 
 def sc.u.done(u: sc.U) -> Bool:
   match u:
-    case sc.U{n, e, h, q, d, f}:
+    case sc.U{n, e, h, q, d, f, g}:
       d
 
 def sc.now(+s: sc.S) -> Nat:
@@ -490,25 +557,29 @@ def sc.now(+s: sc.S) -> Nat:
 def sc.hint(+s: sc.S) -> String:
   sc.u.hint(sc.u(s))
 
+def sc.with.fd(+s: sc.S, +f2: sc.Fd) -> sc.S:
+  +u = sc.u(s)
+  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), sc.u.done(u), sc.u.focus(u), f2})
+
 def sc.with.now(+s: sc.S, +n2: Nat) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{n2, sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), sc.u.done(u), sc.u.focus(u)})
+  sc.with.u(s, sc.U{n2, sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), sc.u.done(u), sc.u.focus(u), sc.u.fd(u)})
 
 def sc.with.esc(+s: sc.S, +e2: Nat) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), e2, sc.u.hint(u), sc.u.quit(u), sc.u.done(u), sc.u.focus(u)})
+  sc.with.u(s, sc.U{sc.u.now(u), e2, sc.u.hint(u), sc.u.quit(u), sc.u.done(u), sc.u.focus(u), sc.u.fd(u)})
 
 def sc.with.hint(+s: sc.S, +h2: String) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), h2, sc.u.quit(u), sc.u.done(u), sc.u.focus(u)})
+  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), h2, sc.u.quit(u), sc.u.done(u), sc.u.focus(u), sc.u.fd(u)})
 
 def sc.with.quit(+s: sc.S) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), True{}, sc.u.done(u), sc.u.focus(u)})
+  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), True{}, sc.u.done(u), sc.u.focus(u), sc.u.fd(u)})
 
 def sc.with.done(+s: sc.S) -> sc.S:
   +u = sc.u(s)
-  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), True{}, sc.u.focus(u)})
+  sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), sc.u.hint(u), sc.u.quit(u), True{}, sc.u.focus(u), sc.u.fd(u)})
 
 # Views ----------------------------------------------------------------------------
 #
@@ -585,7 +656,7 @@ def sc.tab.index(ts: List<&2, String>, +t: String, +i: Nat) -> Nat:
 def sc.with.focus(+s: sc.S, +t: String) -> sc.S:
   +u = sc.u(s)
   +f = Bool.pick(String, String.eq(t, "all"), "", t)
-  sc.dirty(sc.with.off(sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), "", sc.u.quit(u), sc.u.done(u), f}), 0), 2)
+  sc.dirty(sc.with.off(sc.with.u(s, sc.U{sc.u.now(u), sc.u.esc(u), "", sc.u.quit(u), sc.u.done(u), f, sc.u.fd(u)}), 0), 2)
 
 def sc.st.busy(t: sc.St) -> Bool:
   match t:
@@ -937,9 +1008,15 @@ def sc.queue(+s: sc.S) -> List<&2, String>:
 def sc.find.row(m: Maybe<&2, String>) -> List<&2, String>:
   match m:
     case Some{q}:
-      [P.pp.paint("33", "reverse search: ") ++ q ++ P.pp.paint("2", "  (C-r older \u{b7} C-g back)")]
+      [P.pp.paint("33", "history search: ") ++ q ++ P.pp.paint("2", "  (M-r older \u{b7} C-g back)")]
     case None{}:
       []
+
+# the line of a search of the chat, under it
+def sc.fd.row(+f: sc.Fd, +w: U32) -> String:
+  +more = sc.fd.more(f)
+  +tag = Bool.pick(String, more, "reading older messages for: ", Bool.pick(String, sc.fd.fail(f), "failing search: ", Bool.pick(String, sc.fd.up(f), "search back: ", "search: ")))
+  P.pp.sgr.cut(P.pp.paint("33", tag) ++ sc.fd.q(f) ++ P.pp.paint("2", "  (C-r older \u{b7} C-s newer \u{b7} Enter stays \u{b7} C-g back)"), w)
 
 def sc.placeholder() -> String:
   "Enter sends \u{b7} Alt-Enter: a new line \u{b7} C-s sends waiting now \u{b7} C-g stops mugen \u{b7} Esc Esc leaves"
@@ -1138,7 +1215,8 @@ def sc.low(+s: sc.S) -> sc.Low:
   +painted = Sp.sp.paint(lrows, text, Sp.sp.mask(fs, 0n, String.length(text)))
   +shown = List.take(&2, String, List.drop(&2, String, painted, U32.to_nat(top)), U32.to_nat(max))
   +hint = sc.hint(s)
-  +info = Bool.pick(List<&2, String>, Bool.not(String.is_empty(hint)), [P.pp.sgr.cut(P.pp.paint("2", hint), w)], sc.find.row(D.ed.find(e)))
+  +fd = sc.fd(s)
+  +info = Bool.pick(List<&2, String>, sc.fd.on(fd), [sc.fd.row(fd, w)], Bool.pick(List<&2, String>, Bool.not(String.is_empty(hint)), [P.pp.sgr.cut(P.pp.paint("2", hint), w)], sc.find.row(D.ed.find(e))))
   +empty = D.ed.is.empty(e)
   +input = Bool.pick(List<&2, String>, empty, [P.pp.paint("2", P.pp.fit(sc.placeholder(), (w - 2 : U32)))], shown)
   +head = List.concat(&2, String, [[sc.rule(w, sc.off(s))], sc.act(s), sc.queue(s), info, [P.pp.sgr.cut(sc.status(s), w)]])
@@ -1471,10 +1549,256 @@ def sc.old.put(+s: sc.S, +from: U32, ms: List<&2, sc.OldM>) -> sc.S:
   +s2 = sc.with.blks(s, List.append(&2, sc.Blk, bs, olds))
   sc.with.tr(s2, sc.tr.with.old(sc.tr(s2), from))
 
+# Searching the chat: C-r looks up the chat, C-s down it, as Emacs's isearch.
+# A character looks further for a longer text from the match it is on,
+# Backspace takes one back and begins again from where the search began; C-r
+# and C-s go to the match before and after, and past the last they go round
+# (a search that failed starts over at the other end); Enter stays there, C-g
+# and Esc go back; any other key stays there and is then a key of its own. On
+# no text they take the last search's. All lowercase looks in any case, one
+# capital makes it exact. It looks at the rows as drawn, so a folded block's
+# inside is not seen, and over the wrap of a line into the next row. Past the
+# chat's oldest block C-r asks the log for older messages as M-Up does.
+
+# one capital and it is exact
+def sc.fd.cased(+q: String) -> Bool:
+  Bool.not(String.eq(q, String.to_lower(q)))
+
+def sc.fd.norm(+s: String, +cased: Bool) -> String:
+  Bool.pick(String, cased, s, String.to_lower(s))
+
+# where q begins in s, from i on
+def sc.fd.idx.go(s: String, here: Bool, +q: String, +i: Nat) -> Maybe<&2, Nat>:
+  match s here:
+    case _ True{}:
+      Some{i}
+    case SNil{} False{}:
+      None{}
+    case SCon{c, +t} False{}:
+      sc.fd.idx.go(t, String.starts_with(t, q), q, Nat.add(i, 1n))
+
+def sc.fd.idx.of(+s: String, +q: String, +i: Nat) -> Maybe<&2, Nat>:
+  sc.fd.idx.go(s, String.starts_with(s, q), q, i)
+
+# whether q begins in this row, plain and with its case as q's: all in it, or
+# running on into the row below it (a line that wrapped)
+def sc.fd.hit.at(m: Maybe<&2, Nat>, +n: Nat) -> Bool:
+  match m:
+    case Some{i}:
+      Nat.is_lt(i, n)
+    case None{}:
+      False{}
+
+def sc.fd.hit(+row: String, +below: String, +q: String) -> Bool:
+  sc.fd.hit.at(sc.fd.idx.of(row ++ " " ++ String.trim_start(below), q, 0n), String.length(row))
+
+# what a walk knows: the row it reached, the match it holds, whether it ended
+type sc.FdG is Data:
+  sc.FdG{r: U32, got: U32, stop: Bool}
+
+def sc.fd.g.r(g: sc.FdG) -> U32:
+  match g:
+    case sc.FdG{r, got, stop}:
+      r
+
+def sc.fd.g.got(g: sc.FdG) -> U32:
+  match g:
+    case sc.FdG{r, got, stop}:
+      got
+
+def sc.fd.g.stop(g: sc.FdG) -> Bool:
+  match g:
+    case sc.FdG{r, got, stop}:
+      stop
+
+# a row met at nr: going up, the first match above ref ends the walk (1);
+# going down, the walk ends at ref with the last match below it (2); else on (0)
+def sc.fd.k(+up: Bool, +hit: Bool, +nr: U32, +ref: U32) -> Nat:
+  Bool.pick(Nat, up, Bool.pick(Nat, Bool.and(hit, U32.is_gt(nr, ref)), 1n, 0n), Bool.pick(Nat, U32.is_ge(nr, ref), 2n, 0n))
+
+# a block's rows, bottom up; k what the row before them said, at r
+def sc.fd.rows(rs: List<&2, String>, k: Nat, +up: Bool, +q: String, +cased: Bool, +ref: U32, +r: U32, +got: U32, +below: String) -> sc.FdG:
+  match rs k:
+    case Nil{} 0n:
+      sc.FdG{r, got, False{}}
+    case row <> more 0n:
+      +p = sc.fd.norm(P.pp.clean(row), cased)
+      +nr = (r + 1 : U32)
+      +hit = sc.fd.hit(p, below, q)
+      sc.fd.rows(more, sc.fd.k(up, hit, nr, ref), up, q, cased, ref, nr, Bool.pick(U32, Bool.and(hit, U32.is_lt(nr, ref)), nr, got), p)
+    case _ 1n:
+      sc.FdG{r, r, True{}}
+    case _ _:
+      sc.FdG{r, got, True{}}
+
+# the blocks, newest first; going up, a block wholly at or below ref is passed
+# by its count of rows, unread
+def sc.fd.blks(bs: List<&2, sc.Blk>, stop: Bool, +up: Bool, +q: String, +cased: Bool, +ref: U32, +r: U32, +got: U32, +w: U32, +home: String, +focus: String) -> U32:
+  match bs stop:
+    case _ True{}:
+      got
+    case Nil{} False{}:
+      got
+    case b <> rest False{}:
+      +b2 = sc.blk.fresh(b, w, home)
+      +n = sc.ans.n(b2, focus)
+      +top = (r + n : U32)
+      +pass = Bool.or(U32.is_eq(n, 0), Bool.and(up, U32.is_le(top, ref)))
+      +g = sc.fd.rows(Bool.pick(List<&2, String>, pass, [], sc.blk.rows(b2)), 0n, up, q, cased, ref, r, got, "")
+      sc.fd.blks(rest, sc.fd.g.stop(g), up, q, cased, ref, Bool.pick(U32, pass, top, sc.fd.g.r(g)), sc.fd.g.got(g), w, home, focus)
+
+# going up, the nearest match above ref; going down, the nearest below it; 0 none
+def sc.fd.find(+s: sc.S, +up: Bool, +q: String, +ref: U32) -> U32:
+  +cased = sc.fd.cased(q)
+  sc.fd.blks(sc.vw(s), False{}, up, q, cased, ref, 0, 0, sc.w(s), sc.home(s), sc.focus(s))
+
+# the rows scrolled up that show the match: as they are while it shows (under
+# the pinned prompt's row), else with it a third of the way down
+def sc.fd.place(+at: U32, +off: U32, +t: U32) -> U32:
+  +shows = Bool.and(U32.is_gt(at, off), U32.is_lt(at, (off + t : U32)))
+  +want = (at + U32.div(t, 3) : U32)
+  Bool.pick(U32, shows, off, (want - U32.min(want, t) : U32))
+
+# the search as it now stands, drawn: scrolled to its match; none, where it was
+def sc.fd.show(+s: sc.S, +f: sc.Fd) -> sc.S:
+  +s1 = sc.with.fd(sc.with.hint(s, ""), f)
+  +at = sc.fd.at(f)
+  +off = Bool.pick(U32, U32.is_eq(at, 0), Bool.pick(U32, String.is_empty(sc.fd.q(f)), sc.fd.off0(f), sc.off(s1)), sc.fd.place(at, sc.off(s1), sc.ans.t(s1)))
+  sc.dirty(sc.with.off(s1, off), 2)
+
+# look for q from ref: found, or none; going up in the chat, with older
+# messages in the log and none here, they are asked for (sc.Old brings them,
+# and this again), and what was searched is not read again
+def sc.fd.look.ask(ask: Bool, +s: sc.S, +f: sc.Fd, +old: U32, +at: U32) -> IO(sc.S):
+  match ask:
+    case True{}:
+      IO.bind(Unit, sc.S, E.ev.send(sc.hub(s), E.ev.Older{old}), u => IO.pure(sc.S, sc.dirty(sc.with.fd(s, sc.Fd{True{}, sc.fd.q(f), sc.fd.at(f), sc.fd.up(f), sc.fd.ref(f), sc.fd.off0(f), False{}, sc.fd.last(f), True{}}), 1)))
+    case False{}:
+      +q = sc.fd.q(f)
+      IO.pure(sc.S, sc.fd.show(s, sc.Fd{True{}, q, at, sc.fd.up(f), sc.fd.ref(f), sc.fd.off0(f), Bool.and(U32.is_eq(at, 0), Bool.not(String.is_empty(q))), sc.fd.last(f), False{}}))
+
+def sc.fd.look(+s: sc.S, +f: sc.Fd) -> IO(sc.S):
+  +q = sc.fd.q(f)
+  +none = String.is_empty(q)
+  +at = Bool.pick(U32, none, 0, sc.fd.find(s, sc.fd.up(f), q, sc.fd.ref(f)))
+  +focus = sc.focus(s)
+  +old = sc.tr.old(sc.tr(s))
+  +ask = Bool.and(Bool.and(U32.is_eq(at, 0), Bool.not(none)), Bool.and(sc.fd.up(f), Bool.and(Bool.or(String.is_empty(focus), String.eq(focus, "mugen")), U32.is_gt(old, 0))))
+  sc.fd.look.ask(ask, s, f, old, at)
+
+# where a new search looks from: going up, the last row showing; going down,
+# the top one
+def sc.fd.ref.of(+s: sc.S, +up: Bool) -> U32:
+  +off = sc.off(s)
+  Bool.pick(U32, up, off, ((off + sc.ans.t(s) : U32) + 1 : U32))
+
+# C-r (up) or C-s pressed: a new search, on the last one's text if there is one
+def sc.fd.begin(+s: sc.S, +up: Bool) -> IO(sc.S):
+  +f = sc.fd(s)
+  sc.fd.look(s, sc.Fd{True{}, "", 0, up, sc.fd.ref.of(s, up), sc.off(s), False{}, sc.fd.last(f), False{}})
+
+# the search over: stays where it is, or goes back; its text kept for the next
+def sc.fd.end(+s: sc.S, +back: Bool) -> sc.S:
+  +f = sc.fd(s)
+  +q = sc.fd.q(f)
+  +last = Bool.pick(String, String.is_empty(q), sc.fd.last(f), q)
+  +s1 = sc.with.fd(s, sc.Fd{False{}, "", 0, sc.fd.up(f), 0, 0, False{}, last, False{}})
+  sc.dirty(Bool.pick(sc.S, back, sc.with.off(s1, sc.fd.off0(f)), s1), 2)
+
+# C-r (up) or C-s in a search: the next match that way; on no text, the last
+# search's; a search that failed goes round, from the end it looks towards
+def sc.fd.next(+s: sc.S, +up: Bool) -> IO(sc.S):
+  +f = sc.fd(s)
+  +q0 = sc.fd.q(f)
+  +none = String.is_empty(q0)
+  +at = sc.fd.at(f)
+  +ref = Bool.pick(U32, sc.fd.fail(f), Bool.pick(U32, up, 0, 4294967295), Bool.pick(U32, U32.is_eq(at, 0), sc.fd.ref.of(s, up), at))
+  sc.fd.look(s, sc.Fd{True{}, Bool.pick(String, none, sc.fd.last(f), q0), at, up, ref, sc.fd.off0(f), False{}, sc.fd.last(f), False{}})
+
+# the text grown: looked for from the match it is on, that one included
+def sc.fd.grow(+s: sc.S, +more: String) -> IO(sc.S):
+  +f = sc.fd(s)
+  +at = sc.fd.at(f)
+  +up = sc.fd.up(f)
+  +ref = Bool.pick(U32, U32.is_eq(at, 0), sc.fd.ref(f), Bool.pick(U32, up, (at - 1 : U32), (at + 1 : U32)))
+  sc.fd.look(s, sc.Fd{True{}, sc.fd.q(f) ++ more, at, up, ref, sc.fd.off0(f), False{}, sc.fd.last(f), False{}})
+
+# Backspace: the text less a character, looked for again from the start, there
+def sc.fd.shrink(+s: sc.S) -> IO(sc.S):
+  +f = sc.fd(s)
+  +q = sc.fd.q(f)
+  +up = sc.fd.up(f)
+  +off0 = sc.fd.off0(f)
+  +s1 = sc.with.off(s, off0)
+  sc.fd.look(s1, sc.Fd{True{}, String.take(q, Nat.sub(String.length(q), 1n)), 0, up, sc.fd.ref.of(s1, up), off0, False{}, sc.fd.last(f), False{}})
+
+# older messages came for a search: looked in
+def sc.fd.more.got(+s: sc.S) -> IO(sc.S):
+  sc.fd.look(s, sc.fd(s))
+
+# Painting the matches, in the rows as drawn. A row with one loses its colors,
+# as a selected row does. The current match is yellow, the others reversed.
+def sc.fd.mark.go(fuel: Nat, m: Maybe<&2, Nat>, +p: String, +n: String, +q: String, +cur: Bool, +acc: String) -> String:
+  match fuel m:
+    case 0n _:
+      acc ++ p
+    case 1n+f None{}:
+      acc ++ p
+    case 1n+f Some{+i}:
+      +j = Nat.add(i, Nat.max(String.length(q), 1n))
+      +on = Bool.pick(String, cur, "\u{1B}[30;43m", "\u{1B}[7m")
+      +off = Bool.pick(String, cur, "\u{1B}[39;49m", "\u{1B}[27m")
+      +n2 = String.drop(n, j)
+      sc.fd.mark.go(f, sc.fd.idx.of(n2, q, 0n), String.drop(p, j), n2, q, False{}, acc ++ String.take(p, i) ++ on ++ String.take(String.drop(p, i), Nat.sub(j, i)) ++ off)
+
+def sc.fd.mark(+p: String, +n: String, +q: String, +cur: Bool) -> String:
+  sc.fd.mark.go(String.length(n), sc.fd.idx.of(n, q, 0n), p, n, q, cur, "")
+
+def sc.fd.row.on(has: Bool, +r: String, +p: String, +n: String, +q: String, +cur: Bool) -> String:
+  match has:
+    case True{}:
+      sc.fd.mark(p, n, q, cur)
+    case False{}:
+      r
+
+def sc.fd.row.show(+r: String, +q: String, +cased: Bool, +cur: Bool) -> String:
+  +p = P.pp.clean(r)
+  +n = sc.fd.norm(p, cased)
+  sc.fd.row.on(String.contains(n, q), r, p, n, q, cur)
+
+# the rows to draw (top down, y the first's): cur is the row of the match
+def sc.fd.rows.show(rs: List<&2, String>, +q: String, +cased: Bool, +y: U32, +cur: U32) -> List<&2, String>:
+  match rs:
+    case []:
+      []
+    case r <> rest:
+      sc.fd.row.show(r, q, cased, U32.is_eq(y, cur)) <> sc.fd.rows.show(rest, q, cased, (y + 1 : U32), cur)
+
+def sc.fd.paint.go(go: Bool, +f: sc.Fd, +rows: List<&2, String>, +top: U32) -> List<&2, String>:
+  match go:
+    case True{}:
+      +q = sc.fd.q(f)
+      +at = sc.fd.at(f)
+      sc.fd.rows.show(rows, q, sc.fd.cased(q), 1, ((top + 1 : U32) - U32.min((top + 1 : U32), at) : U32))
+    case False{}:
+      rows
+
+# top: the rows from the chat's end to its top row, as drawn
+def sc.fd.paint(+f: sc.Fd, +rows: List<&2, String>, +top: U32) -> List<&2, String>:
+  sc.fd.paint.go(Bool.and(sc.fd.on(f), Bool.not(String.is_empty(sc.fd.q(f)))), f, rows, top)
+
+def sc.old.got.go(k: Nat, +s: sc.S) -> IO(sc.S):
+  match k:
+    case 1n:
+      sc.fd.more.got(s)
+    case _:
+      sc.to.ans.up(s)
+
 def sc.old.got.on(on: Bool, +s: sc.S, +from: U32, ms: List<&2, sc.OldM>) -> IO(sc.S):
   match on:
     case True{}:
-      sc.to.ans.up(sc.old.put(s, from, ms))
+      +f = sc.fd(s)
+      sc.old.got.go(Bool.pick(Nat, Bool.and(sc.fd.on(f), sc.fd.more(f)), 1n, 0n), sc.old.put(s, from, ms))
     case False{}:
       IO.pure(sc.S, s)
 
@@ -1539,7 +1863,7 @@ def sc.draw.all(+s: sc.S) -> IO(sc.S):
   +pid = Bool.pick(U32, Bool.and(U32.is_ge(t, 4), Bool.or(String.is_empty(focus), String.eq(focus, "mugen"))), sc.pin.id(pm), 0)
   +rows = sc.pinned.rows(pid, sc.pin.row(pm, sc.w(s)), rows0)
   +ids = sc.pinned.ids(pid, ids0)
-  +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(t), sc.sel.show(sc.z(s), rows), 1), sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
+  +out = String.concat(List.concat(&2, String, [["\u{1B}[?2026h\u{1B}[?25l"], sc.paint.rows(U32.to_nat(t), sc.sel.show(sc.z(s), sc.fd.paint(sc.fd(s), rows, (off2 + U32.from_nat(List.length(&2, String, rows)) : U32))), 1), sc.paint.rows(U32.to_nat(nl), lrows, (t + 1 : U32)),
     [sc.bx.out(sc.low.box(low)), sc.cursor((t + (sc.low.row(low) + 1 : U32) : U32), sc.low.col(low)), "\u{1B}[?25h\u{1B}[?2026l"]]))
   +s2 = sc.with.sp(s, Sp.sp.with.drawn(sc.sp(s), sc.bx.key(sc.low.box(low))))
   IO.bind(Unit, sc.S, IO.write(out), u => IO.pure(sc.S, sc.with.drawn(s2, g, ids, off2, an, nl, rows, pid)))
@@ -2538,13 +2862,106 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
     case _:
       IO.pure(sc.S, s)
 
-def sc.key(+s: sc.S, +key: K.ky.Key) -> IO(sc.S):
+def sc.key.plain(+s: sc.S, +key: K.ky.Key) -> IO(sc.S):
   +e = sc.ed(s)
   +back = Bool.not(List.is_empty(&2, String, sc.st.wait(sc.st(s))))
   +tabs = Bool.not(List.is_empty(&2, String, sc.tabs(sc.st.agents(sc.st(s)), sc.focus(s))))
   +k = sc.key.k(key, Maybe.is_some(&2, String, D.ed.find(e)), D.ed.is.empty(e), back, tabs)
   +s1 = Bool.pick(sc.S, Bool.or(Nat.is_eq(k, 8n), Nat.is_eq(k, 28n)), s, sc.with.esc(s, 0n))
   sc.key.go(k, s1, key)
+
+# a key while the chat is searched: 1 a character, 2 Backspace, 3 C-r, 4 C-s,
+# 5 Enter, 6 C-g or Esc, 7 a paste; 8 what says nothing of the search (the
+# mouse, the terminal's focus), a key as ever; 0 any other, which ends it and
+# is then a key of its own
+def sc.fd.key.k(key: K.ky.Key) -> Nat:
+  match key:
+    case K.ky.Char{c}:
+      1n
+    case K.ky.Back{}:
+      2n
+    case K.ky.Ctrl{114}:
+      3n
+    case K.ky.Ctrl{115}:
+      4n
+    case K.ky.Enter{}:
+      5n
+    case K.ky.Ctrl{103}:
+      6n
+    case K.ky.Esc{}:
+      6n
+    case K.ky.Paste{t}:
+      7n
+    case K.ky.Mouse{b, x, y, up}:
+      8n
+    case K.ky.Focus{on}:
+      8n
+    case K.ky.Other{}:
+      8n
+    case _:
+      0n
+
+def sc.fd.key.text(key: K.ky.Key) -> String:
+  match key:
+    case K.ky.Char{+c}:
+      SCon{Chr{c}, ""}
+    case K.ky.Paste{+t}:
+      t
+    case _:
+      ""
+
+def sc.fd.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
+  match k:
+    case 1n:
+      sc.fd.grow(s, sc.fd.key.text(key))
+    case 2n:
+      sc.fd.shrink(s)
+    case 3n:
+      sc.fd.next(s, True{})
+    case 4n:
+      sc.fd.next(s, False{})
+    case 5n:
+      IO.pure(sc.S, sc.fd.end(s, False{}))
+    case 6n:
+      IO.pure(sc.S, sc.fd.end(s, True{}))
+    case 7n:
+      sc.fd.grow(s, sc.fd.key.text(key))
+    case 8n:
+      sc.key.plain(s, key)
+    case _:
+      sc.key.plain(sc.fd.end(s, False{}), key)
+
+# a search begins: C-r (1), unless the input's history is being searched; C-s
+# (2), unless there are messages for it to send now (now); 0 no
+def sc.fd.start(key: K.ky.Key, +find: Bool, +now: Bool) -> Nat:
+  match key:
+    case K.ky.Ctrl{114}:
+      Bool.pick(Nat, find, 0n, 1n)
+    case K.ky.Ctrl{115}:
+      Bool.pick(Nat, Bool.or(find, now), 0n, 2n)
+    case _:
+      0n
+
+def sc.key.idle(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
+  match k:
+    case 1n:
+      sc.fd.begin(s, True{})
+    case 2n:
+      sc.fd.begin(s, False{})
+    case _:
+      sc.key.plain(s, key)
+
+def sc.key.on(on: Bool, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
+  match on:
+    case True{}:
+      sc.fd.key.go(sc.fd.key.k(key), s, key)
+    case False{}:
+      +st = sc.st(s)
+      +now = Bool.not(Bool.and(List.is_empty(&2, String, sc.st.wait(st)), List.is_empty(&2, String, sc.st.sent(st))))
+      sc.key.idle(sc.fd.start(key, Maybe.is_some(&2, String, D.ed.find(sc.ed(s))), now), s, key)
+
+def sc.key(+s: sc.S, +key: K.ky.Key) -> IO(sc.S):
+  sc.key.on(sc.fd.on(sc.fd(s)), s, key)
 
 # The spellcheck ------------------------------------------------------------------
 #
@@ -2786,7 +3203,7 @@ def sc.run(+hub: Chan(E.ev.Ev), +me: Chan(sc.In), +home: String, +hfile: String)
     ws : U32 <- S.mu.winsize()
     hist : List<&2, String> <- sc.hist.load(hfile)
     now : Nat <- IO.now()
-    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 16777216, 0, [], sc.An{0, 0, 0}, "", [], 0}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, ""}, sc.sel.none([]), Sp.sp.new()}, ws)
+    +s0 : sc.S = sc.size(sc.S{sc.Cf{hub, me, home, hfile}, D.ed.new(hist), sc.Tr{[], 16777216, 0, [], sc.An{0, 0, 0}, "", [], 0}, sc.Tm{80, 24, 2, True{}, 0}, sc.idle(), sc.U{now, 0n, "", False{}, False{}, "", sc.fd.none()}, sc.sel.none([]), Sp.sp.new()}, ws)
     Unit <- IO.spawn(Unit, sc.reader(me))
     Unit <- IO.spawn(Unit, sc.ticker(sc.fuel(), me, Done{Unit{}}))
     +s0p : sc.S <- sc.phone(True{}, s0)

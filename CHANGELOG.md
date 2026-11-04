@@ -2,6 +2,15 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.14.0 (2026-11-03)
+
+- Search the chat, as Emacs's isearch: `C-r` back, `C-s` forward. Type and it
+  goes to the match, the others lit; `C-r` and `C-s` go to the match before
+  and after, and round past the last; `Enter` stays there, `C-g` or `Esc` goes
+  back. It goes past the chat's top into the log's older messages, as `M-p`
+  does. With messages waiting `C-s` still sends them.
+- `C-r` was the search of what you've sent: that is `M-r` now.
+
 ## 0.13.0 (2026-11-03)
 
 - `/ana TASK`: ana, the model you train, works on the task in this directory.

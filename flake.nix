@@ -87,6 +87,7 @@
           toolcheck = bendBinary pkgs "toolcheck" "tests/ToolCheck.bend";
           spellcheck = bendBinary pkgs "spellcheck" "tests/SpellCheck.bend";
           helpcheck = bendBinary pkgs "helpcheck" "tests/HelpCheck.bend";
+          findcheck = bendBinary pkgs "findcheck" "tests/FindCheck.bend";
         }
       );
 
@@ -211,6 +212,13 @@
           # takes (bend/tests/HelpCheck.bend), and its pages hang together
           help = pkgs.runCommand "help" { } ''
             ${self.packages.${system}.helpcheck}/bin/helpcheck | tee result
+            grep -qx "PASS: \([0-9]*\) / \1" result
+            touch $out
+          '';
+          # the chat's search: rows, the walk, the view, the paint, its keys
+          # (bend/tests/FindCheck.bend)
+          find = pkgs.runCommand "find" { } ''
+            ${self.packages.${system}.findcheck}/bin/findcheck | tee result
             grep -qx "PASS: \([0-9]*\) / \1" result
             touch $out
           '';
