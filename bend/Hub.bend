@@ -1568,7 +1568,7 @@ def hb.cmd.code(+w: String) -> Nat:
     Bool.pick(Nat, String.eq(w, "/halt"), 4n, Bool.pick(Nat, String.eq(w, "/goal"), 5n, Bool.pick(Nat, String.eq(w, "/model"), 6n,
       Bool.pick(Nat, String.eq(w, "/effort"), 7n, Bool.pick(Nat, String.eq(w, "/status"), 8n, Bool.pick(Nat, String.eq(w, "/export"), 10n,
         Bool.pick(Nat, String.eq(w, "/tree"), 11n, Bool.pick(Nat, String.eq(w, "/plan"), 12n, Bool.pick(Nat, String.eq(w, "/auto"), 13n, Bool.pick(Nat, String.eq(w, "/now"), 14n,
-          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.eq(w, "/login"), 17n, Bool.pick(Nat, String.eq(w, "/restart"), 18n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n)))))))))))))))))
+          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.eq(w, "/login"), 17n, Bool.pick(Nat, String.eq(w, "/restart"), 18n, Bool.pick(Nat, String.eq(w, "/ana"), 19n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n))))))))))))))))))
 
 def hb.pick.json(p: A.ap.Pick) -> J.Json:
   match p:
@@ -2126,6 +2126,22 @@ def hb.login.end(+s: hb.S, +out: String, +status: String) -> IO(hb.S):
 def hb.login.got(+k: U32, +s: hb.S, +out: String, +status: String) -> IO(hb.S):
   Bool.pick(IO(hb.S), U32.is_eq(k, 0), hb.login.link(s, out), hb.login.end(s, out, status))
 
+# /ana TASK: ana, your own model, works on the task in this directory, as a `!`
+# command of yours would: `ana-mugen` (ana's flake) runs her loop, her calls run
+# there for real, and her session comes back as the command's output. `/stop !`
+# cuts it. The task as one word for sh: '...', each ' as '\''
+def hb.ana.q(s: String, acc: String) -> String:
+  match s:
+    case SNil{}:
+      String.reverse(acc)
+    case SCon{Chr{39}, t}:
+      hb.ana.q(t, "''\\'" ++ acc)
+    case SCon{c, t}:
+      hb.ana.q(t, SCon{c, acc})
+
+def hb.ana.cmd(+task: String) -> String:
+  "ana-mugen -- '" ++ hb.ana.q(task, "") ++ "'"
+
 def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
   match k:
     case 0n:
@@ -2179,6 +2195,8 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
         +s2 : hb.S <- hb.release(s)
         Unit <- hb.say(s2, "mugen restarts: the mugen the system has now starts in its place")
         return hb.with.quit(s2)
+    case 19n:
+      Bool.pick(IO(hb.S), String.is_empty(rest), hb.tell.user(s, "/ana needs one: /ana <task>."), hb.bang(s, hb.ana.cmd(rest)))
     case _:
       hb.tell.user(s, w ++ " is no command; nothing was sent. /help lists the commands.")
 

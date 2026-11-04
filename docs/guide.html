@@ -415,6 +415,7 @@ mugen --api</pre>
             <tr><td><code>/words</code></td><td>Your words, the spellcheck's own (<code>~/.hunspell_en_US</code>); <code>/words add WORD…</code> and <code>/words rm WORD…</code> add and take out words.</td></tr>
             <tr><td><code>/tree</code>, <code>/export</code></td><td>The whole memory tree as a page, <code>~/.mugen/tree.html</code>; the memory as <code>./mugen-memory.json</code>.</td></tr>
             <tr><td><code>/help [TOPIC|all]</code></td><td>Alone (or <kbd>M-?</kbd>): the keys used most and the topics, <code>writing</code>, <code>working</code>, <code>reading</code>, <code>spell</code>, <code>modes</code>, <code>agents</code>, <code>shell</code>, <code>commands</code>, <code>setup</code>; with one, that topic (<kbd>Tab</kbd> completes it); <code>all</code>, every one. It shows as a block, wrapped to the screen, that a click or <kbd>M-o</kbd> folds.</td></tr>
+            <tr><td><code>/ana TASK</code></td><td>ana, the model you train, works on the task in this directory: <code>ana-mugen</code> (from ana's flake, on your <code>PATH</code>) runs like a <code>!</code> command, her session comes back as its output, and <code>/stop !</code> cuts it.</td></tr>
             <tr><td><code>/restart</code></td><td>Leave as <code>/quit</code> does, and start mugen again at once in the same terminal, with the same chat: after a rebuild (<code>nixos-rebuild switch</code>), the new mugen.</td></tr>
             <tr><td><code>/quit</code></td><td>Leave, killing every process the tools started.</td></tr>
           </tbody>

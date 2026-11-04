@@ -124,6 +124,7 @@ def hl.commands() -> String:
     "- `/spell [on|off]`: the spellcheck",
     "- `/words`, `/words add WORD…`, `/words rm WORD…`: your words (`/help spell`)",
     "- `/help [TOPIC|all]`: this help; `M-?`",
+    "- `/ana TASK`: your own model, ana, works on the task in this directory: `ana-mugen` runs like a `!` command, her session is its output, `/stop !` cuts it",
     "- `/restart`: leave, and start mugen again at once (after a rebuild, the new one), in the same place, with the same chat",
     "- `/quit`: leave; `Esc Esc`, `C-d`, or `C-c` on an empty input",
     "`/mouse`, `/image`, `/spell` and `/words` work on the full screen only, not with `MUGEN_PLAIN`."])

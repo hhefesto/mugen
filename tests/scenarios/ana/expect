@@ -1,0 +1,4 @@
+[/ana needs one: /ana <task>.]
+user: !ana-mugen -- 'say '\''hi'\'', $HOME and "`x`"'
+ana: done
+(exit 0 in T s)

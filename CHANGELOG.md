@@ -2,6 +2,13 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.13.0 (2026-11-03)
+
+- `/ana TASK`: ana, the model you train, works on the task in this directory.
+  `ana-mugen` (ana's flake) must be on your PATH; it runs as a `!` command
+  does, her session comes back as its output and into the chat, and `/stop !`
+  cuts it.
+
 ## 0.12.1 (2026-11-02)
 
 - A `!` command waiting for a password in its tmux window is hard to miss:

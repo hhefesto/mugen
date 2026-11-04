@@ -1,0 +1,13 @@
+#!/bin/sh
+# /ana TASK runs `ana-mugen -- TASK` as `!` would, the task one word whatever
+# it holds (a stand-in here: ana's flake has the real one); /ana alone runs
+# nothing and says what it needs.
+mkdir -p bin
+cat > bin/ana-mugen <<'END'
+#!/bin/sh
+{ echo "$#"; printf '[%s]\n' "$@"; } > "$ANA_ARGS"
+echo "ana: done"
+END
+chmod +x bin/ana-mugen
+export PATH="$PWD/bin:$PATH" ANA_ARGS="$PWD/ana.args"
+( echo "/ana"; echo "/ana say 'hi', \$HOME and \"\`x\`\""; sleep 3 ) | timeout 60 "$MUGEN"

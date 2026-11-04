@@ -210,6 +210,9 @@ Commands:
   gives it the code its page shows).
 - `/restart`: leave, and start mugen again at once in the same terminal
   with the same chat (after a rebuild, the new mugen).
+- `/ana TASK`: ana, the model you train, works on the task in this directory.
+  `ana-mugen` (from ana's flake, on your PATH) runs like a `!` command, her
+  session comes back as its output, and `/stop !` cuts it.
 - `/status`, `/mouse`, `/tree`, `/export`, `/quit`.
 
 For [mugen-web](https://github.com/hhefesto/mugen-web) (the chat in a
