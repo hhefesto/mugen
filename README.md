@@ -197,11 +197,12 @@ Commands:
 - `/words`: your words (the spellcheck's, `~/.hunspell_en_US`);
   `/words add WORD…` and `/words rm WORD…` change them (`Tab` completes
   `/words rm`'s).
-- `/help`: the keys used most and the help's topics (`writing`,
-  `working`, `reading`, `spell`, `modes`, `agents`, `shell`, `commands`,
-  `setup`); `/help TOPIC` one of them (`Tab` completes it), `/help all`
-  every one; `M-?` opens it. It shows as a block wrapped to the screen,
-  which a click or `M-o` folds.
+- `/help`: the whole help: the keys used most, then every topic in full
+  (`writing`, `working`, `reading`, `spell`, `modes`, `agents`, `shell`,
+  `commands`, `setup`); `/help TOPIC` one of them alone (`Tab` completes
+  it); `M-?` opens it. It shows as a block wrapped to the screen, from its
+  head when it is longer than the screen, which a click or `M-o` folds.
+- `/version`: which mugen this is, as `mugen --version` says.
 - `/image PATH` (or `/image` alone, for the clipboard's image, by xclip): the
   image goes with the message being written, as a line `[image
   docs/images/NAME]` in it (kept in `~/.mugen/docs/images/`). The turn's

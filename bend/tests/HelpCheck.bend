@@ -89,7 +89,7 @@ def has(+text: String, +name: String) -> Bool:
   String.contains(text, "`" ++ name)
 
 def pages() -> String:
-  H.hl.index() ++ "\n\n" ++ H.hl.all()
+  H.hl.all()
 
 def key.cases(ns: List<&2, N>, +text: String) -> List<&2, T>:
   match ns:
@@ -122,14 +122,15 @@ def topic.cases(ts: List<&2, H.hl.Topic>) -> List<&2, T>:
       +x = H.hl.topic.text(t)
       List.append(&2, T, [T{"topic " ++ n ++ " in the index", Bool.pick(String, has(H.hl.index(), n ++ "`"), "yes", "no"), "yes"},
         T{"topic " ++ n ++ " is a page", Bool.pick(String, Bool.and(String.starts_with(x, "## "), String.eq(H.hl.page(n), x)), "yes", "no"), "yes"},
-        T{"/help all has topic " ++ n, Bool.pick(String, String.contains(H.hl.page("all"), x), "yes", "no"), "yes"},
+        T{"/help has topic " ++ n ++ " in full", Bool.pick(String, String.contains(H.hl.page(""), x), "yes", "no"), "yes"},
         T{"Tab completes /help " ++ n, Bool.pick(String, elem(E.ed.words(), "/help " ++ n), "yes", "no"), "yes"}], topic.cases(rest))
 
 def cases() -> List<&2, T>:
   +text = pages()
   +cmds = H.hl.page("commands")
   List.concat(&2, T, [key.cases(keys(), text), cmd.cases(E.ed.words(), cmds), topic.cases(H.hl.topics()),
-    [T{"/help alone: the index", Bool.pick(String, String.eq(H.hl.page("  "), H.hl.index()), "yes", "no"), "yes"},
+    [T{"/help alone: all of it, the keys first", Bool.pick(String, Bool.and(String.eq(H.hl.page("  "), H.hl.all()), String.starts_with(H.hl.page("  "), H.hl.index())), "yes", "no"), "yes"},
+     T{"/help all: the same", Bool.pick(String, String.eq(H.hl.page("all"), H.hl.page("")), "yes", "no"), "yes"},
      T{"/help of no topic", Bool.pick(String, String.starts_with(H.hl.page("nope"), "No help topic `nope`"), "yes", "no"), "yes"},
      T{"nine topics", Nat.show(List.length(&2, H.hl.Topic, H.hl.topics())), "9"}]])
 

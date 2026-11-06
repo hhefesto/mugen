@@ -1586,7 +1586,7 @@ def hb.cmd.code(+w: String) -> Nat:
     Bool.pick(Nat, String.eq(w, "/halt"), 4n, Bool.pick(Nat, String.eq(w, "/goal"), 5n, Bool.pick(Nat, String.eq(w, "/model"), 6n,
       Bool.pick(Nat, String.eq(w, "/effort"), 7n, Bool.pick(Nat, String.eq(w, "/status"), 8n, Bool.pick(Nat, String.eq(w, "/export"), 10n,
         Bool.pick(Nat, String.eq(w, "/tree"), 11n, Bool.pick(Nat, String.eq(w, "/plan"), 12n, Bool.pick(Nat, String.eq(w, "/auto"), 13n, Bool.pick(Nat, String.eq(w, "/now"), 14n,
-          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.eq(w, "/login"), 17n, Bool.pick(Nat, String.eq(w, "/restart"), 18n, Bool.pick(Nat, String.eq(w, "/ana"), 19n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n))))))))))))))))))
+          Bool.pick(Nat, String.eq(w, "/back"), 15n, Bool.pick(Nat, String.eq(w, "/login"), 17n, Bool.pick(Nat, String.eq(w, "/restart"), 18n, Bool.pick(Nat, String.eq(w, "/ana"), 19n, Bool.pick(Nat, String.eq(w, "/version"), 20n, Bool.pick(Nat, String.starts_with(w, "/"), 9n, 0n)))))))))))))))))))
 
 def hb.pick.json(p: A.ap.Pick) -> J.Json:
   match p:
@@ -2285,6 +2285,8 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
         return hb.with.quit(s2)
     case 19n:
       Bool.pick(IO(hb.S), String.is_empty(rest), hb.tell.user(s, "/ana needs one: /ana <task>."), hb.bang(s, hb.ana.cmd(rest)))
+    case 20n:
+      hb.tell.user(s, "mugen " ++ hb.cfg.version(hb.cfg(s)))
     case _:
       hb.tell.user(s, w ++ " is no command; nothing was sent. /help lists the commands.")
 

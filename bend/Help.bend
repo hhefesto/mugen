@@ -3,9 +3,10 @@ import Base
 
 # Help: /help's pages, as markdown (the screen wraps them to its width, a
 # block a click or M-o folds; off the full screen they print as they are).
-# /help alone is the index: the keys used most, and the topics; /help
-# TOPIC one topic (Tab completes it); /help all every one. M-? opens the
-# index. bend/tests/HelpCheck.bend fails when a command (Edit.bend
+# /help alone is the whole help, nothing behind another command: the keys
+# used most, the topics' names, then every topic in full (/help all is the
+# same); /help TOPIC one topic alone (Tab completes it). M-? opens it.
+# bend/tests/HelpCheck.bend fails when a command (Edit.bend
 # ed.words) or a key the screen takes (Screen.bend sc.key.k) is named
 # nowhere here.
 #
@@ -126,7 +127,8 @@ def hl.commands() -> String:
     "- `/image [PATH]`: an image with the message being written",
     "- `/spell [on|off]`: the spellcheck",
     "- `/words`, `/words add WORD…`, `/words rm WORD…`: your words (`/help spell`)",
-    "- `/help [TOPIC|all]`: this help; `M-?`",
+    "- `/help [TOPIC]`: this help, all of it, or one topic alone; `M-?`",
+    "- `/version`: which mugen this is, as `mugen --version` says",
     "- `/ana TASK`: your own model, ana, works on the task in this directory: `ana-mugen` runs like a `!` command, her session is its output, `/stop !` cuts it",
     "- `/restart`: leave, and start mugen again at once (after a rebuild, the new one), in the same place, with the same chat",
     "- `/quit`: leave; `Esc Esc`, `C-d`, or `C-c` on an empty input",
@@ -178,7 +180,7 @@ def hl.index() -> String:
     "- `Shift-Tab` switches plan and auto mode",
     "- `M-s` fixes a red word; `M-a` adds it to your words",
     "- `Esc Esc` leaves (what runs goes on at the next start)",
-    "`/help TOPIC` for more (`Tab` completes it), `/help all` for everything, `M-?` for this page again:"], hl.toc(hl.topics())))
+    "`/help TOPIC` shows one topic alone (`Tab` completes it), `M-?` all of this again. Every topic, in full below:"], hl.toc(hl.topics())))
 
 def hl.texts(ts: List<&2, hl.Topic>) -> List<&2, String>:
   match ts:
@@ -187,9 +189,9 @@ def hl.texts(ts: List<&2, hl.Topic>) -> List<&2, String>:
     case +t <> rest:
       hl.topic.text(t) <> hl.texts(rest)
 
-# every topic, one after another
+# the whole help: the index, then every topic, one after another
 def hl.all() -> String:
-  String.join(hl.texts(hl.topics()), "\n\n")
+  String.join(hl.index() <> hl.texts(hl.topics()), "\n\n")
 
 def hl.find(ts: List<&2, hl.Topic>, +name: String) -> Maybe<&2, hl.Topic>:
   match ts:
@@ -210,12 +212,12 @@ def hl.page.of(m: Maybe<&2, hl.Topic>, +arg: String) -> String:
     case Some{t}:
       hl.topic.text(t)
     case None{}:
-      "No help topic `" ++ arg ++ "`; the topics are " ++ String.join(hl.names(hl.topics()), ", ") ++ ", and `all`.\n\n" ++ hl.index()
+      "No help topic `" ++ arg ++ "`; the topics are " ++ String.join(hl.names(hl.topics()), ", ") ++ ".\n\n" ++ hl.all()
 
-# /help ARG's page: "" the index, "all" everything, else the topic named
+# /help ARG's page: "" or "all" everything, else the topic named
 def hl.page(+arg: String) -> String:
   +a = String.trim(arg)
-  Bool.pick(String, String.is_empty(a), hl.index(), Bool.pick(String, String.eq(a, "all"), hl.all(), hl.page.of(hl.find(hl.topics(), a), a)))
+  Bool.pick(String, Bool.or(String.is_empty(a), String.eq(a, "all")), hl.all(), hl.page.of(hl.find(hl.topics(), a), a))
 
 def hl.cmds.of(ns: List<&2, String>) -> List<&2, String>:
   match ns:
@@ -226,4 +228,4 @@ def hl.cmds.of(ns: List<&2, String>) -> List<&2, String>:
 
 # what Tab completes after /help
 def hl.cmds() -> List<&2, String>:
-  List.append(&2, String, hl.cmds.of(hl.names(hl.topics())), ["/help all"])
+  hl.cmds.of(hl.names(hl.topics()))

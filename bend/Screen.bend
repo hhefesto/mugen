@@ -1950,10 +1950,27 @@ def sc.attached(m: Maybe<&2, List<&2, sc.Blk>>, +s: sc.S, +who: String, +kind: S
     case None{}:
       sc.add(s, who, kind, text, False{})
 
-# 0 a bell, 1 a tool starts, 2 a call (its result follows), 3 a result, 4 any other
+# 0 a bell, 1 a tool starts, 2 a call (its result follows), 3 a result, 4 any
+# other, 5 a page of help
 def sc.put.k(+kind: String) -> Nat:
   Bool.pick(Nat, String.eq(kind, "bell"), 0n, Bool.pick(Nat, String.eq(kind, "run"), 1n,
-    Bool.pick(Nat, String.eq(kind, "tool"), 2n, Bool.pick(Nat, String.eq(kind, "echo"), 3n, 4n))))
+    Bool.pick(Nat, String.eq(kind, "tool"), 2n, Bool.pick(Nat, String.eq(kind, "echo"), 3n, Bool.pick(Nat, String.eq(kind, "help"), 5n, 4n)))))
+
+def sc.page.rows(bs: List<&2, sc.Blk>) -> U32:
+  match bs:
+    case []:
+      0
+    case +b <> rest:
+      sc.blk.n(b)
+
+# a page of help too long for the chat is read from its head, not its end:
+# its title on the chat's second row, where M-Up puts an answer (the block's
+# blank row is the first, the pinned prompt's). The view stays there as what
+# comes next arrives; End goes on to the chat's end.
+def sc.add.page(+s: sc.S, +who: String, +kind: String, +text: String) -> sc.S:
+  +s1 = sc.add(s, who, kind, text, False{})
+  +k = sc.page.rows(sc.blks(s1))
+  Bool.pick(sc.S, sc.shows(sc.focus(s1), who), sc.with.off(s1, (k - U32.min(k, sc.ans.t(s1)) : U32)), s1)
 
 def sc.put.chat(k: Nat, +s: sc.S, +who: String, +kind: String, +text: String) -> sc.S:
   match k:
@@ -1963,6 +1980,8 @@ def sc.put.chat(k: Nat, +s: sc.S, +who: String, +kind: String, +text: String) ->
       sc.attached(sc.attach(sc.blks(s), sc.attach.v(sc.blks(s), who, text), who, text, "", sc.w(s), sc.home(s)), s, who, "tool", text)
     case 3n:
       sc.attached(sc.attach(sc.blks(s), sc.attach.v(sc.blks(s), who, ""), who, "", text, sc.w(s), sc.home(s)), s, who, "echo", text)
+    case 5n:
+      sc.add.page(s, who, kind, text)
     case _:
       sc.add(s, who, kind, text, False{})
 

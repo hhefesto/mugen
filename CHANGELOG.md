@@ -2,6 +2,14 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.16.0 (2026-11-05)
+
+- `/version` says which mugen this is, as `mugen --version` does.
+- `/help` and `M-?` show the whole help, every topic in full, not an index of
+  topics to ask for one by one. A page longer than the screen opens at its
+  head. `/help TOPIC` still shows one alone; `/help all` still works and is
+  now the same as `/help`, so `Tab` no longer offers it.
+
 ## 0.15.0 (2026-11-04)
 
 - A shell command can no longer hold your messages forever: once one has
