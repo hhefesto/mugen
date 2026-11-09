@@ -176,7 +176,8 @@ Commands:
   `cd` doesn't last). Its output shows as a block of yours (`[you] shell`),
   and the chat logs it as your message (the command, then its output,
   clipped as mugen's own shell output is), so mugen reads it at its next
-  turn; it starts none. One runs at a time; `/stop !` (or `/stop`) kills it.
+  turn; it starts none (one that asks for a password does, below). One runs
+  at a time; `/stop !` (or `/stop`) kills it.
   A command that asks for a password (`sudo` in it, or in the alias its
   first word names, as `!ns`) runs in a tmux window of its own beside
   mugen's: type the password there, where only sudo reads it; mugen never
@@ -184,7 +185,12 @@ Commands:
   from another terminal, `tmux attach -t 0:2`), the window rings the bell,
   and while it runs the status line starts with "!ns waits for your
   password in tmux window 0:2" (sudo gives up after 5 minutes). Enter in
-  that window, once the command ends, brings you back. Outside tmux mugen
+  that window, once the command ends, brings you back. Its end is taken as a
+  message of yours is: it starts a turn, or reaches the running one at its
+  next tool call, so mugen reads what it printed and its exit (`exit 1, in a
+  terminal of its own`; `its window was closed`) and says whether it worked
+  without your telling it. mugen asks you to run such commands (it can't type
+  a password), and this way it goes on once they end. Outside tmux mugen
   won't run one.
 - `/stop [name]`: stop the turn, or one agent (`/stop !`: your own command).
 - `/now`: as `C-s`.

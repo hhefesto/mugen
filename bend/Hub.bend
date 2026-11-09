@@ -1905,8 +1905,9 @@ def hb.view.texts(ps: List<&2, R.tr.P>, +nodes: I.im.M<V.vw.Node>) -> List<&2, S
 # $SHELL, as the shell tool runs mugen's own (its output clipped the same
 # way). The screen shows it as a tool block of the user's ("you"); the chat
 # logs it as the user's message (`!command`, then what it printed), which
-# mugen reads in its next turn: it starts none. One runs at a time; `/stop !`
-# (or a bare `/stop`) kills it.
+# mugen reads in its next turn: it starts none (one in a terminal of its
+# own does, below). One runs at a time; `/stop !` (or a bare `/stop`) kills
+# it.
 
 def hb.bang.call(+cmd: String) -> String:
   "shell " ++ J.js.write(J.JObj{[J.JKv{"command", J.JStr{cmd}}]})
@@ -1921,7 +1922,7 @@ def hb.bang.run(+env: L.tl.Env, +inbox: Chan(E.ev.Ev), +cmd: String) -> IO(Unit)
     +home : String <- S.mu.env("HOME", "/")
     +cwd : String <- S.mu.env("PWD", home)
     o : E.ev.Out <- L.tl.shell(env, cwd, cmd)
-    E.ev.send(inbox, E.ev.Ran{cmd, hb.out.text(o)})
+    E.ev.send(inbox, E.ev.Ran{cmd, hb.out.text(o), False{}})
 
 # A command that asks for a password (sudo in it, or in what its first
 # word is an alias of: `!ns`) runs in a terminal of its own instead, a tmux
@@ -1929,7 +1930,10 @@ def hb.bang.run(+env: L.tl.Env, +inbox: Chan(E.ev.Ev), +cmd: String) -> IO(Unit)
 # never through mugen (sudo reads it from that terminal, without echo; mugen
 # reads only what the command prints, kept in run/term/ID.out). mugen-web
 # shows that window and types into it (run/term.json says which), from the
-# tailnet only. Its end (or the window closed) logs it as any `!` command.
+# tailnet only. Its end (or the window closed) logs it as any `!` command,
+# and is taken as a message is: it starts a turn, or goes to the running
+# one. Such a command is mugen's to wait for (it asks the user to run what
+# needs a password: it can't), so mugen sees whether it worked, and goes on.
 def hb.bang.needs.got(o: S.mu.Out) -> Bool:
   String.contains(Cc.cc.out.text(o), "sudo")
 
@@ -1963,7 +1967,7 @@ def hb.term.wait(+inbox: Chan(E.ev.Ev), +dir: String, +id: String, +cmd: String)
     o : Result<&1, &1, U32 & String, String> <- S.mu.read_file(base ++ ".out")
     c : Result<&1, &1, U32 & String, String> <- S.mu.read_file(base ++ ".code")
     u : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(dir ++ "/run/term.json")
-    E.ev.send(inbox, E.ev.Ran{cmd, hb.term.text(o, c)})
+    E.ev.send(inbox, E.ev.Ran{cmd, hb.term.text(o, c), True{}})
 
 # the window a pane is in (new-window's -t takes a window, not a pane)
 def hb.term.win(+pane: String) -> IO(String):
@@ -1976,7 +1980,7 @@ def hb.term.at(+pane: String) -> IO(String):
 # what mugen says as the window opens: where to type the password
 def hb.term.say(+cmd: String, +w: String, +at: String) -> String:
   "!" ++ cmd ++ " asks for a password, so it runs in a tmux window of its own, beside mugen's: window " ++ at ++ " (" ++ w
-    ++ "; from another terminal, `tmux attach -t " ++ at ++ "`). Type the password there, or on mugen-web opened over the tailnet: only sudo reads it, mugen never sees it. sudo gives up after 5 minutes without it. Enter in that window, once it ends, comes back here."
+    ++ "; from another terminal, `tmux attach -t " ++ at ++ "`). Type the password there, or on mugen-web opened over the tailnet: only sudo reads it, mugen never sees it. sudo gives up after 5 minutes without it. When it ends mugen reads what it printed and its exit, and says whether it worked. Enter in that window, once it ends, comes back here."
 
 # 1 the window opened (tp its pane), else 0: nothing runs, the user is told
 def hb.term.opened(k: Nat, +s: hb.S, +cmd: String, +dir: String, +id: String, +tp: String) -> IO(hb.S):
@@ -2048,12 +2052,21 @@ def hb.ran.show(m: Maybe<&2, Chan(Sc.sc.In)>, +s: hb.S, +call: String, +out: Str
     case None{}:
       Bool.pick(IO(Unit), hb.tty(s), IO.print(out), IO.pure(Unit, Unit{}))
 
+# one from a terminal of its own (t) taken, as a message is: a turn starts
+# for it, or the running one gets it
+def hb.ran.take(t: Bool, +p: hb.P) -> IO(hb.S):
+  match t:
+    case True{}:
+      hb.take(hb.p.s(p), hb.p.msg(p))
+    case False{}:
+      IO.pure(hb.S, hb.p.s(p))
+
 # its end: shown, logged as the user's
-def hb.ran(+s: hb.S, +cmd: String, +out: String) -> IO(hb.S):
+def hb.ran(+s: hb.S, +cmd: String, +out: String, t: Bool) -> IO(hb.S):
   do IO<hb.S>:
     Unit <- hb.ran.show(hb.scr(s), s, hb.bang.call(cmd), out)
     p : hb.P <- hb.push(hb.with.term(hb.with.bang(s, False{}), ""), "user", "!" ++ cmd ++ "\n" ++ out)
-    return hb.p.s(p)
+    hb.ran.take(t, p)
 
 # /stop: 0 as it was, 1 the user's command stopped (all that runs, or `/stop
 # !`), 2 none of theirs runs, 3 it and the rest stopped
@@ -2391,8 +2404,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
         hb.agent.ended(s, hb.ag.find(hb.agents(s), who), ok, text, left))
     case Some{E.ev.Goal{+goal, ok, text}}:
       Bool.pick(IO(hb.S), hb.is.check(hb.turn(s), goal), hb.checked(s, goal, ok, text), IO.pure(hb.S, s))
-    case Some{E.ev.Ran{+cmd, +out}}:
-      hb.ran(s, cmd, out)
+    case Some{E.ev.Ran{+cmd, +out, t}}:
+      hb.ran(s, cmd, out, t)
     case Some{E.ev.Login{k, +out, +status}}:
       hb.login.got(k, s, out, status)
     case Some{E.ev.Older{+before}}:

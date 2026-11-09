@@ -140,6 +140,8 @@
                   pkgs.procps
                   pkgs.diffutils
                   pkgs.util-linux
+                  # (a ! command's terminal of its own: tests/scenarios/term)
+                  pkgs.tmux
                 ];
               }
               ''

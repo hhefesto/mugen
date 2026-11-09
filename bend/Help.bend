@@ -107,9 +107,9 @@ def hl.shell() -> String:
   hl.lines([
     "## Your own shell commands",
     "- `!COMMAND` runs a shell command of yours at once, whether mugen works or not, in the directory you started mugen in, by a fresh `$SHELL` (a `cd` doesn't last).",
-    "- Its output shows as a block of yours, and goes into the chat as your message, so mugen reads it at its next turn. It starts no turn by itself.",
+    "- Its output shows as a block of yours, and goes into the chat as your message, so mugen reads it at its next turn. It starts no turn by itself (one that asks for a password does, below).",
     "- One runs at a time; `/stop !` (or `/stop`) kills it.",
-    "- A command that asks for a password (`sudo` in it, or in the alias its first word names, as `!ns`) runs in a tmux window of its own, opened beside mugen's: type the password there, where only sudo reads it, without echo; mugen never sees it, it reads only what the command prints. When the command ends, Enter in that window brings you back, and its output goes into the chat as any `!` command's. Outside tmux mugen won't run such a command: run it in another terminal."])
+    "- A command that asks for a password (`sudo` in it, or in the alias its first word names, as `!ns`) runs in a tmux window of its own, opened beside mugen's: type the password there, where only sudo reads it, without echo; mugen never sees it, it reads only what the command prints. When the command ends, Enter in that window brings you back, and its output goes into the chat as any `!` command's, but this one starts a turn (or reaches the running one, as a message does): mugen reads its exit and says whether it worked. Outside tmux mugen won't run such a command: run it in another terminal."])
 
 def hl.commands() -> String:
   hl.lines([

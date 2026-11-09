@@ -1,0 +1,13 @@
+#!/bin/sh
+# a ! command that asks for a password (sudo in it) runs in a tmux window of
+# its own, and its end starts a turn, as a message would: mugen reads its exit
+# and says whether it worked (`!ns` and `nixos-rebuild switch`, here a command
+# that only names sudo and fails). A tmux server of the scenario's own stands
+# in for the user's; bash with no rc files is the user's shell.
+S="$PWD/tmux.sock"
+export HOME="$PWD" SHELL="$(command -v bash)" TERM=xterm
+tmux -f /dev/null -S "$S" new-session -d -s sc -x 80 -y 20 "sleep 300"
+export TMUX="$S,$(tmux -S "$S" display-message -p '#{pid}'),0"
+export TMUX_PANE="$(tmux -S "$S" display-message -p -t sc '#{pane_id}')"
+( echo "!echo sudo said no; exit 3"; sleep 8 ) | timeout 60 "$MUGEN"
+tmux -S "$S" kill-server

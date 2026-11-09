@@ -30,7 +30,9 @@ type ev.Say is Data:
 #                   it never took
 #   Goal            a goal check's answer
 #   Ran             the user's own shell command (`!command`) ended: what
-#                   it printed, as the shell tool says it
+#                   it printed, as the shell tool says it; `turn`: it ran
+#                   in a terminal of its own (a password's, `!ns`), so its
+#                   end is taken as a message is (Hub.bend hb.ran)
 #   Login           /login's sign-in of Claude Code: (step 0) out, its
 #                   link, then what it printed; (1) it ended: out, its
 #                   exit status (or late, gone) then its last lines, and
@@ -52,7 +54,7 @@ type ev.Ev is Data:
   ev.Req{who: String, name: String, input: J.Json, reply: Chan(ev.Out)}
   ev.End{who: String, ok: Bool, text: String, stop: U32, left: U32}
   ev.Goal{goal: String, ok: Bool, text: String}
-  ev.Ran{command: String, out: String}
+  ev.Ran{command: String, out: String, turn: Bool}
   ev.Login{step: U32, out: String, status: String}
   ev.Older{before: U32}
   ev.Resume{at: U32}

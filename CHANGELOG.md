@@ -2,6 +2,15 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.17.0 (2026-11-09)
+
+- A `!` command that asks for a password (`!ns`), the one kind mugen asks you
+  to run because it can't, starts a turn when it ends, or reaches the running
+  turn at its next tool call, as a message of yours does. So mugen reads what
+  it printed and its exit (`exit 1, in a terminal of its own`, or `its window
+  was closed`) and says whether it worked, without your telling it. Any other
+  `!` command still starts no turn.
+
 ## 0.16.0 (2026-11-05)
 
 - `/version` says which mugen this is, as `mugen --version` does.

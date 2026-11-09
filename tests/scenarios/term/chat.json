@@ -1,0 +1,21 @@
+[
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "It failed: exit 3."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]

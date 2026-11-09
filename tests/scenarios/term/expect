@@ -1,0 +1,7 @@
+[!echo sudo said no; exit 3 asks for a password, so it runs in a tmux window of its own, beside mugen's: window sc:1 (!echo; from another terminal, `tmux attach -t sc:1`). Type the password there, or on mugen-web opened over the tailnet: only sudo reads it, mugen never sees it. sudo gives up after 5 minutes without it. When it ends mugen reads what it printed and its exit, and says whether it worked. Enter in that window, once it ends, comes back here.]
+user: !echo sudo said no; exit 3
+sudo said no
+exit
+
+(exit 3, in a terminal of its own)
+unii: It failed: exit 3.
