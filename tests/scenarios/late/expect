@@ -2,5 +2,5 @@ user: run a long job
 user: are you there
 [your messages waited 2 seconds, so mugen's command was cut: it reads them with what the command printed]
 tool: shell {"device":"@HOST@","command":"sleep 30 & sleep 31; echo never"}
-echo: error: (cut by mugen for the user's waiting messages in T s)
+echo: error: (cut in T s by mugen, because the user's 1 message had waited 2 seconds; it comes next. Anything the command started on another machine over ssh, or detached with setsid, may still be running)
 unii: Here.

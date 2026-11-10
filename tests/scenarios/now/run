@@ -1,0 +1,4 @@
+#!/bin/sh
+# /now (C-s on the screen) cuts the command keeping a message from being
+# read, its group killed, and the call's result says who cut it and why
+( echo "run a long job"; sleep 1; echo "are you there"; sleep 1; echo "/now"; sleep 5 ) | MUGEN_LATE=60 timeout 60 "$MUGEN"

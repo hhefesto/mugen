@@ -1520,10 +1520,37 @@ def hb.stop(+s: hb.S, +name: String) -> IO(hb.S):
 # Sending now --------------------------------------------------------------------
 #
 # /now (C-s on the screen): the messages waiting, sent at once. With a shell
-# command of mugen's running, the command is cut (Tools.bend says "cut by the
-# user"): the call gets its output so far, then the messages, as it would
-# after any tool. Else mugen's turn (or its goal check) is stopped, and a new
-# turn starts with them.
+# command of mugen's running, the command is cut, and the cut file says who
+# cut it and why (hb.cut.now; Tools.bend puts it in the call's result): the
+# call gets its output so far, then the messages, as it would after any tool.
+# Else mugen's turn (or its goal check) is stopped, and a new turn starts with
+# them.
+
+# the messages a cut is for: those waiting (held too, as the screen counts
+# them) and those handed to the running turn after its call started (the
+# sent past its lead)
+def hb.cut.n(+s: hb.S) -> Nat:
+  +waiting = Nat.add(List.length(&2, hb.Msg, hb.wait(s)), List.length(&2, String, hb.held(s)))
+  Nat.add(waiting, Nat.sub(List.length(&2, hb.Msg, hb.sent(s)), U32.to_nat(hb.ui.lead(hb.ui(s)))))
+
+def hb.cut.msgs(+n: Nat) -> String:
+  Bool.pick(String, Nat.is_eq(n, 1n), "1 message", Nat.show(n) ++ " messages")
+
+def hb.cut.next(+n: Nat) -> String:
+  Bool.pick(String, Nat.is_eq(n, 1n), "it comes next", "they come next")
+
+# what a cut leaves: the command's processes are killed, not what it started
+# elsewhere (a build over ssh runs on once its ssh is killed)
+def hb.cut.left() -> String:
+  "Anything the command started on another machine over ssh, or detached with setsid, may still be running"
+
+# the cut file of /now, after "(cut in 2.0 s"
+def hb.cut.now(+n: Nat) -> String:
+  "by the user, with C-s or /now, to send you the " ++ hb.cut.msgs(n) ++ " waiting; " ++ hb.cut.next(n) ++ ". " ++ hb.cut.left()
+
+# the cut file of a late cut (hb.late.fire)
+def hb.cut.late(+n: Nat, +waited: String) -> String:
+  "by mugen, because the user's " ++ hb.cut.msgs(n) ++ " had waited " ++ waited ++ "; " ++ hb.cut.next(n) ++ ". " ++ hb.cut.left()
 
 def hb.stop.as(+s: hb.S, +name: String, +why: String) -> IO(hb.S):
   +what = hb.sel(hb.running(s), name)
@@ -1556,7 +1583,7 @@ def hb.now.go(k: Nat, +s: hb.S, +pid: U32) -> IO(hb.S):
       hb.tell.user(s, "nothing waits to be sent")
     case 1n:
       do IO<hb.S>:
-        r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(hb.ctl(s, "") ++ ".cut", "", 0)
+        r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(hb.ctl(s, "") ++ ".cut", hb.cut.now(hb.cut.n(s)), 0)
         x : U32 <- S.mu.kill(pid, 1, 9)
         hb.tell.user(s, "mugen's command was cut: it reads the messages waiting with what the command printed")
     case 2n:
@@ -1864,7 +1891,7 @@ def hb.late.fire(k: Nat, +s: hb.S, +secs: U32, +pid: U32) -> IO(hb.S):
     case _:
       do IO<hb.S>:
         +s2 : hb.S <- hb.release(s)
-        r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(hb.ctl(s2, "") ++ ".cut", "cut by mugen for the user's waiting messages", 0)
+        r : Result<&1, &1, U32 & String, Unit> <- S.mu.save(hb.ctl(s2, "") ++ ".cut", hb.cut.late(hb.cut.n(s), hb.late.words(secs)), 0)
         x : U32 <- S.mu.kill(pid, 1, 9)
         hb.tell.user(hb.with.late(s2, 0n), "your messages waited " ++ hb.late.words(secs) ++ ", so mugen's command was cut: it reads them with what the command printed")
 

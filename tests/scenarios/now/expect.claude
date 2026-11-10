@@ -1,0 +1,7 @@
+user: run a long job
+user: are you there
+[mugen's command was cut: it reads the messages waiting with what the command printed]
+tool: shell {"device":"@HOST@","command":"sleep 30 & sleep 31; echo never"}
+echo: error: (cut in T s by the user, with C-s or /now, to send you the 1 message waiting; it comes next. Anything the command started on another machine over ssh, or detached with setsid, may still be running)
+unii: Here.
+unii: Here.

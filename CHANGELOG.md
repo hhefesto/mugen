@@ -2,6 +2,17 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.17.1 (2026-11-10)
+
+- A shell command cut for your messages says in its result who cut it and
+  why, so mugen knows a message is coming and doesn't guess: `(cut in 636.0 s
+  by the user, with C-s or /now, to send you the 1 message waiting; it comes
+  next. Anything the command started on another machine over ssh, or detached
+  with setsid, may still be running)`. A cut after your messages waited too
+  long says `by mugen, because the user's 1 message had waited 5 minutes`.
+  It was a bare `cut by the user`, or `cut by mugen for the user's waiting
+  messages`.
+
 ## 0.17.0 (2026-11-09)
 
 - A `!` command that asks for a password (`!ns`), the one kind mugen asks you

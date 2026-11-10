@@ -256,15 +256,19 @@ def tl.secs(+ms: Nat) -> String:
   Nat.show(Nat.div(t, 10n)) ++ "." ++ Nat.show(Nat.mod(t, 10n)) ++ " s"
 
 # how it ended: its status kept, else stopped (the stop file), cut to send a
-# message (the cut file: empty is the user's /now, else it says why, Hub.bend
-# hb.late.fire), or killed
+# message (the cut file: it says by whom and why, from "by", Hub.bend
+# hb.cut.now and hb.cut.late; empty, "cut by the user"), or killed
 def tl.exit(+code: String, +stopped: Bool, +cut: Bool, +why: String) -> String:
-  +cutby = Bool.pick(String, String.is_empty(why), "cut by the user", why)
+  +cutby = Bool.pick(String, String.is_empty(why), "cut by the user", "cut")
   Bool.pick(String, stopped, "stopped", Bool.pick(String, cut, cutby, Bool.pick(String, String.is_empty(code), "killed", "exit " ++ code)))
 
-def tl.shell.out(+text: String, +exit: String, +ms: Nat) -> E.ev.Out:
+# what follows the time: a cut's why, as "(cut in 2.0 s by the user, who ...)"
+def tl.why(+stopped: Bool, +cut: Bool, +why: String) -> String:
+  Bool.pick(String, Bool.and(Bool.and(cut, Bool.not(stopped)), Bool.not(String.is_empty(why))), " " ++ why, "")
+
+def tl.shell.out(+text: String, +exit: String, +why: String, +ms: Nat) -> E.ev.Out:
   +body = tl.chomp(text)
-  E.ev.Out{Bool.pick(String, String.is_empty(body), "", body ++ "\n") ++ "(" ++ exit ++ " in " ++ tl.secs(ms) ++ ")", Bool.not(String.eq(exit, "exit 0"))}
+  E.ev.Out{Bool.pick(String, String.is_empty(body), "", body ++ "\n") ++ "(" ++ exit ++ " in " ++ tl.secs(ms) ++ why ++ ")", Bool.not(String.eq(exit, "exit 0"))}
 
 def tl.done(r: Result<&1, &1, U32 & String, Nat>) -> Bool:
   match r:
@@ -292,11 +296,11 @@ def tl.shell(+env: tl.Env, +cwd: String, +command: String) -> IO(E.ev.Out):
         +size : Nat <- IO.bind(Result<&1, &1, U32 & String, Nat>, Nat, S.mu.size(out), r => IO.pure(Nat, tl.nat.of(r)))
         +text : String <- tl.out.read(Nat.is_le(units, U32.to_nat(tl.cap())), out, units, size)
         +status : String <- IO.bind(Result<&1, &1, U32 & String, String>, String, S.mu.read_file(code), r => IO.pure(String, T.tx.trim(tl.text.of(r))))
-        stopped : Bool <- tl.exists(ctl ++ ".stop")
-        cut : Bool <- tl.exists(ctl ++ ".cut")
+        +stopped : Bool <- tl.exists(ctl ++ ".stop")
+        +cut : Bool <- tl.exists(ctl ++ ".cut")
         +why : String <- IO.bind(Result<&1, &1, U32 & String, String>, String, S.mu.read_file(ctl ++ ".cut"), r => IO.pure(String, T.tx.trim(tl.text.of(r))))
         r2 : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(ctl ++ ".cut")
-        return tl.shell.out(text, tl.exit(status, stopped, cut, why), Nat.sub(t1, t0))
+        return tl.shell.out(text, tl.exit(status, stopped, cut, why), tl.why(stopped, cut, why), Nat.sub(t1, t0))
 
 # Read ----------------------------------------------------------------------
 

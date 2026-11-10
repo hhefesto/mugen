@@ -10,7 +10,8 @@
 # goal check's calls; @HOST@ is this device's name); and may have `check`
 # (a script run in the scenario's dir, its data dir as $1, that fails if the
 # store is wrong). Output is masked: the device's name as @HOST@, the work
-# dir as @WORK@, the data dir as @DIR@, a shell's time as "in T s", /version's
+# dir as @WORK@, the data dir as @DIR@, a shell's time as "in T s" (before
+# ")", or before a cut's " by ..."), /version's
 # answer as @VERSION@, the agents' names as @AGENT1@, @AGENT2@, ...
 #
 #   tools/scenarios.sh [NAME...]
@@ -65,7 +66,7 @@ for name in "${names[@]}"; do
   done
   # (paths under $HOME are said with ~: /status's work dir in the sandbox)
   tw="~${w#"$HOME"}"
-  sed -e "s#$w/d/work#@WORK@#g" -e "s#$w/d#@DIR@#g" -e "s#$tw/d/work#@WORK@#g" -e "s#$tw/d#@DIR@#g" -e "s/$HOST/@HOST@/g" -e 's/ in [0-9]*\.[0-9] s)/ in T s)/g' -e 's/^\[mugen [0-9]*\.[0-9]*\.[0-9]*\]$/[mugen @VERSION@]/' "${masks[@]}" "$w/raw" > "$w/out"
+  sed -e "s#$w/d/work#@WORK@#g" -e "s#$w/d#@DIR@#g" -e "s#$tw/d/work#@WORK@#g" -e "s#$tw/d#@DIR@#g" -e "s/$HOST/@HOST@/g" -e 's/ in [0-9]*\.[0-9] s\([) ]\)/ in T s\1/g' -e 's/^\[mugen [0-9]*\.[0-9]*\.[0-9]*\]$/[mugen @VERSION@]/' "${masks[@]}" "$w/raw" > "$w/out"
   ok=1
   expect="$src/expect"
   if [ -f "$src/expect.$WIRE" ]; then
