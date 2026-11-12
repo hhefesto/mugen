@@ -1202,6 +1202,14 @@ def sc.prompt(rs: List<&2, String>, +first: Bool) -> List<&2, String>:
     case r <> rest:
       (Bool.pick(String, first, P.pp.paint("1;35", "\u{3bb}") ++ " ", "  ") ++ r) <> sc.prompt(rest, False{})
 
+# the input's mask (Spell.bend: 1 a bad word) with the region in it (2, 3), while the mark is set
+def sc.rg.mask(r: Maybe<&2, D.ed.Rg>, +m: String) -> String:
+  match r:
+    case Some{D.ed.Rg{+a, +b}}:
+      Sp.sp.mask.rg(m, a, b, 0n)
+    case None{}:
+      m
+
 def sc.low(+s: sc.S) -> sc.Low:
   +w = sc.w(s)
   +e = sc.ed(s)
@@ -1212,7 +1220,7 @@ def sc.low(+s: sc.S) -> sc.Low:
   +text = D.ed.text(e)
   +lrows = D.ed.lay.rows(lay)
   +fs = sc.flags(s)
-  +painted = Sp.sp.paint(lrows, text, Sp.sp.mask(fs, 0n, String.length(text)))
+  +painted = Sp.sp.paint(lrows, text, sc.rg.mask(D.ed.region(e), Sp.sp.mask(fs, 0n, String.length(text))))
   +shown = List.take(&2, String, List.drop(&2, String, painted, U32.to_nat(top)), U32.to_nat(max))
   +hint = sc.hint(s)
   +fd = sc.fd(s)
@@ -1306,23 +1314,89 @@ def sc.hl.rows(rs: List<&2, String>, +y: U32, +e: sc.Ends) -> List<&2, String>:
     case r <> rest:
       sc.hl.one(sc.in.k(y, e), r, y, e) <> sc.hl.rows(rest, (y + 1 : U32), e)
 
-def sc.take.one(k: Nat, +r: String, +y: U32, +e: sc.Ends, +acc: List<&2, String>) -> List<&2, String>:
+# A copy is the text as it is, not as the screen wraps it (2026-11-12, the
+# user: "I want the non-wrapped copy (the true one in disk) to be handed"):
+# a row a line wrapped onto (Pretty.bend's mark at its start, after its
+# prefix) joins the row before with no newline, its prefix left out.
+
+# a row's wrap: 0 none (a line of its own), 1 it goes on the row before
+# after a space, 2 with nothing between; and the columns before the mark
+type sc.Wr is Data:
+  sc.Wr{k: Nat, pw: U32}
+
+def sc.wr.k(w: sc.Wr) -> Nat:
+  match w:
+    case sc.Wr{k, pw}:
+      k
+
+def sc.wr.pw(w: sc.Wr) -> U32:
+  match w:
+    case sc.Wr{k, pw}:
+      pw
+
+def sc.wrap.go(s: String, +acc: String) -> sc.Wr:
+  match s:
+    case SNil{}:
+      sc.Wr{0n, 0}
+    case SCon{Chr{27}, SCon{Chr{91}, SCon{Chr{50}, SCon{Chr{50}, SCon{Chr{109}, t}}}}}:
+      sc.Wr{1n, P.pp.vis(String.reverse(acc))}
+    case SCon{Chr{27}, SCon{Chr{91}, SCon{Chr{50}, SCon{Chr{51}, SCon{Chr{109}, t}}}}}:
+      sc.Wr{2n, P.pp.vis(String.reverse(acc))}
+    case SCon{+c, +t}:
+      sc.wrap.go(t, SCon{c, acc})
+
+# a row's text cut where the selection meets it, from column lo at least
+# (a wrapped row's prefix left out)
+def sc.cut.lo(+r: String, +y: U32, +e: sc.Ends, +lo: U32) -> sc.Three:
+  +p = P.pp.clean(r)
+  +from = U32.max(lo, Bool.pick(U32, U32.is_eq(y, sc.ends.ya(e)), sc.ends.xa(e), 1))
+  +to = Bool.pick(U32, U32.is_eq(y, sc.ends.yb(e)), sc.ends.xb(e), 65535)
+  +a = P.pp.take(p, (from - 1 : U32))
+  +b = P.pp.take(P.pp.snd(a), (to - U32.min(to, (from - 1 : U32)) : U32))
+  sc.Three{P.pp.fst(a), P.pp.fst(b), P.pp.snd(b)}
+
+# a selected row's piece: its text and its wrap
+type sc.Pc is Data:
+  sc.Pc{text: String, k: Nat}
+
+def sc.take.one(k: Nat, +r: String, +y: U32, +e: sc.Ends, +acc: List<&2, sc.Pc>) -> List<&2, sc.Pc>:
   match k:
     case 0n:
       acc
     case _:
-      String.trim_end(sc.three.b(sc.cut(r, y, e))) <> acc
+      +w = sc.wrap.go(r, "")
+      sc.Pc{sc.three.b(sc.cut.lo(r, y, e, (sc.wr.pw(w) + 1 : U32))), sc.wr.k(w)} <> acc
 
-# the selected text of the rows (top down, from row y), its lines reversed
-def sc.take.sel(rs: List<&2, String>, +y: U32, +e: sc.Ends, +acc: List<&2, String>) -> List<&2, String>:
+# the selected text of the rows (top down, from row y), its pieces reversed
+def sc.take.sel(rs: List<&2, String>, +y: U32, +e: sc.Ends, +acc: List<&2, sc.Pc>) -> List<&2, sc.Pc>:
   match rs:
     case []:
       acc
     case r <> rest:
       sc.take.sel(rest, (y + 1 : U32), e, sc.take.one(sc.in.k(y, e), r, y, e, acc))
 
+def sc.pc.next.k(ps: List<&2, sc.Pc>) -> Nat:
+  match ps:
+    case []:
+      0n
+    case sc.Pc{t, k} <> rest:
+      k
+
+# the pieces joined: a newline before a row of its own, a space before a row
+# a prose line wrapped onto, nothing before one code was cut onto; each
+# piece less its trailing spaces, but one the next goes on from with nothing
+# between (code's spaces are its own)
+def sc.join.pcs(ps: List<&2, sc.Pc>, +first: Bool) -> String:
+  match ps:
+    case []:
+      ""
+    case sc.Pc{+t, +k} <> +rest:
+      +body = Bool.pick(String, Nat.is_eq(sc.pc.next.k(rest), 2n), t, String.trim_end(t))
+      +sep = Bool.pick(String, first, "", Bool.pick(String, Nat.is_eq(k, 0n), "\n", Bool.pick(String, Nat.is_eq(k, 1n), " ", "")))
+      sep ++ body ++ sc.join.pcs(rest, False{})
+
 def sc.sel.text(+z: sc.Sel) -> String:
-  String.join(List.reverse(&2, String, sc.take.sel(sc.sel.rows(z), 1, sc.sel.ends(z), [])), "\n")
+  sc.join.pcs(List.reverse(&2, sc.Pc, sc.take.sel(sc.sel.rows(z), 1, sc.sel.ends(z), [])), True{})
 
 # the rows to paint: reversed where a drag selects
 def sc.sel.show.go(k: Nat, +z: sc.Sel, +rows: List<&2, String>) -> List<&2, String>:
@@ -2164,8 +2238,15 @@ def sc.sp.moved(+s: sc.S) -> sc.S:
   +k = Sp.sp.key.of(Sp.sp.target(sc.flags(s), String.length(D.ed.pre(e)), 0n))
   sc.with.sp(s, Sp.sp.with.shut(Sp.sp.with.mx(sp, 0n), Bool.pick(Nat, Nat.is_eq(k, Sp.sp.shut(sp)), k, 0n)))
 
+# what an edit says under the chat: the mark set, a C-x waiting, else nothing
+def sc.edit.say(+e: D.ed.Ed, +key: K.ky.Key) -> String:
+  Bool.pick(String, D.ed.cx(e), P.pp.paint("2", "C-x- \u{b7} C-x C-x: the mark and the cursor swapped \u{b7} h: all of it the region \u{b7} u: undo \u{b7} C-g: none"),
+    Bool.pick(String, Bool.and(D.ed.region.on(e), K.ky.is.ctrl(key, 64)), P.pp.paint("2", "mark set \u{b7} C-w cuts the region, M-w copies it, C-g: the mark off"), ""))
+
 def sc.edit(+s: sc.S, +key: K.ky.Key) -> sc.S:
-  sc.dirty(sc.with.hint(sc.sp.moved(sc.with.ed(s, D.ed.key(sc.ed(s), key))), ""), 1)
+  +e = D.ed.key(sc.ed(s), key)
+  sc.dirty(sc.with.hint(sc.sp.moved(sc.with.ed(s, e)), sc.edit.say(e, key)), 1)
+
 
 def sc.mouse.say(on: Bool) -> String:
   match on:
@@ -2527,7 +2608,13 @@ def sc.all(+s: sc.S) -> sc.S:
 # 31 M-Up, M-p or M-{ (mugen's answer before), 32 M-Down, M-n or M-} (the
 # one after).
 # While searching, Enter, C-g, Esc and Shift-Tab are the search's.
-def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool) -> Nat:
+#
+# Emacs's (2026-11-12): with the mark set, C-g sets it off (it stops mugen
+# with none), 33 C-w cuts the region and 34 M-w copies it (to the clipboard
+# too, as a drag's copy); M-< and M-> go to the input's start and end, and
+# to the chat's top and end only on an empty input; after C-x, every key is
+# the input's (C-x C-x, C-x h, C-x u).
+def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool, +mk: Bool) -> Nat:
   match key:
     case K.ky.Nav{1, 2}:
       31n
@@ -2546,7 +2633,11 @@ def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool)
     case K.ky.Ctrl{100}:
       Bool.pick(Nat, empty, 3n, 0n)
     case K.ky.Ctrl{103}:
-      Bool.pick(Nat, find, 0n, 4n)
+      Bool.pick(Nat, Bool.or(find, mk), 0n, 4n)
+    case K.ky.Ctrl{119}:
+      Bool.pick(Nat, mk, 33n, 0n)
+    case K.ky.Meta{119}:
+      Bool.pick(Nat, mk, 34n, 0n)
     case K.ky.Ctrl{115}:
       5n
     case K.ky.Ctrl{111}:
@@ -2564,9 +2655,9 @@ def sc.key.k(key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool)
     case K.ky.Nav{8, m}:
       11n
     case K.ky.Meta{60}:
-      12n
+      Bool.pick(Nat, empty, 12n, 0n)
     case K.ky.Meta{62}:
-      13n
+      Bool.pick(Nat, empty, 13n, 0n)
     case K.ky.Nav{6, m}:
       Bool.pick(Nat, empty, 13n, 0n)
     case K.ky.Nav{5, m}:
@@ -2660,6 +2751,15 @@ def sc.copied.of(o: S.mu.Out, +n: Nat) -> String:
   match o:
     case S.mu.Out{status, out, err}:
       sc.copied(n, out)
+
+# C-w (cut) and M-w (copy) with the mark set: the region as emacs does it,
+# and onto the clipboard too, as a drag's copy (sc.clip)
+def sc.kill.copy(+s: sc.S, +key: K.ky.Key) -> IO(sc.S):
+  +text = D.ed.region.text(sc.ed(s))
+  +s1 = sc.edit(s, key)
+  do IO<sc.S>:
+    o : S.mu.Out <- S.mu.run("sh", ["-c", sc.clip()], text, 4096, 5000)
+    return sc.dirty(sc.with.hint(s1, sc.copied.of(o, List.length(&2, String, P.pp.split(text)))), 1)
 
 # the tabs: a click on one (column x, from 1), or M-Left / M-Right
 def sc.tab.click(+s: sc.S, +x: U32) -> sc.S:
@@ -2878,14 +2978,33 @@ def sc.key.go(k: Nat, +s: sc.S, +key: K.ky.Key) -> IO(sc.S):
       sc.to.ans.up(s)
     case 32n:
       IO.pure(sc.S, sc.to.ans(s, False{}))
+    case 33n:
+      sc.kill.copy(s, key)
+    case 34n:
+      sc.kill.copy(s, key)
     case _:
       IO.pure(sc.S, s)
+
+# a key after C-x: the input's (the mouse as ever)
+def sc.key.cx.k(key: K.ky.Key) -> Nat:
+  match key:
+    case K.ky.Mouse{b, x, y, up}:
+      17n
+    case _:
+      0n
+
+def sc.key.of(cx: Bool, +key: K.ky.Key, +find: Bool, +empty: Bool, +back: Bool, +tabs: Bool, +mk: Bool) -> Nat:
+  match cx:
+    case True{}:
+      sc.key.cx.k(key)
+    case False{}:
+      sc.key.k(key, find, empty, back, tabs, mk)
 
 def sc.key.plain(+s: sc.S, +key: K.ky.Key) -> IO(sc.S):
   +e = sc.ed(s)
   +back = Bool.not(List.is_empty(&2, String, sc.st.wait(sc.st(s))))
   +tabs = Bool.not(List.is_empty(&2, String, sc.tabs(sc.st.agents(sc.st(s)), sc.focus(s))))
-  +k = sc.key.k(key, Maybe.is_some(&2, String, D.ed.find(e)), D.ed.is.empty(e), back, tabs)
+  +k = sc.key.of(D.ed.cx(e), key, Maybe.is_some(&2, String, D.ed.find(e)), D.ed.is.empty(e), back, tabs, D.ed.region.on(e))
   +s1 = Bool.pick(sc.S, Bool.or(Nat.is_eq(k, 8n), Nat.is_eq(k, 28n)), s, sc.with.esc(s, 0n))
   sc.key.go(k, s1, key)
 

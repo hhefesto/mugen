@@ -525,14 +525,32 @@ def sp.sgr.off() -> String:
 def sp.sgr(+was: Bool, +bad: Bool) -> String:
   Bool.pick(String, Bool.xor(was, bad), Bool.pick(String, bad, sp.sgr.on(), sp.sgr.off()), "")
 
-# a row's characters underlined where its mask says (on: they are so far)
-def sp.paint.row(r: String, m: String, +on: Bool) -> String:
+# the region (Edit.bend's mark to the cursor, 2026-11-12) reversed, and its end
+def sp.rev(+was: Bool, +now: Bool) -> String:
+  Bool.pick(String, Bool.xor(was, now), Bool.pick(String, now, "\u{1B}[7m", "\u{1B}[27m"), "")
+
+# a mask's character: 0 plain, 1 a bad word's, 2 the region's, 3 both
+def sp.m.code(+f: U32) -> U32:
+  Bool.pick(U32, P.pp.in(f, 48, 51), (f - 48 : U32), 0)
+
+# a row's characters underlined, or reversed, where its mask says (st: as
+# they are so far, the code of sp.m.code)
+def sp.paint.row(r: String, m: String, +st: U32) -> String:
   match r m:
     case SCon{c, +t} SCon{Chr{+f}, +u}:
-      +bad = U32.is_eq(f, 49)
-      sp.sgr(on, bad) ++ SCon{c, sp.paint.row(t, u, bad)}
+      +now = sp.m.code(f)
+      sp.sgr(U32.is_ne(U32.and(st, 1), 0), U32.is_ne(U32.and(now, 1), 0)) ++ sp.rev(U32.is_ne(U32.and(st, 2), 0), U32.is_ne(U32.and(now, 2), 0)) ++ SCon{c, sp.paint.row(t, u, now)}
     case _ _:
-      Bool.pick(String, on, sp.sgr.off(), "")
+      sp.sgr(U32.is_ne(U32.and(st, 1), 0), False{}) ++ sp.rev(U32.is_ne(U32.and(st, 2), 0), False{})
+
+# the mask with the region (from a to b) in it
+def sp.mask.rg(m: String, +a: Nat, +b: Nat, +i: Nat) -> String:
+  match m:
+    case SNil{}:
+      ""
+    case SCon{Chr{+f}, +t}:
+      +in = Bool.and(Nat.is_ge(i, a), Nat.is_lt(i, b))
+      SCon{Chr{Bool.pick(U32, in, (f + 2 : U32), f)}, sp.mask.rg(t, a, b, Nat.add(i, 1n))}
 
 def sp.nl.k(s: String) -> Nat:
   match s:
@@ -551,7 +569,7 @@ def sp.paint(rows: List<&2, String>, +text: String, +mask: String) -> List<&2, S
       +n = String.length(r)
       +t2 = String.drop(text, n)
       +k = sp.nl.k(t2)
-      sp.paint.row(r, String.take(mask, n), False{}) <> sp.paint(rest, String.drop(t2, k), String.drop(String.drop(mask, n), k))
+      sp.paint.row(r, String.take(mask, n), 0) <> sp.paint(rest, String.drop(t2, k), String.drop(String.drop(mask, n), k))
 
 # where each row starts in the text
 def sp.starts(rows: List<&2, String>, +text: String, +at: Nat) -> List<&2, Nat>:

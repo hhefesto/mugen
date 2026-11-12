@@ -2,6 +2,24 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.18.0 (2026-11-12)
+
+- The input is more of an emacs buffer. `C-SPC` sets the mark and the region,
+  from it to the cursor, shows reversed; `C-w` cuts the region and `M-w`
+  copies it, to the clipboard too, as a drag's copy; `C-x C-x` swaps the
+  mark and the cursor, `C-x h` marks the whole text, and `C-g` sets the mark
+  off (with no mark it still stops mugen). Kills one right after another add
+  to one kill, and `M-y` after `C-y` walks back through the last sixty.
+  `C-/` (or `C-_`, `C-x u`) undoes a change, a word typed being one, and
+  `C-?` (or `C-M-_`) redoes it. `C-t` swaps the characters at the cursor;
+  `M-u`, `M-l`, `M-c` change the next word's case; `M-<` and `M->` go to the
+  text's start and end, and to the chat's top and end on an empty input
+  (they did that anywhere).
+- A copy of the chat (a drag) is the text as it is, not as the screen
+  wraps it: a line wrapped onto several rows comes as the one line, its
+  spaces where they were and the wrapped rows' indent left out. It had a
+  newline at every row's end.
+
 ## 0.17.1 (2026-11-10)
 
 - A shell command cut for your messages says in its result who cut it and

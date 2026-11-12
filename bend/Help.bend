@@ -41,7 +41,10 @@ def hl.writing() -> String:
     "## Writing",
     "- `Enter` sends. `Alt-Enter` makes a new line: that one works in every terminal. `Shift-Enter` and `C-j` do too where the terminal sends them apart from `Enter` (many don't), and so does a `\\` at the end of the text before `Enter`.",
     "- A paste comes whole, as one message, newlines and all.",
-    "- Emacs keys: `C-a`, `C-e`, `C-k`, `C-u`, `C-w`, `C-y`, `M-b`, `M-f`, `M-d`; `Home` and `End` in a text go to its line's start and end.",
+    "- Emacs keys: `C-a`, `C-e`, `C-f`, `C-b`, `C-k`, `C-u`, `C-w`, `C-y`, `M-b`, `M-f`, `M-d`; `M-<` and `M->` go to the text's start and end (on an empty input, the chat's top and end); `Home` and `End` in a text go to its line's start and end.",
+    "- The region: `C-SPC` sets the mark, and the cursor's moves then make the region, shown reversed. `C-w` cuts it and `M-w` copies it, to the clipboard too (as a drag's copy does); `C-x C-x` swaps the mark and the cursor, `C-x h` makes all of the text the region, `C-g` sets the mark off (with no mark set, `C-g` stops mugen).",
+    "- Kills: `C-k`, `C-u`, `C-w`, `M-d` and `M-Backspace` cut, and one right after another adds to the same kill. `C-y` yanks the last; `M-y` right after it puts the kill before in its place, and so back through the last sixty.",
+    "- `C-/` (or `C-_`, or `C-x u`) undoes a change (a word typed is one), `C-?` (or `C-M-_`) redoes it; `C-t` swaps the characters at the cursor; `M-u`, `M-l` and `M-c` make the next word upper case, lower case or capitalized.",
     "- History: `↑`, `↓`, `C-p`, `C-n`; `M-r` searches it (`M-r` again finds an older match, `C-g` or `Esc` gives up, any other key keeps what it found). It is kept in `$MUGEN_DIR/history`.",
     "- `Tab` completes a command (`/he` → `/help`), and a topic of `/help` or a word of yours for `/words rm`.",
     "- `C-c` clears the text (`C-y` brings it back); on an empty input it leaves.",
@@ -63,7 +66,7 @@ def hl.working() -> String:
 def hl.reading() -> String:
   hl.lines([
     "## Reading the chat",
-    "- `PgUp`, `PgDn` and the wheel scroll. On an empty input `Home` (or `M-<` anywhere) goes to the top, `End` (or `M->`) back to the end.",
+    "- `PgUp`, `PgDn` and the wheel scroll. On an empty input `Home` (or `M-<`) goes to the top, `End` (or `M->`) back to the end.",
     "- While you are scrolled up, nothing new moves what you read; `M->` follows the end again.",
     "- `M-↑` and `M-↓` (or Emacs's `M-p` and `M-n`, or `M-{` and `M-}`) go to mugen's answer before and after the one you read, past its thoughts, its tools and what they said: the answer comes to the top, under the message it answers. They go on past the chat's oldest answer, through every answer of the chat (older ones read from its log). Past the last one, `M-↓` goes to the end. On an agent's tab they go through the agent's answers.",
     "- `C-r` searches the chat back, `C-s` forward, as Emacs's isearch: type and it goes to the match, the others lit. `C-r` and `C-s` go to the match before and after, and past the last one they go round. `Enter` stays there, `C-g` or `Esc` goes back to where you were, any other key stays there and is then a key of its own. `C-r` or `C-s` on no text takes the last search's. All lowercase finds any case; a capital makes it exact.",

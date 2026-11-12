@@ -51,11 +51,29 @@ def ky.esc() -> String:
 
 # Plain keys ---------------------------------------------------------------------
 
+# (NUL is C-SPC, or C-@: Ctrl{64}; 31 is C-/, or C-_: Ctrl{95}; 2026-11-12, emacs's mark and undo)
 def ky.plain(+c: U32) -> ky.Key:
   Bool.pick(ky.Key, U32.is_eq(c, 13), ky.Enter{}, Bool.pick(ky.Key, U32.is_eq(c, 10), ky.Newline{},
     Bool.pick(ky.Key, U32.is_eq(c, 9), ky.Tab{}, Bool.pick(ky.Key, Bool.or(U32.is_eq(c, 127), U32.is_eq(c, 8)), ky.Back{},
       Bool.pick(ky.Key, Bool.and(U32.is_ge(c, 1), U32.is_le(c, 26)), ky.Ctrl{(c + 96 : U32)},
-        Bool.pick(ky.Key, U32.is_lt(c, 32), ky.Other{}, ky.Char{c}))))))
+        Bool.pick(ky.Key, U32.is_eq(c, 0), ky.Ctrl{64}, Bool.pick(ky.Key, U32.is_eq(c, 31), ky.Ctrl{95},
+          Bool.pick(ky.Key, U32.is_lt(c, 32), ky.Other{}, ky.Char{c}))))))))
+
+# whether a key is the character c
+def ky.is.char(key: ky.Key, +c: U32) -> Bool:
+  match key:
+    case ky.Char{+d}:
+      U32.is_eq(c, d)
+    case _:
+      False{}
+
+# whether a key is control and c (97 for C-a)
+def ky.is.ctrl(key: ky.Key, +c: U32) -> Bool:
+  match key:
+    case ky.Ctrl{+d}:
+      U32.is_eq(c, d)
+    case _:
+      False{}
 
 # ESC, then a character: Alt and it
 def ky.alt(+c: U32) -> ky.Key:
@@ -82,8 +100,13 @@ def ky.mod(+code: U32, +m0: U32) -> ky.Key:
       Bool.pick(ky.Key, U32.is_eq(code, 27), ky.Esc{},
         Bool.pick(ky.Key, Bool.or(U32.is_eq(code, 127), U32.is_eq(code, 8)), Bool.pick(ky.Key, alt, ky.MetaBack{}, ky.Back{}),
           Bool.pick(ky.Key, Bool.and(ctrl, ky.letter(code)), ky.Ctrl{ky.lower(code)},
+          # C-SPC; C-? (C-S-/), C-/ and C-_; C-M-/ and C-M-_ (redo, as ESC C-_)
+          Bool.pick(ky.Key, Bool.and(ctrl, U32.is_eq(code, 32)), ky.Ctrl{64},
+          Bool.pick(ky.Key, Bool.and(ctrl, Bool.or(U32.is_eq(code, 63), Bool.and(shift, U32.is_eq(code, 47)))), ky.Ctrl{63},
+          Bool.pick(ky.Key, Bool.and(ctrl, Bool.and(alt, Bool.or(U32.is_eq(code, 47), U32.is_eq(code, 95)))), ky.Meta{31},
+          Bool.pick(ky.Key, Bool.and(ctrl, Bool.or(U32.is_eq(code, 47), U32.is_eq(code, 95))), ky.Ctrl{95},
             Bool.pick(ky.Key, Bool.and(alt, U32.is_ge(code, 32)), ky.Meta{Bool.pick(U32, Bool.and(shift, Bool.and(U32.is_ge(code, 97), U32.is_le(code, 122))), (code - 32 : U32), code)},
-              Bool.pick(ky.Key, Bool.and(U32.is_ge(code, 32), U32.is_lt(code, 57344)), ky.Char{code}, ky.Other{})))))))
+              Bool.pick(ky.Key, Bool.and(U32.is_ge(code, 32), U32.is_lt(code, 57344)), ky.Char{code}, ky.Other{})))))))))))
 
 # Sequences ---------------------------------------------------------------------
 

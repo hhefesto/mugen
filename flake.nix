@@ -88,6 +88,7 @@
           spellcheck = bendBinary pkgs "spellcheck" "tests/SpellCheck.bend";
           helpcheck = bendBinary pkgs "helpcheck" "tests/HelpCheck.bend";
           findcheck = bendBinary pkgs "findcheck" "tests/FindCheck.bend";
+          editcheck = bendBinary pkgs "editcheck" "tests/EditCheck.bend";
         }
       );
 
@@ -222,6 +223,14 @@
           find = pkgs.runCommand "find" { } ''
             ${self.packages.${system}.findcheck}/bin/findcheck | tee result
             grep -qx "PASS: \([0-9]*\) / \1" result
+            touch $out
+          '';
+          # the input's emacs keys: the region, the kills, undo, case, the keys as
+          # terminals send them (bend/tests/EditCheck.bend)
+          edit = pkgs.runCommand "edit" { } ''
+            ${self.packages.${system}.editcheck}/bin/editcheck | tee result
+            ! grep -q MISMATCH result
+            [ "$(grep -c '^ok ' result)" = 27 ]
             touch $out
           '';
           # `mugen --version` says a MAJOR.MINOR.PATCH, and -V the same

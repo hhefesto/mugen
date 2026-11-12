@@ -93,7 +93,7 @@ def esc() -> String:
 # what the screen does with a key (Screen.bend sc.key.k), on an empty input
 # or not
 def act(+k: K.ky.Key, +empty: Bool) -> String:
-  Nat.show(Sc.sc.key.k(k, False{}, empty, False{}, False{}))
+  Nat.show(Sc.sc.key.k(k, False{}, empty, False{}, False{}, False{}))
 
 # hunspell's answer to teh, quikc, brown, xyzzyq, well-known, 'tis
 def out1() -> String:
@@ -215,7 +215,9 @@ def pure() -> List<&2, T>:
    T{"screen: Home in a text: its line's start", act(K.ky.Nav{5, 0}, False{}), "0"},
    T{"screen: End on an empty input: the end", act(K.ky.Nav{6, 0}, True{}), "13"},
    T{"screen: End in a text", act(K.ky.Nav{6, 0}, False{}), "0"},
-   T{"screen: M-<", act(K.ky.Meta{60}, False{}), "12"},
+   T{"screen: M-< on an empty input: the top", act(K.ky.Meta{60}, True{}), "12"},
+   T{"screen: M-< in a text: its start (2026-11-12, emacs)", act(K.ky.Meta{60}, False{}), "0"},
+   T{"screen: M-> in a text: its end", act(K.ky.Meta{62}, False{}), "0"},
    T{"screen: M-s", act(K.ky.Meta{115}, False{}), "23"},
    T{"screen: M-S", act(K.ky.Meta{83}, False{}), "24"},
    T{"screen: M-3", act(K.ky.Meta{51}, False{}), "25"},

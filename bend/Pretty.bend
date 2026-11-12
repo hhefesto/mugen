@@ -352,6 +352,31 @@ def pp.cut.head(+tx: String, +n: U32) -> pp.Two:
 def pp.run.end(+row: String, +st: String, +cur: String) -> String:
   row ++ pp.paint(st, cur)
 
+# A row a line wraps onto opens with a mark: an SGR that changes nothing
+# where it stands (a row starts with every style off), 22 where the wrap
+# took a space between words (prose), 23 where it took none (a word or code
+# cut at the row's end). A copy of the chat (Screen.bend sc.sel.text) joins
+# such a row to the one before as the line it is, less what the row has
+# before the mark (its prefix: an indent, a bar), with no newline: the
+# user, 2026-11-12: "I want the non-wrapped copy (the true one in disk) to
+# be handed and not what my current window size applies newlines".
+def pp.mark.sp() -> String:
+  "\u{1B}[22m"
+
+def pp.mark.cut() -> String:
+  "\u{1B}[23m"
+
+# a row less its mark (a table's cells wrap inside a row of their own)
+def pp.unmark.row(+r: String) -> String:
+  Bool.pick(String, Bool.or(String.starts_with(r, pp.mark.sp()), String.starts_with(r, pp.mark.cut())), String.drop(r, 5n), r)
+
+def pp.unmark(rs: List<&2, String>) -> List<&2, String>:
+  match rs:
+    case []:
+      []
+    case +r <> rest:
+      pp.unmark.row(r) <> pp.unmark(rest)
+
 def pp.fill(n: Nat, tks: List<&2, pp.Tk>, v: Nat, +room: U32, +word: Bool, +cont: Bool, +row: String, +st: String, +cur: String, +col: U32, +rows: List<&2, String>) -> List<&2, String>:
   match n tks v:
     case 1n+f pp.Tk{+st2, +tx, +w, +sp} <> +t 1n:
@@ -361,14 +386,14 @@ def pp.fill(n: Nat, tks: List<&2, pp.Tk>, v: Nat, +room: U32, +word: Bool, +cont
     case 1n+f tk <> +t 2n:
       pp.fill(f, t, pp.fill.v(t, room, word, cont, col), room, word, cont, row, st, cur, col, rows)
     case 1n+f +tk <> +t 3n:
-      pp.fill(f, tk <> t, pp.fill.v(tk <> t, room, word, True{}, 0), room, word, True{}, "", "", "", 0, pp.run.end(row, st, cur) <> rows)
+      pp.fill(f, tk <> t, pp.fill.v(tk <> t, room, word, True{}, 0), room, word, True{}, Bool.pick(String, word, pp.mark.sp(), pp.mark.cut()), "", "", 0, pp.run.end(row, st, cur) <> rows)
     case 1n+f pp.Tk{+st2, +tx, +w, +sp} <> +t 4n:
       +p = pp.cut.head(tx, (room - col : U32))
       +rest = pp.snd(p)
       +more = Bool.pick(List<&2, pp.Tk>, String.is_empty(rest), t, pp.Tk{st2, rest, pp.width(rest), sp} <> t)
       +same = String.eq(st, st2)
       +last = Bool.pick(String, same, pp.run.end(row, st, cur ++ pp.fst(p)), pp.run.end(pp.run.end(row, st, cur), st2, pp.fst(p)))
-      pp.fill(f, more, pp.fill.v(more, room, word, True{}, 0), room, word, True{}, "", "", "", 0, last <> rows)
+      pp.fill(f, more, pp.fill.v(more, room, word, True{}, 0), room, word, True{}, pp.mark.cut(), "", "", 0, last <> rows)
     case _ _ _:
       List.reverse(&2, String, pp.run.end(row, st, cur) <> rows)
 
@@ -709,7 +734,7 @@ def pp.tb.bold(sps: List<&2, pp.Sp>) -> List<&2, pp.Sp>:
 # a cell's rows in w columns
 def pp.tb.cell(+c: String, +w: U32, +head: Bool) -> List<&2, String>:
   +sps = pp.inline(c)
-  pp.rows(Bool.pick(List<&2, pp.Sp>, head, pp.tb.bold(sps), sps), w, True{})
+  pp.unmark(pp.rows(Bool.pick(List<&2, pp.Sp>, head, pp.tb.bold(sps), sps), w, True{}))
 
 # a row's cells, each as its rows ([""] for a cell the row lacks)
 def pp.tb.cols(ws: List<&2, U32>, cs: List<&2, String>, +head: Bool) -> List<&2, List<&2, String>>:

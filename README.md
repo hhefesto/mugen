@@ -133,11 +133,16 @@ Keys:
 - `Esc Esc`, `C-d`, `C-c` on an empty input (`/quit`): leave. `C-c` on
   text clears it (`C-y` brings it back).
 - Emacs keys (`C-a`, `C-e`, `C-k`, `C-u`, `C-w`, `C-y`, `M-b`, `M-f`,
-  `M-d`; `Home` and `End` in a text: its line's start and end), the
+  `M-d`; `M-<` and `M->`: the text's start and end; `Home` and `End` in a
+  text: its line's start and end); the region (`C-SPC` sets the mark,
+  `C-w` cuts, `M-w` copies, to the clipboard too, `C-x C-x`, `C-x h`, `C-g`);
+  kills that add up and `M-y` after `C-y`; undo and redo (`C-/`, `C-?`);
+  `C-t`, `M-u`, `M-l`, `M-c`; the
   history (`↑`, `↓`, `C-p`, `C-n`, `M-r`, kept in `$MUGEN_DIR/history`),
   `Tab` completes a command (a `/help` topic, a word for `/words rm`).
 - `Home` and `End` on an empty input: the chat's top and end (`M-<`,
-  `M->` anywhere).
+  `M->` too). A drag over the chat copies the text as it is: a wrapped
+  line comes as the one line it is.
 - The spellcheck: as you write, a word hunspell (en_US) doesn't know is
   underlined in red. Left alone: the word being written (the one the
   cursor ends), code in backticks, a `!` command, paths, URLs and

@@ -71,9 +71,9 @@ def navs() -> List<&2, N>:
 def keys() -> List<&2, N>:
   List.concat(&2, N, [metas(range(94n, 33)), ctrls(range(26n, 97)), navs()])
 
-# what the screen does with it: empty, an empty input
-def act(+k: K.ky.Key, +empty: Bool) -> Nat:
-  Sc.sc.key.k(k, False{}, empty, True{}, True{})
+# what the screen does with it: empty, an empty input; mk, the mark set
+def act(+k: K.ky.Key, +empty: Bool, +mk: Bool) -> Nat:
+  Sc.sc.key.k(k, False{}, empty, True{}, True{}, mk)
 
 def taken(+a: Nat) -> Bool:
   Bool.not(Bool.or(Nat.is_eq(a, 0n), Nat.is_eq(a, 17n)))
@@ -98,9 +98,9 @@ def key.cases(ns: List<&2, N>, +text: String) -> List<&2, T>:
     case +n <> rest:
       +k = nk.key(n)
       +s = nk.name(n)
-      +on = Bool.or(taken(act(k, True{})), taken(act(k, False{})))
+      +on = Bool.or(Bool.or(taken(act(k, True{}, False{})), taken(act(k, False{}, False{}))), taken(act(k, False{}, True{})))
       +ok = Bool.or(Bool.not(on), has(text, s))
-      List.append(&2, T, Bool.pick(List<&2, T>, on, [T{"key " ++ s ++ " (" ++ Nat.show(act(k, True{})) ++ "/" ++ Nat.show(act(k, False{})) ++ ") is in the help", Bool.pick(String, ok, "yes", "no"), "yes"}], []), key.cases(rest, text))
+      List.append(&2, T, Bool.pick(List<&2, T>, on, [T{"key " ++ s ++ " (" ++ Nat.show(act(k, True{}, False{})) ++ "/" ++ Nat.show(act(k, False{}, False{})) ++ "/" ++ Nat.show(act(k, False{}, True{})) ++ ") is in the help", Bool.pick(String, ok, "yes", "no"), "yes"}], []), key.cases(rest, text))
 
 def first.word(+w: String) -> String:
   Maybe.default(&2, String, List.get(&2, String, String.split(w, ' '), 0n), w)
