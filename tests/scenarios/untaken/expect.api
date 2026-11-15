@@ -1,0 +1,6 @@
+user: run a long job
+user: are you there
+tool: shell {"device":"@HOST@","command":"sleep 2; echo ok"}
+echo: ok
+(exit 0 in T s)
+unii: Done.

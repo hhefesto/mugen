@@ -1,0 +1,25 @@
+#!/bin/sh
+# The messages waiting when a turn ends start the next turn on their own,
+# even when Claude Code never takes one it was handed (MUGEN_FAKE_DROP: a
+# Claude Code that keeps it, as 2.1.319 kept a /goal, and sits idle): two
+# seconds after the turn's end (MUGEN_UNTAKEN) mugen closes the call, and
+# the message it never took goes again as the next turn, with the one typed
+# meanwhile (held: "⧗ 1 waiting"); no C-s. mugen on its full screen in a
+# tmux pane, typed into as mugen-web types (tools/screen.sh). (On the API's
+# wire the turn takes the message after a tool, and the next one starts at
+# once.)
+. "$SCENARIO_TOOLS/screen.sh"
+screen "MUGEN_UNTAKEN=2 MUGEN_FAKE_DROP='are you there' $MUGEN"
+web "run a long job"
+asked 1
+sleep 0.5
+web "are you there"
+asked 3
+sleep 0.5
+web "and this"
+sleep 0.6
+under "just after the turn's end" ""
+asked 4
+sleep 1
+under "once the next turn has run" ""
+bye

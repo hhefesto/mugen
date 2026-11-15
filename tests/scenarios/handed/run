@@ -1,0 +1,23 @@
+#!/bin/sh
+# The screen's "handed to mugen" (the messages the running call was handed)
+# lasts until the call takes them, not until its call ends: a message typed
+# during a turn's first tool waits (held), goes to the call as that tool
+# ends, and is taken with a later tool's result, the turn going on with
+# tools and no reply (as the user's message at 16:48 on 11-15, read
+# between tool calls and still "handed" till they stopped the turn); while
+# the third tool runs it is in no line under the chat. mugen on its full
+# screen in a tmux pane, typed into as mugen-web types (tools/screen.sh).
+. "$SCENARIO_TOOLS/screen.sh"
+screen "$MUGEN"
+web "run a long job"
+asked 1
+sleep 0.5
+web "are you there"
+sleep 0.5
+under "first tool" "are you there"
+asked 3
+sleep 1
+under "third tool" "are you there"
+asked 4
+sleep 1
+bye

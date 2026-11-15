@@ -105,10 +105,25 @@ test with `bend bend/tests/X.bend -o run/x` (run/ is ignored by git).
   adds three (its identity line, the system prompt, the last message), which
   makes the four the API allows. Marks are `ttl: 1h`, matching Claude Code's
   on a plan (`CLAUDE_CODE_PROMPT_CACHE_TTL=1h`).
+- A message whose last text block starts with `/` and the name of one of
+  Claude Code's own commands (`/goal`, `/model`, `/status`, ...) is run as
+  that command, `--disable-slash-commands` or not (2.1.319): it never
+  follows tool results, its answer is Claude Code's own (an output with
+  `local_command_source`), and it is never said back. `cc.safe` (Code.bend)
+  puts a space before every text block that starts with `/`. A result's
+  `user_message_uuids` names the messages its turn used: one never said
+  back ends the call (Agent.bend `ag.cc.result`), and a turn's end with a
+  message still untaken waits `MUGEN_UNTAKEN` seconds at most
+  (`ag.cc.clock`), then closes Claude Code's stdin (it still runs what it
+  queued). Both go again as the next turn. Claude Code says a message back
+  when its turn's API answer comes (a message after tool results: at once;
+  several queued for a turn: each, the last one with all their texts).
+  `tools/fakeclaude.ts` plays all of this.
 - What Claude Code does with stream-json input (marks kept, mid-turn messages
-  after tool results, ids said back with `--replay-user-messages`) is its
-  internal behaviour. Re-check it after an upgrade against a local capture
-  server (`ANTHROPIC_BASE_URL`, a dummy key).
+  after tool results, ids said back with `--replay-user-messages`, as the
+  next API answer comes) is its internal behaviour. Re-check it after an
+  upgrade against a local capture server (`ANTHROPIC_BASE_URL`, a dummy
+  key).
 
 ## Versions
 

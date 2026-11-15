@@ -1,0 +1,10 @@
+user: run a long job
+user: /goal say done
+tool: shell {"device":"@HOST@","command":"sleep 2; echo ok"}
+echo: ok
+(exit 0 in T s)
+unii: Done.
+mind: Claude Code answered a message itself, as its own command: /goal isn't available in this environment.
+mind: Claude Code took a message as a command of its own, not as words for the model: the call ends, and the message goes again as the next turn.
+unii: Got it.
+note: Goal met.

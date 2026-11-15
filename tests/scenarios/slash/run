@@ -1,0 +1,7 @@
+#!/bin/sh
+# /goal sent while a turn runs a tool: the goal is set, and the call takes
+# "/goal ..." as the user's words (on Claude Code's wire it comes after the
+# turn, as the call's next turn, with a space before its "/"), not as a
+# command of Claude Code's own, which would answer "/goal isn't available
+# in this environment" itself and leave the turn waiting on it forever
+( echo "run a long job"; sleep 1; echo "/goal say done"; sleep 5 ) | timeout 60 "$MUGEN"

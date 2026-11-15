@@ -7,9 +7,21 @@
 // "wire": "claude"); a retry status is asked again, told as an api_retry
 // event; a tool call runs on mugen's MCP server (--mcp-config); the user
 // messages that come meanwhile follow the next tool results, each said back
-// by its id as it is taken; a turn ends with a result event, and a message
-// left waiting starts the next. Scripts, defaults and @LASTAGENT@ are
-// fakeapi.ts's.
+// by its id as it is taken; a turn ends with a result event (the ids of the
+// messages it took, user_message_uuids), and a message left waiting starts
+// the next. Scripts, defaults and @LASTAGENT@ are fakeapi.ts's.
+//
+// As Claude Code 2.1.319 does, a message whose last text block starts with
+// "/" and one of its own commands' names (/goal, /model, ...) is that
+// command, --disable-slash-commands or not: it never follows tool results
+// (it waits for the turn's end), and its turn is Claude Code's own answer,
+// "/goal isn't available in this environment." (an output with
+// local_command_source), and a result naming it, the message never said
+// back. With MUGEN_FAKE_TRIM, a text's leading spaces don't count (a Claude
+// Code that would see a command where mugen's escape put a space). With
+// MUGEN_FAKE_DROP, a message past the call's first that has that text is
+// lost: never taken, never answered (a Claude Code that takes no message,
+// for mugen's wait on one).
 import * as fs from "node:fs";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -168,14 +180,43 @@ const ask = async (body: any) => {
 
 const passing = (code: number) => code === 408 || code === 409 || code === 429 || code >= 500;
 
-// the user messages waiting, said back as taken
+// Claude Code's own commands, as it knows a message for one: its last text
+// block's start ("/goal x" is one, " /goal x" and "/goalx" are not)
+const commands = new Set(["goal", "model", "status", "plan", "login", "logout", "help", "compact", "clear", "cost", "config", "context", "doctor", "effort", "exit", "export", "init", "memory", "mcp", "permissions", "resume", "review", "version", "usage"]);
+const lastText = (m: any) => {
+  const c = m.message.content;
+  const ts = typeof c === "string" ? [c] : c.filter((b: any) => b.type === "text").map((b: any) => b.text);
+  return ts.length === 0 ? "" : ts[ts.length - 1];
+};
+const command = (m: any) => {
+  const t = lastText(m);
+  const w = /^\/([a-z][a-z-]*)(\s|$)/.exec(env.MUGEN_FAKE_TRIM ? t.trimStart() : t);
+  return w !== null && commands.has(w[1]) ? w[1] : undefined;
+};
+// a message mugen's wait is tried on: lost as it comes during a turn
+const dropped = (m: any) => !!env.MUGEN_FAKE_DROP && lastText(m).includes(env.MUGEN_FAKE_DROP);
+
+// the ids of the turn's messages, for its result
+let took: string[] = [];
+
+// the user messages waiting, said back as taken; a command waits on
 const take = () => {
   const blocks: any[] = [];
+  const keep: any[] = [];
   while (queue.length > 0) {
     const m = queue.shift();
+    if (command(m) !== undefined) {
+      keep.push(m);
+      continue;
+    }
+    if (dropped(m)) {
+      continue;
+    }
     out({ type: "user", message: m.message, uuid: m.uuid, isReplay: true });
+    took.push(m.uuid);
     blocks.push(...m.message.content);
   }
+  queue.unshift(...keep);
   return blocks;
 };
 
@@ -218,7 +259,7 @@ const turn = async () => {
     }
     const uses = m.content.filter((b: any) => b.type === "tool_use");
     if (m.stop_reason !== "tool_use" || uses.length === 0) {
-      out({ type: "result", subtype: "success", is_error: false, result: replies, stop_reason: m.stop_reason, num_turns: 1, usage });
+      out({ type: "result", subtype: "success", is_error: false, result: replies, stop_reason: m.stop_reason, num_turns: 1, usage, user_message_uuids: took });
       return;
     }
     const results: any[] = [];
@@ -231,14 +272,31 @@ const turn = async () => {
       results.push({ type: "tool_result", tool_use_id: u.id, content: [...(text === "" ? [] : [{ type: "text", text }]), ...pics], is_error: r.result?.isError === true });
     }
     out({ type: "user", message: { role: "user", content: results }, uuid: crypto.randomUUID() });
+    // (a message mugen writes as it answers the tool comes with the results,
+    // as Claude Code's next request takes it: stdin read first)
+    await Bun.sleep(100);
     messages.push({ role: "user", content: [...results, ...take()] });
   }
 };
 
 // each message a turn of its own; those that come during one follow its
-// next tool results
+// next tool results; a command answered by Claude Code itself; a lost one
+// (MUGEN_FAKE_DROP, past the first) nothing
+let firstOne = true;
 for (let m = await next(); m !== undefined; m = await next()) {
+  if (!firstOne && dropped(m)) {
+    continue;
+  }
+  firstOne = false;
+  const name = command(m);
+  if (name !== undefined) {
+    const said = "/" + name + " isn't available in this environment.";
+    out({ type: "assistant", message: { id: crypto.randomUUID(), type: "message", role: "assistant", model: "<synthetic>", content: [{ type: "text", text: said }], stop_reason: "end_turn", usage }, parent_tool_use_id: null, local_command_source: "<local-command-stdout>" + said + "</local-command-stdout>", local_command_outcome: { kind: "unavailable_headless" } });
+    out({ type: "result", subtype: "success", is_error: false, result: said, stop_reason: null, num_turns: 0, usage, user_message_uuids: [m.uuid] });
+    continue;
+  }
   out({ type: "user", message: m.message, uuid: m.uuid, isReplay: true });
+  took = [m.uuid];
   messages.push({ role: "user", content: m.message.content });
   await turn();
 }

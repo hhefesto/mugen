@@ -45,6 +45,9 @@ type ev.Say is Data:
 #                   since) and nothing runs (Hub.bend hb.limit.over)
 #   Late            a message's clock ran out: cut a command that keeps the
 #                   call from reading it (Hub.bend hb.late.over)
+#   Took            the call took n more of the messages handed to it as it
+#                   ran: they are read (the screen's "handed to mugen" no
+#                   longer counts them)
 type ev.Ev is Data:
   ev.Line{text: String}
   ev.Eof{}
@@ -59,6 +62,7 @@ type ev.Ev is Data:
   ev.Older{before: U32}
   ev.Resume{at: U32}
   ev.Late{}
+  ev.Took{who: String, n: U32}
 
 # sent, whatever came of it (a hub gone ends the program anyway)
 def ev.send(+c: Chan(ev.Ev), e: ev.Ev) -> IO(Unit):

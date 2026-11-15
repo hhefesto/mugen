@@ -1,0 +1,6 @@
+#!/bin/sh
+# a message sent during a turn that Claude Code never takes (MUGEN_FAKE_DROP:
+# lost, never said back, never answered): at the turn's result mugen waits
+# for Claude Code's next turn MUGEN_UNTAKEN seconds, then ends the call and
+# sends the message again as the next turn. (The API's wire loses none.)
+( echo "run a long job"; sleep 1; echo "are you there"; sleep 8 ) | MUGEN_FAKE_DROP="are you there" MUGEN_UNTAKEN=2 timeout 60 "$MUGEN"

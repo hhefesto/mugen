@@ -1,0 +1,9 @@
+#!/bin/sh
+# as slash, on a Claude Code that would run " /goal ..." as its command too
+# (MUGEN_FAKE_TRIM: the space mugen puts before it doesn't count): its turn
+# is Claude Code's own answer, not the model's, and it never says the
+# message back. mugen doesn't log that answer as a reply, ends the call at
+# that result, and sends the message again as the next turn, where it is
+# the turn's words. (The API's wire has no such commands: the turn takes it
+# after the tool's result, as in slash.)
+( echo "run a long job"; sleep 1; echo "/goal say done"; sleep 6 ) | MUGEN_FAKE_TRIM=1 MUGEN_UNTAKEN=30 timeout 60 "$MUGEN"

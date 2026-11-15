@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+jq -e '.goal == null' "$1/view.json" > /dev/null
+! grep -q "available in this environment" "$1"/main/*.jsonl
+# on Claude Code's wire, the next turn's call has the message as its words
+if grep -q '"wire":"claude"' log/*.json; then
+  last=$(grep -l '"tools"' log/*.json | tail -1)
+  jq -e '.body.messages[0].content | map(select(.type == "text") | .text) | .[-1] == "Turn: the user'"'"'s new message:\n\n/goal say done"' "$last" > /dev/null
+fi

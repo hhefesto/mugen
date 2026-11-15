@@ -1,0 +1,14 @@
+first tool: waiting yes, handed no
+third tool: waiting no, handed no
+user: run a long job
+tool: shell {"device":"@HOST@","command":"sleep 3; echo one"}
+user: are you there
+echo: one
+(exit 0 in T s)
+tool: shell {"device":"@HOST@","command":"sleep 3; echo two"}
+echo: two
+(exit 0 in T s)
+tool: shell {"device":"@HOST@","command":"sleep 4; echo three"}
+echo: three
+(exit 0 in T s)
+unii: Done.

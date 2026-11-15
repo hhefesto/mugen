@@ -2,6 +2,31 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.19.0 (2026-11-15)
+
+- A message that starts with `/` reaches the model as your words, never as
+  a command of Claude Code's own. Claude Code (2.1.319) ran one whose last
+  text starts with `/` and the name of one of its commands (`/goal`,
+  `/model`, `/status`, ...) as that command, `--disable-slash-commands` or
+  not: a `/goal TEXT` sent while mugen worked (on the terminal or from
+  mugen-web) set mugen's goal, then Claude Code answered `/goal isn't
+  available in this environment` itself, which mugen logged as its reply,
+  and the turn waited on it forever. On Claude Code's wire such a text is
+  now sent with a space before its `/`.
+- A turn no longer hangs on a message Claude Code didn't take, and the
+  messages waiting when a turn ends start the next one on their own (they
+  sat until `C-s`). A result that used a message it never said back (a
+  command of its own) ends the call at once; after a turn's end with a
+  message still untaken, mugen waits at most `MUGEN_UNTAKEN` seconds (10)
+  for Claude Code's next turn, then closes its input (what it has queued it
+  still runs). Either way the messages it never took go again as the next
+  turn, with yours waiting. Claude Code's own answer to a command is shown,
+  not logged as mugen's reply.
+- `→ handed to mugen` under the chat lists only what the running call has
+  not read yet: a message leaves it once the call takes it (said back, or
+  in the next turn's prompt), not when the call ends, which could be hours
+  and several turns later.
+
 ## 0.18.0 (2026-11-12)
 
 - The input is more of an emacs buffer. `C-SPC` sets the mark and the region,

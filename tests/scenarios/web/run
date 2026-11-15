@@ -1,0 +1,19 @@
+#!/bin/sh
+# mugen-web's way in: mugen on its full screen, in a tmux pane, typed into
+# as mugen-web's backend types into it (tools/screen.sh, as Send.hs: the
+# text, then Enter). While a turn runs a tool, /goal sets the goal and the
+# call takes "/goal ..." as the user's words (on Claude Code's wire with a
+# space before the "/"); /halt drops the goal, as typed on the terminal.
+# Out: the chat as logged, and the goal.
+. "$SCENARIO_TOOLS/screen.sh"
+screen "$MUGEN"
+web "run a long job"
+asked 1
+sleep 0.5
+web "/goal say done"
+sleep 0.5
+web "/halt"
+asked 2
+sleep 3
+bye
+jq -r '"goal: \(.goal)"' "$MUGEN_DIR/view.json"

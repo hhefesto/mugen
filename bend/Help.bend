@@ -58,6 +58,7 @@ def hl.working() -> String:
     "- `↑` on an empty input takes a waiting message back to edit, until mugen reads it. Only the version you send at last is logged.",
     "- `C-s` (`/now`) sends the waiting messages now: a shell command mugen runs is cut, and mugen gets its output with your messages; else its turn stops and a new one starts with them.",
     "- A message that has waited 5 minutes with no tool returned cuts the shell command holding it by itself (`MUGEN_LATE`, in seconds), and mugen tells you. A command that starts after mugen read your messages can run as long as it likes.",
+    "- `\u{2192} handed to mugen` under the chat is a message mugen's running call has, to read after its running tool; it goes from there once the call reads it. One the call never reads (Claude Code took it for a command of its own, or left it) goes again as the next turn, 10 seconds at most after the turn's end (`MUGEN_UNTAKEN`), with the messages waiting: they never need `C-s`.",
     "- `C-g` (`/stop`) stops mugen's turn and its agents; `/stop NAME` one agent, `/stop !` your own `!` command.",
     "- `/goal TEXT`: mugen works toward it, turn after turn, until a check finds it met. `/halt` drops it.",
     "- Under the chat: what runs and for how long, the messages waiting, the status line (the model, its effort, the context left, the mode), then the input.",

@@ -83,7 +83,8 @@ type hb.W is Data:
 # last told mugen works. On a full screen (Screen.bend): its inbox, whether a
 # stop is to send the messages waiting at once (/now), what mugen was last
 # said to do and since when (IO.now), how many messages its call started
-# with (the rest it was handed as it ran), and the user's messages held,
+# with or has taken since (the rest it was handed as it ran, the screen's
+# "handed to mugen"), and the user's messages held,
 # not logged yet, while mugen works (Up takes the newest back to edit).
 # Whether the user's `!command` runs, and, while one runs in a tmux window
 # of its own for a password, the status line's word of where ("" none).
@@ -858,6 +859,15 @@ def hb.take.on(t: hb.T, +s: hb.S, +msg: hb.Msg) -> IO(hb.S):
 # else waiting for the next (Chat.take)
 def hb.take(+s: hb.S, +msg: hb.Msg) -> IO(hb.S):
   hb.take.on(hb.turn(s), s, msg)
+
+# the turn's call took n more of the messages handed to it (E.ev.Took):
+# read, they leave the screen's "handed to mugen" (the sent past the lead)
+def hb.took(mine: Bool, +s: hb.S, +n: U32) -> hb.S:
+  match mine:
+    case True{}:
+      hb.with.lead(s, (hb.ui.lead(hb.ui(s)) + n : U32))
+    case False{}:
+      s
 
 # the turn ends: its stop's note, if any; nothing waits
 def hb.rest(+s: hb.S) -> IO(hb.S):
@@ -2441,6 +2451,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
       hb.limit.over(s, at)
     case Some{E.ev.Late{}}:
       hb.late.over(s)
+    case Some{E.ev.Took{+who, n}}:
+      IO.pure(hb.S, hb.took(Bool.and(String.is_empty(who), hb.is.call(hb.turn(s))), s, n))
 
 def hb.is.settle(t: hb.T) -> Bool:
   match t:

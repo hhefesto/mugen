@@ -185,12 +185,30 @@ def cc.args(+c: cc.Cfg, r: cc.Run) -> List<String>:
 def cc.mark() -> J.Json:
   J.JObj{[J.JKv{"type", J.JStr{"ephemeral"}}, J.JKv{"ttl", J.JStr{"1h"}}]}
 
+# A text Claude Code keeps the user's words. Claude Code (2.1.319) runs a
+# message whose last text block starts with "/" and a name of its own
+# commands (/goal, /model, /status, /help, ...) as that command, even with
+# --disable-slash-commands: in -p it answers "/goal isn't available in this
+# environment" itself (a reply the model never gave), never says the message
+# back, and one sent during a turn waits for the turn's end. A space before
+# the "/" keeps it a message (the model reads " /goal ..."); a text that
+# starts any other way is sent as it is.
+def cc.safe.go(slash: Bool, +text: String) -> String:
+  match slash:
+    case True{}:
+      SCon{Chr{32}, text}
+    case False{}:
+      text
+
+def cc.safe(+text: String) -> String:
+  cc.safe.go(String.starts_with(text, "/"), text)
+
 def cc.text(+text: String, mark: Bool) -> J.Json:
   match mark:
     case True{}:
-      J.JObj{[J.JKv{"type", J.JStr{"text"}}, J.JKv{"text", J.JStr{text}}, J.JKv{"cache_control", cc.mark()}]}
+      J.JObj{[J.JKv{"type", J.JStr{"text"}}, J.JKv{"text", J.JStr{cc.safe(text)}}, J.JKv{"cache_control", cc.mark()}]}
     case False{}:
-      J.JObj{[J.JKv{"type", J.JStr{"text"}}, J.JKv{"text", J.JStr{text}}]}
+      J.JObj{[J.JKv{"type", J.JStr{"text"}}, J.JKv{"text", J.JStr{cc.safe(text)}}]}
 
 # the blocks with text, the first mark kept (seen: one was)
 def cc.parts(bs: List<&2, V.vw.B>, +seen: Bool) -> List<&2, J.Json>:
@@ -288,6 +306,10 @@ def cc.texts(xs: List<&2, J.Json>) -> List<&2, String>:
       s <> cc.texts(t)
     case x <> t:
       J.js.write(x) <> cc.texts(t)
+
+# an array of strings (a result's user_message_uuids)
+def cc.strs(+j: J.Json, +k: String) -> List<&2, String>:
+  cc.texts(J.js.arr(j, k))
 
 def cc.res.of(+j: J.Json) -> cc.Res:
   +err = Maybe.default(&2, Bool, J.js.bool(j, "is_error"), False{})

@@ -336,6 +336,7 @@ tmux's history, not the chat.
 | `MUGEN_SYNC` | `1` | fsync each log write |
 | `MUGEN_MAX_TOKENS` | `16000` | a reply's most tokens |
 | `MUGEN_LATE` | `300` | seconds a message of yours waits before the shell command keeping mugen from reading it is cut |
+| `MUGEN_UNTAKEN` | `10` | seconds mugen waits, after a turn's end, for Claude Code to take a message it was handed; then the call ends (Claude Code's input closed) and the message is the next turn |
 | `MUGEN_WEB_SEARCH` | `web_search_20260209` | the web search tool's type (`--api`) |
 | `MUGEN_WIRE` | | `api`: the same as `--api` |
 | `MUGEN_CLAUDE` | `claude` | the Claude Code CLI to run |

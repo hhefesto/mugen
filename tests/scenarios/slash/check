@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+# the goal was met (and set: the check asked about it)
+jq -e '.goal == null' "$1/view.json" > /dev/null
+q=$(grep -l "You check a goal" log/*.json | head -1)
+jq -e '.body.messages[0].content[-1].text | endswith("\nThe goal:\n\nsay done")' "$q" > /dev/null
+# the call's last step ends with it: on Claude Code's wire with a space
+# before its "/", so it is the user's words
+last=$(grep -l '"tools"' log/*.json | tail -1)
+jq -e '[.body.messages[-1].content[] | select(.type == "text") | .text][-1] == (if .wire == "claude" then " /goal say done" else "/goal say done" end)' "$last" > /dev/null
+# Claude Code's own words are nowhere in the chat
+! grep -q "available in this environment" "$1"/main/*.jsonl

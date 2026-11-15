@@ -68,6 +68,10 @@ def ag.log(+env: ag.Env, +kind: String, +text: String) -> IO(Unit):
 def ag.show(+env: ag.Env, +kind: String, +text: String) -> IO(Unit):
   E.ev.send(ag.hub(env), E.ev.Show{ag.who(env), kind, text})
 
+# n more of the hub's messages taken (E.ev.Took): they are read
+def ag.took(+env: ag.Env, +n: Nat) -> IO(Unit):
+  Bool.pick(IO(Unit), Nat.is_eq(n, 0n), IO.pure(Unit, Unit{}), E.ev.send(ag.hub(env), E.ev.Took{ag.who(env), U32.from_nat(n)}))
+
 # Tool calls waiting on their results: id, as logged ("name {json}")
 type ag.Pend is Data:
   ag.Pend{id: String, text: String}
@@ -300,6 +304,7 @@ def ag.loop(n: Nat, next: ag.Next, +env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.e
     case 1n+f ag.Run{[], +replies, +backs}:
       do IO<ag.Next>:
         +g : ag.Got <- ag.got(says)
+        Unit <- ag.took(env, List.length(&2, String, ag.got.texts(g)))
         ag.loop(f, ag.batch(g, replies, backs), env, ask, says, notes, ag.more(its, backs, ag.got.texts(g)), ps)
     case 1n+f ag.Run{A.ap.Use{+id, +name, +input} <> rest, +replies, +backs}:
       do IO<ag.Next>:
@@ -362,11 +367,13 @@ def ag.api.run(+env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
 # Claude Code exits, and its wrapper's last line ends the reading.
 
 # what the call hears: a line of its events (k 0) or of MCP's (1); a message
-# from the hub; a reader's end (0 the files', 2 the hub's)
+# from the hub; a reader's end (0 the files', 2 the hub's); the clock of a
+# wait on a message Claude Code hasn't taken (ag.cc.clock)
 type ag.Cv is Data:
   ag.CLine{k: U32, line: String}
   ag.CSay{say: E.ev.Say}
   ag.CEnd{k: Nat}
+  ag.CTick{id: String}
 
 def ag.cv.send(+c: Chan(ag.Cv), e: ag.Cv) -> IO(Unit):
   IO.bind(Result<&1, &1, ag.Cv, Unit>, Unit, Chan.send(ag.Cv, c, e), r => IO.pure(Unit, Unit{}))
@@ -474,49 +481,56 @@ def ag.fwd(fuel: Nat, m: Maybe<&1, E.ev.Say>, +says: Chan(E.ev.Say), +ch: Chan(a
 # ids of the hub's messages sent and not taken yet; those held; the replies
 # of the latest output, and its message's id; Claude Code's own tools' calls
 # waiting on results; the last result; whether stdin is open; whether a stop
-# came; the hub's messages that came after stdin closed.
+# came; the hub's messages that came after stdin closed; the wait on a
+# message Claude Code hasn't taken, its last event a result ("" none): its
+# clock's id.
 type ag.Cs is Data:
-  ag.Cs{id: String, first: Bool, sent: List<&2, String>, held: List<&2, String>, last: List<&2, String>, msg: String, ps: List<&2, ag.Pend>, res: Maybe<&2, C.cc.Res>, open: Bool, stop: Bool, left: U32}
+  ag.Cs{id: String, first: Bool, sent: List<&2, String>, held: List<&2, String>, last: List<&2, String>, msg: String, ps: List<&2, ag.Pend>, res: Maybe<&2, C.cc.Res>, open: Bool, stop: Bool, left: U32, idle: String}
 
 def ag.cs.sent(s: ag.Cs) -> List<&2, String>:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       se
 
 def ag.cs.held(s: ag.Cs) -> List<&2, String>:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       h
 
 def ag.cs.last(s: ag.Cs) -> List<&2, String>:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       l
 
 def ag.cs.ps(s: ag.Cs) -> List<&2, ag.Pend>:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       p
 
 def ag.cs.res(s: ag.Cs) -> Maybe<&2, C.cc.Res>:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       r
 
 def ag.cs.open(s: ag.Cs) -> Bool:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       o
 
 def ag.cs.stop(s: ag.Cs) -> Bool:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       st
 
 def ag.cs.left(s: ag.Cs) -> U32:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       le
+
+def ag.cs.idle(s: ag.Cs) -> String:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      w
 
 def ag.strs.del(xs: List<&2, String>, +x: String) -> List<&2, String>:
   match xs:
@@ -525,10 +539,25 @@ def ag.strs.del(xs: List<&2, String>, +x: String) -> List<&2, String>:
     case +y <> t:
       List.append(&2, String, Bool.pick(List<&2, String>, String.eq(x, y), [], [y]), ag.strs.del(t, x))
 
+def ag.strs.has(xs: List<&2, String>, +x: String) -> Bool:
+  match xs:
+    case []:
+      False{}
+    case +y <> t:
+      Bool.or(String.eq(x, y), ag.strs.has(t, x))
+
+# whether any of xs is in ys
+def ag.strs.any(xs: List<&2, String>, +ys: List<&2, String>) -> Bool:
+  match xs:
+    case []:
+      False{}
+    case +x <> t:
+      Bool.or(ag.strs.has(ys, x), ag.strs.any(t, ys))
+
 # every message taken: its own and the hub's sent
 def ag.cc.taken(s: ag.Cs) -> Bool:
   match s:
-    case ag.Cs{i, f, +se, h, l, m, p, r, o, st, le}:
+    case ag.Cs{i, f, +se, h, l, m, p, r, o, st, le, w}:
       Bool.and(f, List.is_empty(&2, String, se))
 
 # Events --------------------------------------------------------------------------
@@ -573,8 +602,8 @@ def ag.cc.echoes(bs: List<&2, J.Json>, +ps: List<&2, ag.Pend>) -> List<&2, A.ap.
 
 def ag.cc.with.out(s: ag.Cs, +msg: String, +replies: List<&2, String>, +ps: List<&2, ag.Pend>) -> ag.Cs:
   match s:
-    case ag.Cs{i, f, se, h, +l, +m, p, r, o, st, le}:
-      ag.Cs{i, f, se, h, List.append(&2, String, Bool.pick(List<&2, String>, String.eq(m, msg), l, []), replies), msg, ps, r, o, st, le}
+    case ag.Cs{i, f, se, h, +l, +m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, h, List.append(&2, String, Bool.pick(List<&2, String>, String.eq(m, msg), l, []), replies), msg, ps, r, o, st, le, w}
 
 # an output of Claude Code's: its messages logged and shown, its replies kept
 def ag.cc.assistant(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
@@ -585,14 +614,17 @@ def ag.cc.assistant(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
 
 def ag.cc.with.taken(s: ag.Cs, +uuid: String, +ps: List<&2, ag.Pend>) -> ag.Cs:
   match s:
-    case ag.Cs{+i, +f, +se, h, l, m, p, r, o, st, le}:
-      ag.Cs{i, Bool.or(f, String.eq(i, uuid)), ag.strs.del(se, uuid), h, l, m, ps, r, o, st, le}
+    case ag.Cs{+i, +f, +se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, Bool.or(f, String.eq(i, uuid)), ag.strs.del(se, uuid), h, l, m, ps, r, o, st, le, w}
 
-# a user event: one of ours taken (its id said back), or tool results
+# a user event: one of ours taken (its id said back: a hub's message is
+# told taken), or tool results
 def ag.cc.user(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+  +uuid = C.cc.s(j, "uuid")
   do IO<ag.Cs>:
     +ps : List<&2, ag.Pend> <- ag.entries(ag.cc.echoes(C.cc.blocks(j), ag.cs.ps(s)), env, ag.cs.ps(s))
-    return ag.cc.with.taken(s, C.cc.s(j, "uuid"), ps)
+    Unit <- ag.took(env, Bool.pick(Nat, ag.strs.has(ag.cs.sent(s), uuid), 1n, 0n))
+    return ag.cc.with.taken(s, uuid, ps)
 
 # the held messages onto stdin, each with an id of its own: sent
 def ag.cc.flush.go(hs: List<&2, String>, +texts: Chan(String), +sent: List<&2, String>) -> IO(List<&2, String>):
@@ -607,8 +639,8 @@ def ag.cc.flush.go(hs: List<&2, String>, +texts: Chan(String), +sent: List<&2, S
 
 def ag.cc.flush(+texts: Chan(String), s: ag.Cs) -> IO(ag.Cs):
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
-      IO.bind(List<&2, String>, ag.Cs, ag.cc.flush.go(h, texts, se), se2 => IO.pure(ag.Cs, ag.Cs{i, f, se2, [], l, m, p, r, o, st, le}))
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      IO.bind(List<&2, String>, ag.Cs, ag.cc.flush.go(h, texts, se), se2 => IO.pure(ag.Cs, ag.Cs{i, f, se2, [], l, m, p, r, o, st, le, w}))
 
 def ag.cc.flush.if(b: Bool, +texts: Chan(String), +s: ag.Cs) -> IO(ag.Cs):
   match b:
@@ -650,38 +682,69 @@ def ag.cc.halt.if(b: Bool, +env: ag.Env, +texts: Chan(String)) -> IO(Unit):
     case False{}:
       IO.pure(Unit, Unit{})
 
-def ag.cc.with.res(s: ag.Cs, +res: C.cc.Res, +open: Bool) -> ag.Cs:
+def ag.cc.with.res(s: ag.Cs, +res: C.cc.Res, +open: Bool, +idle: String) -> ag.Cs:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
-      ag.Cs{i, f, se, h, l, m, p, Some{res}, open, st, le}
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, h, l, m, p, Some{res}, open, st, le, idle}
+
+def ag.cc.lost.say(lost: Bool, +env: ag.Env) -> IO(Unit):
+  match lost:
+    case True{}:
+      ag.show(env, "mind", "Claude Code took a message as a command of its own, not as words for the model: the call ends, and the message goes again as the next turn.")
+    case False{}:
+      IO.pure(Unit, Unit{})
 
 # a result: its tokens shown. Answered, the messages held go on as the next
 # turn; else, every message taken, stdin is closed. A turn that failed (a
 # refusal, an error) ends the call, at once if a message sent was not taken.
+# A message the turn used (its result's user_message_uuids) but never said
+# back went to no model (Claude Code ran it as a command of its own): the
+# call ends at once, and it and those after it go again as the next turn
+# (Claude Code takes messages in order: none after it was taken). Answered
+# with a message still to take, the call waits on Claude Code's next turn,
+# its clock started (ag.cc.clock).
 def ag.cc.result(+env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
   +res = C.cc.res.of(j)
   +fine = C.cc.res.fine(res)
   +held = Bool.not(List.is_empty(&2, String, ag.cs.held(s)))
   +taken = ag.cc.taken(s)
+  +lost = ag.strs.any(ag.cs.sent(s), C.cc.strs(j, "user_message_uuids"))
+  +open = Bool.and(Bool.and(ag.cs.open(s), Bool.not(lost)), Bool.and(fine, Bool.or(held, Bool.not(taken))))
   do IO<ag.Cs>:
     Unit <- ag.show(env, "usage", C.cc.usage(Maybe.default(&2, J.Json, J.js.field(j, "usage"), J.JObj{[]})))
-    +s2 : ag.Cs <- ag.cc.flush.if(Bool.and(fine, held), texts, s)
+    Unit <- ag.cc.lost.say(lost, env)
+    +s2 : ag.Cs <- ag.cc.flush.if(Bool.and(Bool.and(fine, held), Bool.not(lost)), texts, s)
     Unit <- ag.cc.close.if(Bool.or(Bool.not(fine), Bool.and(taken, Bool.not(held))), texts)
-    Unit <- ag.cc.halt.if(Bool.and(Bool.not(fine), Bool.not(taken)), env, texts)
-    return ag.cc.with.res(s2, res, Bool.and(ag.cs.open(s), Bool.and(fine, Bool.or(held, Bool.not(taken)))))
+    Unit <- ag.cc.halt.if(Bool.or(lost, Bool.and(Bool.not(fine), Bool.not(taken))), env, texts)
+    +w : String <- Bool.pick(IO(String), open, C.cc.uuid(), IO.pure(String, ""))
+    return ag.cc.with.res(s2, res, open, w)
 
 # a retry Claude Code waits on, told as a busy note
 def ag.cc.retry(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
   +secs = Nat.div(C.cc.n(j, "retry_delay_ms"), 1000n)
   IO.bind(Unit, ag.Cs, ag.show(env, "mind", "The AI service is busy: asking again in " ++ Nat.show(secs) ++ " s."), u => IO.pure(ag.Cs, s))
 
+# Claude Code's own answer to a message it ran as a command of its own (an
+# output with local_command_source: "/goal isn't available in this
+# environment"): no model's words, so shown, never logged as a reply
+def ag.cc.local(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+  IO.bind(Unit, ag.Cs, ag.show(env, "mind", "Claude Code answered a message itself, as its own command: " ++ T.tx.join(ag.cc.texts(C.cc.blocks(j)), " ")), u => IO.pure(ag.Cs, s))
+
 # 0 an output, 1 a user event, 2 a result, 3 a retry, 4 the plan's limits,
-# 5 else
+# 6 Claude Code's own answer to a command, 5 else
 def ag.cc.kind(+j: J.Json) -> Nat:
   +ty = C.cc.ty(j)
-  Bool.pick(Nat, String.eq(ty, "assistant"), 0n, Bool.pick(Nat, String.eq(ty, "user"), 1n, Bool.pick(Nat, String.eq(ty, "result"), 2n,
+  Bool.pick(Nat, String.eq(ty, "assistant"), Bool.pick(Nat, Maybe.is_some(&2, J.Json, J.js.field(j, "local_command_source")), 6n, 0n), Bool.pick(Nat, String.eq(ty, "user"), 1n, Bool.pick(Nat, String.eq(ty, "result"), 2n,
     Bool.pick(Nat, Bool.and(String.eq(ty, "system"), String.eq(C.cc.s(j, "subtype"), "api_retry")), 3n,
       Bool.pick(Nat, String.eq(ty, "rate_limit_event"), 4n, 5n)))))
+
+# an event that isn't a result: Claude Code is at work, no wait on it
+def ag.cc.busy.if(b: Bool, s: ag.Cs) -> ag.Cs:
+  match b s:
+    case True{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, h, l, m, p, r, o, st, le, ""}
+    case False{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}
 
 def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
   match k:
@@ -695,12 +758,15 @@ def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.
       ag.cc.retry(env, s, j)
     case 4n:
       IO.bind(Unit, ag.Cs, C.cc.limits.keep(A.ap.cfg.cc(ag.cfg(env)), J.js.field(j, "rate_limit_info")), u => IO.pure(ag.Cs, s))
+    case 6n:
+      ag.cc.local(env, s, j)
     case _:
       IO.pure(ag.Cs, s)
 
 def ag.cc.event(+env: ag.Env, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
   +j = Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]})
-  ag.cc.event.go(ag.cc.kind(j), env, texts, s, j)
+  +k = ag.cc.kind(j)
+  IO.bind(ag.Cs, ag.Cs, ag.cc.event.go(k, env, texts, s, j), s2 => IO.pure(ag.Cs, ag.cc.busy.if(Bool.not(Nat.is_eq(k, 2n)), s2)))
 
 # MCP ---------------------------------------------------------------------------------
 
@@ -782,29 +848,76 @@ def ag.cc.mcp.on(call: Bool, k: Nat, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(
 def ag.cc.mcp(+env: ag.Env, +ask: A.ap.Ask, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
   +m = Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]})
   +k = Q.mc.kind(m)
-  ag.cc.mcp.on(Nat.is_eq(k, 3n), k, env, ask, texts, s, m)
+  IO.bind(ag.Cs, ag.Cs, ag.cc.mcp.on(Nat.is_eq(k, 3n), k, env, ask, texts, s, m), s2 => IO.pure(ag.Cs, ag.cc.busy.if(True{}, s2)))
 
 # The hub's messages ----------------------------------------------------------------
 
 # a message held (or, stdin closed, left)
 def ag.cc.text.on(open: Bool, s: ag.Cs, +t: String) -> ag.Cs:
   match open s:
-    case True{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
-      ag.Cs{i, f, se, List.append(&2, String, h, [t]), l, m, p, r, o, st, le}
-    case False{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
-      ag.Cs{i, f, se, h, l, m, p, r, o, st, (le + 1 : U32)}
+    case True{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, List.append(&2, String, h, [t]), l, m, p, r, o, st, le, w}
+    case False{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, h, l, m, p, r, o, st, (le + 1 : U32), w}
 
 def ag.cc.text(+s: ag.Cs, +t: String) -> IO(ag.Cs):
   IO.pure(ag.Cs, ag.cc.text.on(ag.cs.open(s), s, t))
 
 def ag.cc.with.stop(s: ag.Cs) -> ag.Cs:
   match s:
-    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le}:
-      ag.Cs{i, f, se, h, l, m, p, r, False{}, True{}, le}
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, h, l, m, p, r, False{}, True{}, le, ""}
 
 # a stop: the call halted
 def ag.cc.stop(+env: ag.Env, +texts: Chan(String), +s: ag.Cs) -> IO(ag.Cs):
   IO.bind(Unit, ag.Cs, ag.cc.halt(env, texts), u => IO.pure(ag.Cs, ag.cc.with.stop(s)))
+
+# A wait on Claude Code ---------------------------------------------------------------
+#
+# Answered, with a message it hasn't taken yet, Claude Code starts its next
+# turn at once (a message sent during a turn it hadn't taken): its events
+# come within milliseconds. If nothing comes for MUGEN_UNTAKEN seconds (10),
+# its stdin is closed: what it has queued it still runs (an end of file
+# cuts no turn), then it exits; the call ends, and what it never took (sent,
+# held, and what came since) goes again as the next turn, with the user's
+# messages held meanwhile. A turn never hangs on a message Claude Code
+# didn't take.
+
+def ag.cc.untaken.secs() -> IO(U32):
+  IO.bind(String, U32, S.mu.env("MUGEN_UNTAKEN", "10"), t => IO.pure(U32, U32.from_nat(Maybe.default(&2, Nat, Nat.read(T.tx.trim(t)), 10n))))
+
+# (a computation of its own: sleeps, then tells the call; no process of its
+# own, so none outlives the call)
+def ag.cc.tick.wait(+ch: Chan(ag.Cv), +id: String) -> IO(Unit):
+  do IO<Unit>:
+    secs : U32 <- ag.cc.untaken.secs()
+    Unit <- IO.sleep((secs * 1000 : U32))
+    ag.cv.send(ch, ag.CTick{id})
+
+# a wait begun (a result left one): its clock started
+def ag.cc.clock(go: Bool, +ch: Chan(ag.Cv), +id: String) -> IO(Unit):
+  match go:
+    case True{}:
+      IO.spawn(Unit, ag.cc.tick.wait(ch, id))
+    case False{}:
+      IO.pure(Unit, Unit{})
+
+def ag.cc.with.shut(s: ag.Cs) -> ag.Cs:
+  match s:
+    case ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
+      ag.Cs{i, f, se, h, l, m, p, r, False{}, st, le, ""}
+
+# the clock rang: the same wait still on (nothing came since), Claude Code's
+# stdin closed
+def ag.cc.tick(go: Bool, +env: ag.Env, +texts: Chan(String), +s: ag.Cs) -> IO(ag.Cs):
+  match go:
+    case True{}:
+      do IO<ag.Cs>:
+        Unit <- ag.show(env, "mind", "Claude Code took no message after its turn's end: the call ends, and what it never took goes again as the next turn.")
+        Unit <- Chan.close(String, texts)
+        return ag.cc.with.shut(s)
+    case False{}:
+      IO.pure(ag.Cs, s)
 
 # The loop ----------------------------------------------------------------------------
 
@@ -823,6 +936,8 @@ def ag.cc.on(x: ag.Cv, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(String), +s: a
       ag.cc.text(s, t)
     case ag.CSay{E.ev.Stop{}}:
       ag.cc.stop(env, texts, s)
+    case ag.CTick{id}:
+      ag.cc.tick(Bool.and(String.eq(ag.cs.idle(s), id), ag.cs.open(s)), env, texts, s)
     case _:
       IO.pure(ag.Cs, s)
 
@@ -834,6 +949,8 @@ def ag.cc.loop(n: Nat, m: Maybe<&1, ag.Cv>, +env: ag.Env, +ask: A.ap.Ask, +ch: C
     case 1n+f Some{x}:
       do IO<ag.Cs>:
         +s2 : ag.Cs <- ag.cc.on(x, env, ask, texts, s)
+        +w : String = ag.cs.idle(s2)
+        Unit <- ag.cc.clock(Bool.and(Bool.not(String.is_empty(w)), Bool.not(String.eq(w, ag.cs.idle(s)))), ch, w)
         m2 : Maybe<&1, ag.Cv> <- Chan.recv(ag.Cv, ch)
         ag.cc.loop(f, m2, env, ask, ch, texts, s2)
     case _ _:
@@ -965,7 +1082,7 @@ def ag.cc.run(+env: ag.Env, +ask: A.ap.Ask, +says: Chan(E.ev.Say)) -> IO(Unit):
     Unit <- IO.spawn(Unit, IO.bind(Maybe<&1, E.ev.Say>, Unit, Chan.recv(E.ev.Say, says), m => ag.fwd(U32.to_nat(4294967295), m, says, ch)))
     +first : String <- C.cc.uuid()
     r : Result<&1, &1, String, Unit> <- Chan.send(String, texts, C.cc.user(C.cc.parts(A.ap.ask.blocks(ask), False{}), first))
-    +s0 : ag.Cs = ag.Cs{first, False{}, [], [], [], "", [], None{}, True{}, False{}, 0}
+    +s0 : ag.Cs = ag.Cs{first, False{}, [], [], [], "", [], None{}, True{}, False{}, 0, ""}
     m : Maybe<&1, ag.Cv> <- Chan.recv(ag.Cv, ch)
     +s : ag.Cs <- ag.cc.loop(U32.to_nat(4294967295), m, env, ask, ch, texts, s0)
     ag.cc.end(env, says, ch, texts, quit, s)
