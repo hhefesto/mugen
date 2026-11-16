@@ -124,7 +124,10 @@ Keys:
   whole, as one message.
 - `C-s` (`/now`): send the waiting messages now. A shell command mugen is
   running is cut, and mugen gets its output and your messages; else its
-  turn stops and one starts with them.
+  turn stops and one starts with them. With no turn yet (the messages
+  wait for the summaries before them), it says once what holds them: a
+  usage limit, when it resets, and that `/login` to another account goes
+  on now.
   A message that has waited 5 minutes with no tool returned does this by
   itself when a shell command is what holds it, and tells you.
 - `C-g` (`/stop`): stop mugen's turn.

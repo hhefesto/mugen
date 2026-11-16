@@ -89,8 +89,10 @@ type hb.W is Data:
 # not logged yet, while mugen works (Up takes the newest back to edit).
 # Whether the user's `!command` runs, and, while one runs in a tmux window
 # of its own for a password, the status line's word of where ("" none).
+# What /now last said of messages waiting on summaries, keyed by the first
+# of them (said once, not on every press: hb.now.wait).
 type hb.Ui is Data:
-  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>, bang: Bool, term: String, late: Nat}
+  hb.Ui{mode: U32, due: Bool, busy: Bool, scr: Maybe<&2, Chan(Sc.sc.In)>, force: Bool, what: String, t0: Nat, lead: U32, held: List<&2, String>, bang: Bool, term: String, late: Nat, said: String}
 
 type hb.S is Data:
   hb.S{cfg: hb.Cfg, mem: M.me.Mem, inbox: Chan(E.ev.Ev), junk: Chan(String), pick: A.ap.Pick, turn: hb.T, wait: List<&2, hb.Msg>, sent: List<&2, hb.Msg>, halt: String, agents: List<&2, hb.Ag>, reqs: List<&2, hb.W>, eof: Bool, quit: Bool, shown: String, ui: hb.Ui}
@@ -239,49 +241,49 @@ def hb.with.ui(s: hb.S, ui2: hb.Ui) -> hb.S:
 
 def hb.ui.mode(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       m
 
 def hb.ui.due(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       d
 
 def hb.ui.busy(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       b
 
 def hb.ui.scr(u: hb.Ui) -> Maybe<&2, Chan(Sc.sc.In)>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       sc
 
 def hb.ui.force(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       fo
 
 def hb.ui.what(u: hb.Ui) -> String:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       wh
 
 def hb.ui.t0(u: hb.Ui) -> Nat:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       t0
 
 def hb.ui.set(u: hb.Ui, +k: Nat, +m2: U32, +b2: Bool, +wh2: String, +t2: Nat) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw, +lt}:
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw, +lt, +sd}:
       hb.Ui{Bool.pick(U32, Nat.is_eq(k, 0n), m2, m), Bool.pick(Bool, Nat.is_eq(k, 1n), b2, d), Bool.pick(Bool, Nat.is_eq(k, 2n), b2, b), sc,
         Bool.pick(Bool, Nat.is_eq(k, 3n), b2, fo), Bool.pick(String, Nat.is_eq(k, 4n), wh2, wh), Bool.pick(Nat, Nat.is_eq(k, 4n), t2, t0), Bool.pick(U32, Nat.is_eq(k, 5n), m2, ld), hd,
-        Bool.pick(Bool, Nat.is_eq(k, 6n), b2, bg), Bool.pick(String, Nat.is_eq(k, 7n), wh2, tw), lt}
+        Bool.pick(Bool, Nat.is_eq(k, 6n), b2, bg), Bool.pick(String, Nat.is_eq(k, 7n), wh2, tw), lt, sd}
 
 def hb.ui.lead(u: hb.Ui) -> U32:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       ld
 
 def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
@@ -289,13 +291,13 @@ def hb.with.lead(+s: hb.S, +n: U32) -> hb.S:
 
 def hb.ui.held(u: hb.Ui) -> List<&2, String>:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       hd
 
 def hb.ui.with.held(u: hb.Ui, +h2: List<&2, String>) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd, +bg, +tw, +lt}:
-      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2, bg, tw, lt}
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, hd, +bg, +tw, +lt, +sd}:
+      hb.Ui{m, d, b, sc, fo, wh, t0, ld, h2, bg, tw, lt, sd}
 
 def hb.held(+s: hb.S) -> List<&2, String>:
   hb.ui.held(hb.ui(s))
@@ -303,7 +305,7 @@ def hb.held(+s: hb.S) -> List<&2, String>:
 # whether the user's own shell command (`!command`) runs
 def hb.ui.bang(u: hb.Ui) -> Bool:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       bg
 
 def hb.bang.on(+s: hb.S) -> Bool:
@@ -315,7 +317,7 @@ def hb.with.bang(+s: hb.S, +b: Bool) -> hb.S:
 # the status line's word of a `!command` waiting in a window of its own
 def hb.ui.term(u: hb.Ui) -> String:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       tw
 
 def hb.with.term(+s: hb.S, +t: String) -> hb.S:
@@ -328,19 +330,35 @@ def hb.with.held(+s: hb.S, +h: List<&2, String>) -> hb.S:
 # it, 0 if none does (the section Late messages)
 def hb.ui.late(u: hb.Ui) -> Nat:
   match u:
-    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt}:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
       lt
 
 def hb.ui.with.late(u: hb.Ui, +l2: Nat) -> hb.Ui:
   match u:
-    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw, lt}:
-      hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, l2}
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw, lt, sd}:
+      hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, l2, sd}
 
 def hb.late(+s: hb.S) -> Nat:
   hb.ui.late(hb.ui(s))
 
 def hb.with.late(+s: hb.S, +l: Nat) -> hb.S:
   hb.with.ui(s, hb.ui.with.late(hb.ui(s), l))
+
+def hb.ui.said(u: hb.Ui) -> String:
+  match u:
+    case hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, sd}:
+      sd
+
+def hb.ui.with.said(u: hb.Ui, +s2: String) -> hb.Ui:
+  match u:
+    case hb.Ui{+m, +d, +b, sc, +fo, +wh, +t0, +ld, +hd, +bg, +tw, +lt, sd}:
+      hb.Ui{m, d, b, sc, fo, wh, t0, ld, hd, bg, tw, lt, s2}
+
+def hb.now.said(+s: hb.S) -> String:
+  hb.ui.said(hb.ui(s))
+
+def hb.with.now.said(+s: hb.S, +k: String) -> hb.S:
+  hb.with.ui(s, hb.ui.with.said(hb.ui(s), k))
 
 def hb.with.mode(+s: hb.S, +m2: U32) -> hb.S:
   hb.with.ui(s, hb.ui.set(hb.ui(s), 0n, m2, False{}, "", 0n))
@@ -1607,6 +1625,40 @@ def hb.now.k(+s: hb.S, +pid: U32) -> Nat:
 def hb.tell.user(+s: hb.S, +text: String) -> IO(hb.S):
   IO.bind(Unit, hb.S, hb.say(s, text), u => IO.pure(hb.S, s))
 
+# Messages waiting on summaries: /now has nothing to stop, so it says what
+# holds them: a usage limit (run/limits.json "rejected" till a time to come:
+# the summaries use the same account) with when it resets and that /login to
+# another account goes past it; else that the summaries are being built.
+# Said once per wait (its first message) and blocker, not on every press.
+
+def hb.now.json(r: Result<&1, &1, U32 & String, String>) -> J.Json:
+  match r:
+    case Done{t}:
+      Maybe.default(&2, J.Json, J.js.read(t), J.JObj{[]})
+    case Fail{e}:
+      J.JObj{[]}
+
+# which limit, as words before "usage limit" ("" one not known)
+def hb.limit.type(+j: J.Json) -> String:
+  +info = Maybe.default(&2, J.Json, J.js.field(j, "info"), J.JObj{[]})
+  +t = Maybe.default(&2, String, J.js.str(info, "rateLimitType"), "")
+  Bool.pick(String, String.eq(t, "five_hour"), "5-hour ", Bool.pick(String, String.starts_with(t, "seven_day"), "weekly ", ""))
+
+def hb.now.why(+at: Nat, +now: Nat, +tz: U32, +kind: String) -> String:
+  Bool.pick(String, Nat.is_gt(at, now),
+    "the summaries before them wait on the " ++ kind ++ "usage limit, which resets at " ++ hb.limit.when(at, now, tz) ++ ": they go then, or now if you /login to another account",
+    "they go as soon as the summaries before them are built")
+
+def hb.now.wait(+s: hb.S) -> IO(hb.S):
+  do IO<hb.S>:
+    +now : Nat <- S.mu.wall()
+    tz : U32 <- S.mu.tzoff(now)
+    r : Result<&1, &1, U32 & String, String> <- S.mu.read_file(hb.dir(s) ++ "/run/limits.json")
+    +j : J.Json = hb.now.json(r)
+    +text : String = hb.now.why(hb.limit.of(j), now, tz, hb.limit.type(j))
+    +key : String = U32.show(hb.wait.first(hb.wait(s), 0)) ++ " " ++ text
+    Bool.pick(IO(hb.S), String.eq(key, hb.now.said(s)), IO.pure(hb.S, s), hb.tell.user(hb.with.now.said(s, key), text))
+
 def hb.now.go(k: Nat, +s: hb.S, +pid: U32) -> IO(hb.S):
   match k:
     case 0n:
@@ -1619,7 +1671,7 @@ def hb.now.go(k: Nat, +s: hb.S, +pid: U32) -> IO(hb.S):
     case 2n:
       hb.stop.as(hb.with.force(s, True{}), hb.turn.name(), "Stopped by the user to send the messages waiting.")
     case _:
-      hb.tell.user(s, "they go as soon as the summaries before them are built")
+      hb.now.wait(s)
 
 def hb.now.on(+s: hb.S, +pid: U32) -> IO(hb.S):
   hb.now.go(hb.now.k(s, pid), s, pid)
@@ -2955,7 +3007,7 @@ def hb.start(+c: hb.Cfg, +chat: A.ap.Pick) -> IO(Unit):
     pane : String <- S.mu.env("TMUX_PANE", "")
     Unit <- hb.tmux.keys(Bool.and(hb.cfg.screen(c), Bool.not(String.is_empty(pane))))
     +scr : Maybe<&2, Chan(Sc.sc.In)> <- hb.screen.open(hb.cfg.screen(c), c, inbox)
-    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, [], False{}, "", 0n}}
+    +s0 : hb.S = hb.S{c, mem, inbox, junk, pick, hb.Idle{}, [], [], "", [], [], False{}, False{}, "", hb.Ui{0, True{}, False{}, scr, False{}, "", 0n, 0, [], False{}, "", 0n, ""}}
     w : hb.When <- hb.when()
     r : M.me.Mem & List<&2, M.me.Job> <- M.me.pump(mem, hb.when.day(w))
     +s1 : hb.S <- hb.mem.jobs(s0, r)

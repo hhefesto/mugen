@@ -2,6 +2,19 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.20.2 (2026-11-16)
+
+- `C-s` (`/now`) with the messages waiting on the summaries before them
+  (no turn yet, nothing to stop) says what holds them: a usage limit
+  (`run/limits.json` rejected), which one, when it resets, and that
+  `/login` to another account goes on now; else, as before, that they go
+  once the summaries are built. It says it once per wait and blocker, not
+  on every press. Before, on 11-16 the 5-hour limit held the summaries
+  from 08:38 and each press printed "they go as soon as the summaries
+  before them are built" (8 times), never naming the limit. A new
+  scenario, `now-limit`, presses `/now` three times while a limit holds
+  the summaries (the fake Claude Code's `MUGEN_FAKE_COMPACT_LIMIT`).
+
 ## 0.20.1 (2026-11-16)
 
 - `/goal clear` and `/goal off` drop the goal, as `/halt` does. Before,

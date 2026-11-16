@@ -21,7 +21,9 @@
 // Code that would see a command where mugen's escape put a space). With
 // MUGEN_FAKE_DROP, a message past the call's first that has that text is
 // lost: never taken, never answered (a Claude Code that takes no message,
-// for mugen's wait on one).
+// for mugen's wait on one). With MUGEN_FAKE_COMPACT_LIMIT (a file), while
+// the file is there a compactor's call hits a usage limit, rejected till
+// the time (Unix seconds) it holds (summaries held at a limit).
 import * as fs from "node:fs";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -170,6 +172,10 @@ const ask = async (body: any) => {
   if (!chat && !goal && !agent && !script && env.MUGEN_FAKE_COMPACT_SLEEP) {
     a.sleep = Number(env.MUGEN_FAKE_COMPACT_SLEEP);
   }
+  const held = env.MUGEN_FAKE_COMPACT_LIMIT;
+  if (!chat && !goal && !agent && !script && held && fs.existsSync(held)) {
+    a = { limit: { at: Number(fs.readFileSync(held, "utf8").trim()), text: "You've hit your limit" } };
+  }
   if (a.sleep) {
     await Bun.sleep(a.sleep * 1000);
   }
@@ -230,7 +236,7 @@ const turn = async () => {
     // a usage limit hit, as Claude Code says it: the limits rejected till a
     // time (resetsIn seconds from now), its words as a reply, a failed result
     if (a.limit) {
-      const at = Math.floor(Date.now() / 1000) + Number(a.limit.resetsIn ?? 0);
+      const at = a.limit.at ?? Math.floor(Date.now() / 1000) + Number(a.limit.resetsIn ?? 0);
       out({ type: "rate_limit_event", rate_limit_info: { status: "rejected", resetsAt: at, rateLimitType: "five_hour", unifiedWindows: { five_hour: { utilization: 1, resetsAt: at, status: "rejected" } } } });
       out({ type: "assistant", message: { id: "msg_limit", type: "message", role: "assistant", model: "<synthetic>", content: [{ type: "text", text: a.limit.text }], stop_reason: "stop_sequence", usage } });
       out({ type: "result", subtype: "success", is_error: true, result: a.limit.text, stop_reason: null, usage });

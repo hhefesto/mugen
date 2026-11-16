@@ -375,7 +375,7 @@ mugen --api</pre>
           <tbody>
             <tr><td><kbd>Enter</kbd></td><td>Sends the message. While mugen works it waits, and the line under the chat says so; it shows in the chat once mugen reads it.</td></tr>
             <tr><td><kbd>Alt-Enter</kbd></td><td>A new line in the message (<kbd>Shift-Enter</kbd> and <kbd>C-j</kbd> too, where the terminal sends them apart from <kbd>Enter</kbd>). A paste comes whole, its new lines kept, as one message.</td></tr>
-            <tr><td><kbd>C-s</kbd></td><td>Sends the waiting messages now (<code>/now</code>). If mugen is running a shell command, the command is cut: mugen gets its output so far, then your messages. Otherwise its turn stops, and a new one starts with them.</td></tr>
+            <tr><td><kbd>C-s</kbd></td><td>Sends the waiting messages now (<code>/now</code>). If mugen is running a shell command, the command is cut: mugen gets its output so far, then your messages. Otherwise its turn stops, and a new one starts with them. With no turn yet (they wait for the summaries before them), it says once what holds them: a usage limit, when it resets, and that <code>/login</code> to another account goes on now.</td></tr>
             <tr><td><kbd>C-g</kbd></td><td>Stops mugen's turn (<code>/stop</code>).</td></tr>
             <tr><td><kbd>Shift-Tab</kbd></td><td>Plan mode, or back to auto mode (as <code>/plan</code> and <code>/auto</code>), as in Claude Code. The status line and a line under the chat say which.</td></tr>
             <tr><td><kbd>Esc</kbd> <kbd>Esc</kbd></td><td>Leaves mugen. So do <kbd>C-d</kbd> and <kbd>C-c</kbd> on an empty input; <kbd>C-c</kbd> on text clears it (<kbd>C-y</kbd> brings it back).</td></tr>
