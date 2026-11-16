@@ -1,0 +1,64 @@
+[
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "tool_use",
+     "id": "t",
+     "name": "shell",
+     "input": {
+      "device": "@HOST@",
+      "command": "sleep 2; echo ok"
+     }
+    }
+   ],
+   "stop_reason": "tool_use",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "Done."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "On it."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]

@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+# no goal left, and none was checked: the goal was dropped before the turn ended
+jq -e '.goal == null' "$1/view.json" > /dev/null
+! grep -q "You check a goal" log/*.json
+# "clear" and "off" never reached the model as words
+! grep -q '"/goal clear"\|"/goal off"\| /goal clear\| /goal off' log/*.json

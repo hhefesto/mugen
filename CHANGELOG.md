@@ -2,6 +2,18 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.20.1 (2026-11-16)
+
+- `/goal clear` and `/goal off` drop the goal, as `/halt` does. Before,
+  they set a goal named "clear" or "off" and sent that word to the model
+  as your message, and a check soon found that "goal" met (the user, 11-16,
+  sent `/goal clear` to clear a goal; it became the goal "clear"). A new
+  scenario, `goal-clear`, sends both, during a turn and with no goal.
+- No change in behavior: the goal check's prompt with "wait" and the
+  waiting goal's note (0.20.0) moved out of `Prompts.bend`, which is
+  UniiChat's prompts word for word, into `Hub.bend`. 0.20.0 had edited
+  `Prompts.bend`, so the flake's `prompts` check failed.
+
 ## 0.20.0 (2026-11-16)
 
 - A goal check can answer "wait": the goal isn't met, but its next step

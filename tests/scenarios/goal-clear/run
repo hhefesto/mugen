@@ -1,0 +1,5 @@
+#!/bin/sh
+# `/goal clear` and `/goal off` drop the goal, as /halt does, never set a
+# goal named "clear" or "off": one sent while a turn runs drops the goal set
+# just before, one sent with no goal only says so; neither reaches the model
+( echo "run a long job"; sleep 1; echo "/goal say done"; sleep 0.5; echo "/goal clear"; sleep 4; echo "/goal off"; sleep 1 ) | timeout 60 "$MUGEN"

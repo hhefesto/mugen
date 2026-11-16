@@ -920,11 +920,22 @@ def hb.goal.run(+c: A.ap.Cfg, +inbox: Chan(E.ev.Ev), +junk: Chan(String), +ctl: 
     s : A.ap.Step <- A.ap.step(c, a, [A.ap.User{A.ap.ask.blocks(a)}], junk, ctl)
     E.ev.send(inbox, hb.goal.ev(goal, P.cp.end.of(s)))
 
+# a goal check's system prompt: UniiChat's (Prompts.bend's pr.goal, which
+# answers yes or no) with a third answer, wait, mugen's own (not UniiChat's:
+# its prompts, word for word, are Prompts.bend's alone)
+def hb.goal.prompt() -> String:
+  "You check a goal. Below is a chat between a user and Unii, an AI agent: its older messages as summary lines (id+n|text), then its latest messages whole, then the goal the user set with /goal. Answer yes if the chat shows the goal fully satisfied now. Answer wait if it is not, but Unii can go no further without the user: the next step needs the user's answer, approval or action (a decision, a push, a deploy, a payment, a rent, a password), Unii has asked for it, and nothing else toward the goal is left to do meanwhile. Else answer no. Write that one word, nothing else."
+
+# the note of a goal that waits on the user (the check answered wait): no
+# nudge, so no turn asks the same questions again; the goal stays
+def hb.goal.wait.say() -> String:
+  "The goal waits for you: its next step needs your answer or approval. It is checked again after your next message; /halt drops it."
+
 def hb.check(+s: hb.S, +goal: String) -> IO(hb.S):
   do IO<hb.S>:
     +at : U32 <- M.me.whole(hb.mem(s), 0)
     tail : List<&2, String> <- hb.lines(U32.to_nat((M.me.count(hb.mem(s)) - at : U32)), s, at, [])
-    +a : A.ap.Ask = A.ap.Ask{hb.pick(s), hb.named(Pr.pr.goal()), List.append(&2, V.vw.B, hb.view(s, at), [V.vw.B{T.tx.concat(tail) ++ Pr.pr.goal.ask() ++ goal, True{}}]), [], 0, False{}}
+    +a : A.ap.Ask = A.ap.Ask{hb.pick(s), hb.named(hb.goal.prompt()), List.append(&2, V.vw.B, hb.view(s, at), [V.vw.B{T.tx.concat(tail) ++ Pr.pr.goal.ask() ++ goal, True{}}]), [], 0, False{}}
     Unit <- hb.fresh(hb.ctl(s, ""))
     Unit <- IO.spawn(Unit, hb.goal.run(hb.cfg.api(hb.cfg(s)), hb.inbox(s), hb.junk(s), hb.ctl(s, ""), a, goal))
     return hb.with.turn(s, hb.Check{goal})
@@ -1069,7 +1080,7 @@ def hb.checked.go(k: Nat, +s: hb.S, +text: String) -> IO(hb.S):
         Unit <- M.me.save(m)
         hb.note(hb.with.mem(s, m), "Goal met.")
     case 3n:
-      hb.note(s, Pr.pr.goal.wait())
+      hb.note(s, hb.goal.wait.say())
     case _:
       do IO<hb.S>:
         +p : hb.P <- hb.push(s, "user", Pr.pr.goal.no())
@@ -1626,6 +1637,12 @@ def hb.word.go(s: String, +acc: String) -> String:
       String.reverse(acc)
     case SCon{c, t}:
       hb.word.go(t, SCon{c, acc})
+
+# `/goal clear` and `/goal off` drop the goal, as /halt does: no goal is
+# named "clear" or "off" (the user, 11-16, sent `/goal clear` to clear one,
+# and it became the goal "clear")
+def hb.goal.off(+r: String) -> Bool:
+  Bool.or(String.eq(r, "clear"), String.eq(r, "off"))
 
 def hb.cmd.code(+w: String) -> Nat:
   Bool.pick(Nat, String.eq(w, "/help"), 1n, Bool.pick(Nat, String.eq(w, "/quit"), 2n, Bool.pick(Nat, String.eq(w, "/stop"), 3n,
@@ -2309,8 +2326,9 @@ def hb.cmd(k: Nat, +s: hb.S, +t: String, +w: String, +rest: String) -> IO(hb.S):
     case 4n:
       IO.bind(hb.S, hb.S, hb.set.goal(s, None{}), s2 => hb.note(s2, "Goal halted by the user."))
     case 5n:
-      Bool.pick(IO(hb.S), String.is_empty(rest), hb.tell.user(s, "/goal needs one: /goal <message>."),
-        IO.bind(hb.S, hb.S, hb.set.goal(s, Some{rest}), s2 => hb.said(s2, t)))
+      Bool.pick(IO(hb.S), hb.goal.off(rest), IO.bind(hb.S, hb.S, hb.set.goal(s, None{}), s2 => hb.note(s2, "Goal halted by the user.")),
+        Bool.pick(IO(hb.S), String.is_empty(rest), hb.tell.user(s, "/goal needs one: /goal <message>."),
+          IO.bind(hb.S, hb.S, hb.set.goal(s, Some{rest}), s2 => hb.said(s2, t))))
     case 6n:
       Bool.pick(IO(hb.S), String.is_empty(rest), hb.tell.user(s, "the chat runs on " ++ hb.pick.label(hb.pick(s))), hb.set.pick(s, hb.with.model(hb.pick(s), rest)))
     case 7n:

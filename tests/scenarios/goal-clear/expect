@@ -1,0 +1,9 @@
+user: run a long job
+user: /goal say done
+note: Goal halted by the user.
+tool: shell {"device":"@HOST@","command":"sleep 2; echo ok"}
+echo: ok
+(exit 0 in T s)
+unii: Done.
+unii: On it.
+note: Goal halted by the user.

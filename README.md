@@ -199,7 +199,8 @@ Commands:
   won't run one.
 - `/stop [name]`: stop the turn, or one agent (`/stop !`: your own command).
 - `/now`: as `C-s`.
-- `/goal TEXT`, `/halt`: set a goal, or drop it. After each turn a check
+- `/goal TEXT`, `/halt`: set a goal, or drop it (`/goal clear` and
+  `/goal off` drop it too). After each turn a check
   answers met, not met (mugen is told to keep working) or waiting on you (a
   note; nothing more till your next message).
 - `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
