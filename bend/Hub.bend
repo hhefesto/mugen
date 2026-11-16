@@ -33,7 +33,8 @@ import ./Pretty.bend as Pp
 # does. A call waits till every message before it is summarized (settle); its
 # blocks are the view to its first message, the devices, the agents at work,
 # then "Turn: the user's new message:" and the messages. A turn that ends well
-# with a goal set asks whether it is met; unmet, the user's nudge goes on. An
+# with a goal set asks whether it is met; unmet, the user's nudge goes on;
+# waiting on the user, a note and nothing more till their next message. An
 # agent's report is a message of its own that starts a turn. What runs (the
 # turn, the agents) is kept in view.json, and a start goes on with it, told so.
 #
@@ -1067,6 +1068,8 @@ def hb.checked.go(k: Nat, +s: hb.S, +text: String) -> IO(hb.S):
         +m : M.me.Mem = M.me.with.kept(hb.mem(s), hb.kept.goal(M.me.kept(hb.mem(s)), None{}))
         Unit <- M.me.save(m)
         hb.note(hb.with.mem(s, m), "Goal met.")
+    case 3n:
+      hb.note(s, Pr.pr.goal.wait())
     case _:
       do IO<hb.S>:
         +p : hb.P <- hb.push(s, "user", Pr.pr.goal.no())
@@ -1090,20 +1093,26 @@ def hb.yes.at(w: String, s: String) -> Bool:
     case _ _:
       False{}
 
-# /^\W*yes\b/i
-def hb.yes(s: String) -> Bool:
+# /^\W*w\b/i, w a lower-case word
+def hb.lead(+w: String, s: String) -> Bool:
   match s:
     case SCon{Chr{+c}, +t}:
-      Bool.pick(Bool, hb.word(c), hb.yes.at("yes", SCon{Chr{c}, t}), hb.yes(t))
+      Bool.pick(Bool, hb.word(c), hb.yes.at(w, SCon{Chr{c}, t}), hb.lead(w, t))
     case SNil{}:
       False{}
 
+# /^\W*yes\b/i
+def hb.yes(s: String) -> Bool:
+  hb.lead("yes", s)
+
 # a goal check's answer (Chat.checked): no check (a failure); met (yes): the
-# goal ends; else the user's nudge goes on as their message
+# goal ends; wait (the next step is the user's): a note, no nudge, the goal
+# stays and is checked after the next turn; else the user's nudge goes on as
+# their message
 def hb.checked(+s: hb.S, +goal: String, +ok: Bool, +text: String) -> IO(hb.S):
   +on = Bool.and(String.is_empty(hb.halt(s)), Bool.and(List.is_empty(&2, hb.Msg, hb.wait(s)), hb.goal.is(hb.goal(s), goal)))
   do IO<hb.S>:
-    +s2 : hb.S <- hb.checked.go(Bool.pick(Nat, Bool.not(on), 0n, Bool.pick(Nat, Bool.not(ok), 1n, Bool.pick(Nat, hb.yes(text), 2n, 3n))), s, text)
+    +s2 : hb.S <- hb.checked.go(Bool.pick(Nat, Bool.not(on), 0n, Bool.pick(Nat, Bool.not(ok), 1n, Bool.pick(Nat, hb.yes(text), 2n, Bool.pick(Nat, hb.lead("wait", text), 3n, 4n)))), s, text)
     hb.go.on(s2)
 
 def hb.kept.work(k: M.me.Kept, w2: List<&2, String>) -> M.me.Kept:

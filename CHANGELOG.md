@@ -2,6 +2,18 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.20.0 (2026-11-16)
+
+- A goal check can answer "wait": the goal isn't met, but its next step
+  needs your answer or approval (a decision, a push, a deploy, a payment, a
+  rent, a password), mugen has asked, and nothing else toward the goal is
+  left meanwhile. Then a note says the goal waits for you, and no "keep
+  working" is sent; the goal stays and is checked again after your next
+  message. Before, the check could only say yes or no, so a goal blocked on
+  you got "keep working" after every turn: on 11-16 that was 29 turns in 99
+  minutes, each re-asking the same few questions (57 questions for 6
+  decisions), which spent the 5-hour limit early.
+
 ## 0.19.1 (2026-11-16)
 
 - A copy (a drag over the chat, `M-w`, `C-w`, the login's link) goes to

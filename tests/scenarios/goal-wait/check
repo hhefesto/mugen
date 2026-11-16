@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+# a check that answers wait: a note, no nudge (one turn only), the goal kept
+jq -e '.goal == "say done"' "$1/view.json" > /dev/null
+test "$(grep -l "You check a goal" log/*.json | wc -l)" -eq 1

@@ -30,7 +30,7 @@ def pr.head() -> String:
 
 # a goal check's system prompt (Server.ts GOAL)
 def pr.goal() -> String:
-  "You check a goal. Below is a chat between a user and Unii, an AI agent: its older messages as summary lines (id+n|text), then its latest messages whole, then the goal the user set with /goal. Answer yes if the chat shows the goal fully satisfied now, else no. Write that one word, nothing else."
+  "You check a goal. Below is a chat between a user and Unii, an AI agent: its older messages as summary lines (id+n|text), then its latest messages whole, then the goal the user set with /goal. Answer yes if the chat shows the goal fully satisfied now. Answer wait if it is not, but Unii can go no further without the user: the next step needs the user's answer, approval or action (a decision, a push, a deploy, a payment, a rent, a password), Unii has asked for it, and nothing else toward the goal is left to do meanwhile. Else answer no. Write that one word, nothing else."
 
 # before the goal, in a check's message (Server.ts GOAL_ASK)
 def pr.goal.ask() -> String:
@@ -39,6 +39,11 @@ def pr.goal.ask() -> String:
 # the nudge of a goal not met (Server.ts GOAL_NO)
 def pr.goal.no() -> String:
   "The goal isn't satisfied yet: keep working."
+
+# the note of a goal that waits on the user (the check answered wait): no
+# nudge, so no turn asks the same questions again; the goal stays
+def pr.goal.wait() -> String:
+  "The goal waits for you: its next step needs your answer or approval. It is checked again after your next message; /halt drops it."
 
 # the agents' names, a common adjective and noun (Names.ts)
 def pr.adjs() -> List<&2, String>:
