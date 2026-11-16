@@ -2209,11 +2209,15 @@ def hb.login.code(+s: hb.S, +code: String) -> IO(hb.S):
 def hb.login(+s: hb.S, +rest: String) -> IO(hb.S):
   Bool.pick(IO(hb.S), String.is_empty(rest), hb.login.begin(s), hb.login.code(s, rest))
 
-# the link copied, on the full screen (what sc.clip says: "" nowhere)
+# the link copied, on the full screen (what sc.clip says: "" nowhere, or
+# only into tmux's buffer under a terminal that drops OSC 52: sc.clip.took)
+def hb.login.took(+out: String) -> String:
+  Bool.pick(String, Sc.sc.clip.took(out), out, "")
+
 def hb.login.clip(m: Maybe<&2, Chan(Sc.sc.In)>, +url: String) -> IO(String):
   match m:
     case Some{c}:
-      IO.bind(S.mu.Out, String, S.mu.run("sh", ["-c", Sc.sc.clip()], url, 4096, 5000), o => IO.pure(String, hb.login.text(o)))
+      IO.bind(S.mu.Out, String, S.mu.run("sh", ["-c", Sc.sc.clip()], url, 4096, 5000), o => IO.pure(String, hb.login.took(hb.login.text(o))))
     case None{}:
       IO.pure(String, "")
 

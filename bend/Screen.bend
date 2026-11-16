@@ -1412,10 +1412,20 @@ def sc.sel.show(+z: sc.Sel, +rows: List<&2, String>) -> List<&2, String>:
 # copying: X's clipboard (xclip), tmux's buffer (and so the terminal's, by
 # OSC 52), or outside tmux the terminal's own, by an OSC 52 of ours (a
 # terminal that takes it, as Windows Terminal, kitty, WezTerm, foot, iTerm2
-# do, and over ssh too: issue #2); whichever is there. It says where it
-# went: x X's, t tmux's, o the terminal's (sent, not known taken).
+# do, and over ssh too: issue #2); whichever is there. In tmux the X display
+# is the one of the terminal the user is at, tmux's client (its pid's
+# environment: DISPLAY, XAUTHORITY), not mugen's own: mugen started over
+# mosh has none, and the desktop's terminal does (the user, 11-15: "I
+# select, it says copied, can't paste"). It says where it went: x X's, t
+# tmux's, o the terminal's (sent, not known taken); and v when that terminal
+# is VTE's (GNOME Terminal, Tilix...), which drops OSC 52.
 def sc.clip() -> String:
-  "t=$(cat); r=; if [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null && printf %s \"$t\" | xclip -selection clipboard >/dev/null 2>&1; then r=x; fi; if [ -n \"$TMUX\" ]; then if printf %s \"$t\" | tmux load-buffer -w - >/dev/null 2>&1; then r=${r}t; fi; elif { printf '\\033]52;c;%s\\a' \"$(printf %s \"$t\" | base64 | tr -d '\\n')\" > /dev/tty; } 2>/dev/null; then r=${r}o; fi; printf %s \"$r\""
+  "t=$(cat); r=; v=; [ -n \"$VTE_VERSION\" ] && v=v; if [ -n \"$TMUX\" ]; then v=; c=$(tmux display-message -p '#{client_pid} #{client_termtype}' 2>/dev/null); p=${c%% *}; case \"$c\" in *' VTE'*) v=v;; esac; if [ -n \"$p\" ] && [ -r \"/proc/$p/environ\" ]; then e=$(tr '\\000' '\\n' < \"/proc/$p/environ\"); DISPLAY=$(printf '%s\\n' \"$e\" | sed -n 's/^DISPLAY=//p' | head -n 1); XAUTHORITY=$(printf '%s\\n' \"$e\" | sed -n 's/^XAUTHORITY=//p' | head -n 1); export DISPLAY; if [ -n \"$XAUTHORITY\" ]; then export XAUTHORITY; else unset XAUTHORITY; fi; printf '%s\\n' \"$e\" | grep -q '^VTE_VERSION=' && v=v; fi; fi; if [ -n \"$DISPLAY\" ] && command -v xclip >/dev/null && printf %s \"$t\" | xclip -selection clipboard >/dev/null 2>&1; then r=x; fi; if [ -n \"$TMUX\" ]; then if printf %s \"$t\" | tmux load-buffer -w - >/dev/null 2>&1; then r=${r}t; fi; elif { printf '\\033]52;c;%s\\a' \"$(printf %s \"$t\" | base64 | tr -d '\\n')\" > /dev/tty; } 2>/dev/null; then r=${r}o; fi; printf %s \"$r$v\""
+
+# whether a copy reached a clipboard (sc.clip's answer): X's, or the
+# terminal's by OSC 52 when it isn't VTE's
+def sc.clip.took(+to: String) -> Bool:
+  Bool.or(String.contains(to, "x"), Bool.and(Bool.or(String.contains(to, "t"), String.contains(to, "o")), Bool.not(String.contains(to, "v"))))
 
 def sc.cursor(+r: U32, +c: U32) -> String:
   "\u{1B}[" ++ U32.show(r) ++ ";" ++ U32.show((c + 1 : U32)) ++ "H"
@@ -2735,16 +2745,20 @@ def sc.click.at(k: Nat, +s: sc.S, +y: U32) -> sc.S:
       sc.click(s, y)
 
 # what a copy says under the chat, from where sc.clip put it (x X's
-# clipboard, t tmux's buffer, o the terminal's by OSC 52, none nowhere)
+# clipboard, t tmux's buffer, o the terminal's by OSC 52, none nowhere; v
+# the terminal is VTE's, which drops OSC 52: then tmux's buffer is all)
 def sc.copied(+n: Nat, +to: String) -> String:
   +what = Nat.show(n) ++ Bool.pick(String, Nat.is_eq(n, 1n), " line", " lines")
   +x = String.contains(to, "x")
   +t = String.contains(to, "t")
   +o = String.contains(to, "o")
-  Bool.pick(String, Bool.or(Bool.or(x, t), o),
-    P.pp.paint("1;32", Bool.pick(String, Bool.or(x, t), "\u{2713} copied " ++ what ++ Bool.pick(String, x, " to the clipboard", " to tmux's buffer (the terminal's clipboard too, if it takes OSC 52)"),
-      "\u{2713} sent " ++ what ++ " to the terminal's clipboard (by OSC 52, if it takes it)")),
-    P.pp.paint("1;31", "\u{2717} not copied: no X display for xclip, no tmux, no terminal"))
+  +v = String.contains(to, "v")
+  +vte : String = "this terminal (VTE's: GNOME Terminal, Tilix...) drops OSC 52, and there is no X display for xclip"
+  Bool.pick(String, x, P.pp.paint("1;32", "\u{2713} copied " ++ what ++ " to the clipboard"),
+    Bool.pick(String, Bool.and(t, v), P.pp.paint("1;33", "! " ++ what ++ " in tmux's buffer only (C-b ] pastes it), not the clipboard: " ++ vte),
+      Bool.pick(String, t, P.pp.paint("1;32", "\u{2713} copied " ++ what ++ " to tmux's buffer (the terminal's clipboard too, if it takes OSC 52)"),
+        Bool.pick(String, Bool.and(o, Bool.not(v)), P.pp.paint("1;32", "\u{2713} sent " ++ what ++ " to the terminal's clipboard (by OSC 52, if it takes it)"),
+          P.pp.paint("1;31", Bool.pick(String, o, "\u{2717} not copied: " ++ vte, "\u{2717} not copied: no X display for xclip, no tmux, no terminal"))))))
     ++ P.pp.paint("2", " \u{b7} Shift-drag selects with the terminal")
 
 def sc.copied.of(o: S.mu.Out, +n: Nat) -> String:

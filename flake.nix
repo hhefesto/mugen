@@ -88,6 +88,7 @@
           spellcheck = bendBinary pkgs "spellcheck" "tests/SpellCheck.bend";
           helpcheck = bendBinary pkgs "helpcheck" "tests/HelpCheck.bend";
           findcheck = bendBinary pkgs "findcheck" "tests/FindCheck.bend";
+          clipcheck = bendBinary pkgs "clipcheck" "tests/ClipCheck.bend";
           editcheck = bendBinary pkgs "editcheck" "tests/EditCheck.bend";
         }
       );
@@ -222,6 +223,14 @@
           # (bend/tests/FindCheck.bend)
           find = pkgs.runCommand "find" { } ''
             ${self.packages.${system}.findcheck}/bin/findcheck | tee result
+            grep -qx "PASS: \([0-9]*\) / \1" result
+            touch $out
+          '';
+          # a copy's line says where the text went, and never claims the
+          # clipboard when only tmux's buffer took it (VTE drops OSC 52);
+          # the login's link likewise (bend/tests/ClipCheck.bend)
+          clip = pkgs.runCommand "clip" { } ''
+            ${self.packages.${system}.clipcheck}/bin/clipcheck | tee result
             grep -qx "PASS: \([0-9]*\) / \1" result
             touch $out
           '';

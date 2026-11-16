@@ -2,6 +2,20 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.19.1 (2026-11-16)
+
+- A copy (a drag over the chat, `M-w`, `C-w`, the login's link) goes to
+  the clipboard of the terminal you're at. Under tmux, mugen now takes the X
+  display from tmux's client (its `DISPLAY` and `XAUTHORITY`), not from its
+  own environment. If mugen was started over mosh it had no display, so
+  xclip was skipped. Then GNOME Terminal (VTE), which drops OSC 52, got
+  nothing, while the line still said "copied" (the user, 11-15: "I select,
+  it says copied, can't paste").
+- The line says where the text really went. Under a VTE terminal with no X
+  display, it says "in tmux's buffer only (C-b ] pastes it), not the
+  clipboard" and gives the reason. The login's "(it is copied too)" shows only
+  when a clipboard took the link. ClipCheck is a new flake check (`clip`).
+
 ## 0.19.0 (2026-11-15)
 
 - A message that starts with `/` reaches the model as your words, never as
