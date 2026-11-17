@@ -1,0 +1,33 @@
+[
+ {
+  "limit": {
+   "resetsIn": 86400,
+   "text": "You've hit your session limit · resets tomorrow"
+  }
+ },
+ {
+  "limit": {
+   "resetsIn": 86400,
+   "text": "You've hit your session limit · resets tomorrow"
+  }
+ },
+ {
+  "body": {
+   "id": "m",
+   "type": "message",
+   "role": "assistant",
+   "model": "m",
+   "content": [
+    {
+     "type": "text",
+     "text": "Back at it."
+    }
+   ],
+   "stop_reason": "end_turn",
+   "usage": {
+    "input_tokens": 1,
+    "output_tokens": 1
+   }
+  }
+ }
+]

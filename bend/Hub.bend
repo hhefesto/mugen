@@ -1016,6 +1016,15 @@ def hb.limit.said(m: Maybe<&2, St.st.Root>) -> Bool:
     case None{}:
       False{}
 
+# the chat's last message is the note that its turn stopped at a usage limit
+# (hb.limited's): nothing came since
+def hb.limit.noted(m: Maybe<&2, St.st.Root>) -> Bool:
+  match m:
+    case Some{+r}:
+      Bool.and(String.eq(St.st.root.kind(r), "note"), String.starts_with(St.st.root.text(r), "Usage limit: mugen goes on by itself"))
+    case None{}:
+      False{}
+
 # a local time as HH:MM, or as YYYY-MM-DD HH:MM when it is 20 hours or more away
 def hb.limit.when(+wake: Nat, +now: Nat, +tz: U32) -> String:
   Bool.pick(String, Nat.is_ge(Nat.sub(wake, now), 72000000n), String.take(C.ck.show(wake, tz), 16n), hb.hm(wake, tz))
@@ -2323,12 +2332,45 @@ def hb.login.link(+s: hb.S, +out: String) -> IO(hb.S):
   +url = hb.login.line(out, 0n)
   Bool.pick(IO(hb.S), String.is_empty(url), hb.tell.user(s, "Claude Code's sign-in shows no link" ++ hb.login.said(out)), hb.login.show(s, url))
 
+# Signed in at a usage limit: the turn that stopped at it goes on at once
+# with the new account, told so, if the chat has had nothing since (its last
+# message the limit's note) and nothing runs or waits, as when the limit
+# resets (hb.limit.over; that wake finds the chat moved on and does
+# nothing). Whether the new account's limit is reached is known only by a
+# call: if it is, Claude Code answers the call with the limit before the
+# model reads anything, and mugen waits again (hb.failed), now till that
+# account's reset. So the model reads this only when it can go on. (Not
+# UniiChat's: its prompts, word for word, are Prompts.bend's alone.)
+def hb.login.say(+acct: String) -> String:
+  "(mugen, not the user) The user signed in to another account (" ++ acct ++ "), whose usage limit isn't reached yet: go on with what you were doing."
+
+def hb.login.go(go: Bool, +s: hb.S, +acct: String) -> IO(hb.S):
+  match go:
+    case True{}:
+      do IO<hb.S>:
+        +p : hb.P <- hb.push(s, "user", hb.login.say(acct))
+        return hb.queue(hb.p.s(p), hb.p.msg(p))
+    case False{}:
+      IO.pure(hb.S, s)
+
+def hb.login.resume(+s: hb.S, +acct: String) -> IO(hb.S):
+  do IO<hb.S>:
+    +n : U32 = M.me.count(hb.mem(s))
+    m : Maybe<&2, St.st.Root> <- St.st.message(hb.dir(s), Bool.pick(U32, U32.is_eq(n, 0), 0, (n - 1 : U32)))
+    +go : Bool = Bool.and(Bool.and(hb.is.idle(hb.turn(s)), List.is_empty(&2, hb.Msg, hb.wait(s))), Bool.and(Bool.not(U32.is_eq(n, 0)), hb.limit.noted(m)))
+    hb.login.go(go, s, acct)
+
 # signed in: the account mugen says it runs on (/status) is the new one,
-# where the chat runs on Claude Code
+# where the chat runs on Claude Code; the limits the last call said
+# (run/limits.json) were the old account's, so they go (the next call says
+# the new one's), and a turn stopped at a limit goes on
 def hb.login.as(on: Bool, +s: hb.S, +acct: String) -> IO(hb.S):
   match on:
     case True{}:
-      hb.tell.user(hb.with.cfg(s, hb.cfg.with.acct(hb.cfg(s), acct)), "signed in: " ++ acct ++ ". The chat's next call goes with it")
+      do IO<hb.S>:
+        +s2 : hb.S <- hb.tell.user(hb.with.cfg(s, hb.cfg.with.acct(hb.cfg(s), acct)), "signed in: " ++ acct ++ ". The chat's next call goes with it")
+        r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(hb.dir(s2) ++ "/run/limits.json")
+        hb.login.resume(s2, acct)
     case False{}:
       hb.tell.user(s, "Claude Code is signed in: " ++ acct ++ ". This chat goes on with its API key (--api)")
 

@@ -2,6 +2,27 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.21.0 (2026-11-16)
+
+- A turn stopped at a usage limit goes on at once when `/login` signs in
+  to another account: mugen tells the model "(mugen, not the user) The
+  user signed in to another account (ACCOUNT), whose usage limit isn't
+  reached yet: go on with what you were doing.", if the chat has had
+  nothing since the limit's note and nothing runs or waits (as when the
+  limit resets). Whether that account's limit is reached is known only by
+  a call: if it is, Claude Code answers with the limit before the model
+  reads anything, and mugen waits again, now till that account's reset;
+  the next `/login` goes on the same way. Before, a sign-in only said "the
+  chat's next call goes with it", and the turn waited for the old
+  account's reset or a message (the user, 11-16, at the weekly limit: "when
+  a login happens, it should be relayed to claude that it should continue
+  if the limit isn't reached for that account yet").
+- A sign-in drops `run/limits.json`, the old account's limits: `/status`
+  says "shown after the first reply" until the new account's first call,
+  and a later failure is no longer taken for the old account's limit.
+- A new scenario, `login-limit`: a turn at a limit, a sign-in to an
+  account at its limit too (stops again), another sign-in (goes on).
+
 ## 0.20.2 (2026-11-16)
 
 - `C-s` (`/now`) with the messages waiting on the summaries before them

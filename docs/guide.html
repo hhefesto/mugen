@@ -408,7 +408,7 @@ mugen --api</pre>
             <tr><td><code>/model LABEL</code></td><td><code>opus-5.5</code> (default), <code>sonnet-5.5</code>, <code>haiku-5.5</code>, or a model id.</td></tr>
             <tr><td><code>/effort LEVEL</code></td><td><code>low</code>, <code>medium</code> (default), <code>high</code>, <code>xhigh</code>, <code>max</code>.</td></tr>
             <tr><td><code>/plan</code>, <code>/auto</code></td><td>Plan mode: mugen reads and proposes a plan, and runs no shell, writes and edits nothing, starts no agents. Auto mode (the default) lets it act. The mode shows on the status line; <kbd>Shift-Tab</kbd> switches it.</td></tr>
-            <tr><td><code>/login</code></td><td>Signs Claude Code in again, to switch accounts from inside the chat: a link to sign in with the account you want (copied too); if its page shows a code, <code>/login CODE</code> gives it. The chat's next call goes with that account.</td></tr>
+            <tr><td><code>/login</code></td><td>Signs Claude Code in again, to switch accounts from inside the chat: a link to sign in with the account you want (copied too); if its page shows a code, <code>/login CODE</code> gives it. The chat's next call goes with that account; a turn stopped at a usage limit goes on at once with it.</td></tr>
             <tr><td><code>/status</code></td><td>The opening status again: account, limits, chat and view, models, mode, work dir, goal, agents.</td></tr>
             <tr><td><code>/image PATH</code></td><td>The image at PATH (png, jpeg, gif or webp; <code>/image</code> alone: the clipboard's) goes with the message being written: a line <code>[image docs/images/NAME]</code> in it names it. The model sees it with that message; <code>zoom(id, 1)</code> shows it again.</td></tr>
             <tr><td><code>/mouse</code></td><td>The mouse to the terminal (its own selection), or back to mugen.</td></tr>
@@ -664,7 +664,7 @@ mugen --api</pre>
         <dt>"The AI service is busy: asking again in N s."</dt>
         <dd>The API is overloaded or your plan has hit a limit. A turn is retried a few times and then reports that the service is busy. Summaries keep retrying every minute, so they only get delayed.</dd>
         <dt>"You've hit your session limit · resets 3am", then "Usage limit: mugen goes on by itself at 03:01"</dt>
-        <dd>Your plan's limit stopped the turn. mugen waits until a minute after the limit resets (every 30 minutes if Claude Code gave no time) and goes on with what it was doing, if nothing came into the chat since. A message of yours goes on at once instead, and stops again if the limit still holds.</dd>
+        <dd>Your plan's limit stopped the turn. mugen waits until a minute after the limit resets (every 30 minutes if Claude Code gave no time) and goes on with what it was doing, if nothing came into the chat since. A message of yours goes on at once instead, and stops again if the limit still holds. So does <code>/login</code> to another account: once signed in, mugen tells the model to go on with it; if that account is at its limit too, the turn stops again and waits for that account's reset.</dd>
         <dt>"No reply: stopped: refusal. Send a message to try again."</dt>
         <dd>The model declined that turn. Messages you sent during it wait for the next turn.</dd>
         <dt>The terminal looks wrong after mugen was killed</dt>

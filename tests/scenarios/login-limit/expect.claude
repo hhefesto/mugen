@@ -1,0 +1,22 @@
+user: start
+unii: You've hit your session limit · resets tomorrow
+note: Usage limit: mugen goes on by itself at @TIME@, a minute after it resets. A message of yours goes on sooner.
+[signing Claude Code in again (claude auth login): its link comes in a moment]
+Switching Claude Code's account. Signed in now: signed in, on Claude Code.
+Open this link and sign in with the account you want:
+https://claude.example/oauth?code=true&state=s1
+If the page then shows a code, paste it here as /login CODE. The account you sign in with takes the place of the one in now, from the chat's next call.
+[the code went to Claude Code's sign-in: how it went comes in a moment]
+[signed in: fresh@example.com · Max plan, on Claude Code. The chat's next call goes with it]
+user: (mugen, not the user) The user signed in to another account (fresh@example.com · Max plan, on Claude Code), whose usage limit isn't reached yet: go on with what you were doing.
+unii: You've hit your session limit · resets tomorrow
+note: Usage limit: mugen goes on by itself at @TIME@, a minute after it resets. A message of yours goes on sooner.
+[signing Claude Code in again (claude auth login): its link comes in a moment]
+Switching Claude Code's account. Signed in now: fresh@example.com · Max plan, on Claude Code.
+Open this link and sign in with the account you want:
+https://claude.example/oauth?code=true&state=s1
+If the page then shows a code, paste it here as /login CODE. The account you sign in with takes the place of the one in now, from the chat's next call.
+[the code went to Claude Code's sign-in: how it went comes in a moment]
+[signed in: fresh@example.com · Max plan, on Claude Code. The chat's next call goes with it]
+user: (mugen, not the user) The user signed in to another account (fresh@example.com · Max plan, on Claude Code), whose usage limit isn't reached yet: go on with what you were doing.
+unii: Back at it.
