@@ -37,7 +37,9 @@ if (argv.includes("--version")) {
 // `auth logout` say so. With MUGEN_FAKE_LOGIN (a code), `auth login` plays
 // the real one's way without a browser (mugen's /login): a link, then a
 // line of stdin, the code; the right one signs in as fresh@example.com
-// (MUGEN_FAKE_LOG.acct, which `auth status` says from then on)
+// (MUGEN_FAKE_LOG.acct, which `auth status` says from then on), its
+// credentials in CLAUDE_CONFIG_DIR/.credentials.json when that is set (as
+// the real one keeps them; the tests set it, so ~/.claude is never touched)
 if (argv[0] === "auth") {
   const out = !!process.env.MUGEN_FAKE_SIGNED_OUT;
   const acct = (process.env.MUGEN_FAKE_LOG ?? "/nonexistent") + ".acct";
@@ -47,6 +49,8 @@ if (argv[0] === "auth") {
     for await (const line of console) {
       if (line.trim() === code) {
         fs.writeFileSync(acct, "fresh@example.com");
+        const ccd = process.env.CLAUDE_CONFIG_DIR;
+        if (ccd) { fs.mkdirSync(ccd, { recursive: true }); fs.writeFileSync(ccd + "/.credentials.json", JSON.stringify({ fake: "fresh@example.com", at: Date.now() })); }
         console.log("Login successful.");
         process.exit(0);
       }

@@ -54,7 +54,9 @@ paste it as `/login CODE`. The chat's next call goes with that account.
   apply, including to the summaries (one Haiku call each). A turn stopped at
   a usage limit goes on by itself a minute after the limit resets, or at
   once when `/login` signs in to another account (if that account is at its
-  limit too, it stops again and waits for that one's reset).
+  limit too, it stops again and waits for that one's reset). So does a
+  sign-in outside the chat, as `mugen login` in another window: while a
+  turn waits at a limit, mugen watches Claude Code's credentials file.
 - **API (`--api`, or `MUGEN_WIRE=api`).** mugen calls the Messages API with
   curl and runs the tool loop itself, as UniiChat does.
 

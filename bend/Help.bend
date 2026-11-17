@@ -141,7 +141,7 @@ def hl.commands() -> String:
 def hl.setup() -> String:
   hl.lines([
     "## Setup",
-    "- `/login` switches Claude Code's account from inside the chat: it shows a link (copied too, on the full screen); sign in there with the account you want, and if the page shows a code, paste it as `/login CODE`. The chat goes on with that account from its next call; a turn stopped at a usage limit goes on at once (and stops again if that account is at its limit too). A `/login` ends any sign-in before it; one waits half an hour at most.",
+    "- `/login` switches Claude Code's account from inside the chat: it shows a link (copied too, on the full screen); sign in there with the account you want, and if the page shows a code, paste it as `/login CODE`. The chat goes on with that account from its next call; a turn stopped at a usage limit goes on at once (and stops again if that account is at its limit too). `mugen login` in another window does the same, while the turn waits. A `/login` ends any sign-in before it; one waits half an hour at most.",
     "- `mugen login` signs Claude Code in (the default backend, on a Claude plan), or to another account (it says who is signed in now); `mugen logout` signs it out; `mugen --api` uses the Messages API with `ANTHROPIC_API_KEY`. `mugen --version` says the version.",
     "- `MUGEN_DIR` (default `~/.mugen`) is one chat, and one mugen holds it. For another chat beside it: `MUGEN_DIR=~/.mugen-2 mugen`.",
     "- `MUGEN_PLAIN=1` (or `TERM=dumb`, as in Emacs' shell) goes without the full screen: lines as they come, and a message of many lines between two lines of `\"\"\"`. From a pipe, each line is a message.",

@@ -51,7 +51,7 @@ for name in "${names[@]}"; do
       unset MUGEN_FAKE_$(echo $f | tr a-z A-Z)
     fi
   done
-  export SCENARIO_TOOLS="$HERE" MUGEN_DIR="$w/d" MUGEN_CURL="$WORK/curl" MUGEN_CLAUDE="$WORK/claude" MUGEN_WIRE="$WIRE" MUGEN_FAKE_LOG="$w/log" MUGEN_SYNC=0 MUGEN_UNIT=1 MUGEN=$MUGEN
+  export SCENARIO_TOOLS="$HERE" MUGEN_DIR="$w/d" MUGEN_CURL="$WORK/curl" MUGEN_CLAUDE="$WORK/claude" MUGEN_WIRE="$WIRE" MUGEN_FAKE_LOG="$w/log" CLAUDE_CONFIG_DIR="$w/claude" MUGEN_SYNC=0 MUGEN_UNIT=1 MUGEN=$MUGEN
   if [ -x "$src/run" ]; then
     (cd "$w" && "$src/run") > "$w/raw" 2> "$w/err" || true
   else

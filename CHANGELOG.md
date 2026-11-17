@@ -2,6 +2,21 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.22.0 (2026-11-16)
+
+- A turn stopped at a usage limit goes on at once after a sign-in outside
+  the chat too (`mugen login` or `claude auth login` in another window), as
+  after `/login`: told "signed in outside the chat (mugen login): ACCOUNT".
+  While the turn waits at the limit, on Claude Code, mugen watches Claude
+  Code's credentials file (`$CLAUDE_CONFIG_DIR/.credentials.json`, else
+  `~/.claude/.credentials.json`; every 2 s) and asks who is signed in when
+  it changes, and every 5 minutes besides (credentials kept elsewhere, as
+  in macOS's keychain); another account than the one at the limit goes on.
+  The watch ends at the limit's wake, when the chat moves on, or when
+  mugen ends; a `/login` of the chat's own is left to `/login`. Scenario
+  login-outside; the scenarios give Claude Code a config dir of their own
+  (`CLAUDE_CONFIG_DIR`), where the fake sign-in writes its credentials.
+
 ## 0.21.0 (2026-11-16)
 
 - A turn stopped at a usage limit goes on at once when `/login` signs in

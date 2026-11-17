@@ -43,6 +43,11 @@ type ev.Say is Data:
 #   Resume          the usage limit mugen's turn stopped at has reset: go
 #                   on, if the chat still has `at` messages (nothing came
 #                   since) and nothing runs (Hub.bend hb.limit.over)
+#   Signed          while the turn waits at that limit, Claude Code was
+#                   signed in, outside the chat (`mugen login` in another
+#                   window), to another account: status, `claude auth
+#                   status --json` then; as /login's sign-in, if the chat
+#                   still has `at` messages (Hub.bend hb.login.seen)
 #   Late            a message's clock ran out: cut a command that keeps the
 #                   call from reading it (Hub.bend hb.late.over)
 #   Took            the call took n more of the messages handed to it as it
@@ -61,6 +66,7 @@ type ev.Ev is Data:
   ev.Login{step: U32, out: String, status: String}
   ev.Older{before: U32}
   ev.Resume{at: U32}
+  ev.Signed{at: U32, status: String}
   ev.Late{}
   ev.Took{who: String, n: U32}
 

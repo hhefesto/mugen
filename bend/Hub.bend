@@ -1035,6 +1035,70 @@ def hb.limit.wait(+inbox: Chan(E.ev.Ev), +at: U32, +secs: U32) -> IO(Unit):
     o : S.mu.Out <- S.mu.run("sleep", [U32.show(secs)], "", 64, (secs * 1000 + 60000 : U32))
     E.ev.send(inbox, E.ev.Resume{at})
 
+# Signed in outside the chat: while the turn waits at a limit, on Claude
+# Code, a computation of its own watches for a sign-in outside the chat
+# (`mugen login` or `claude auth login` in another window): who is signed in
+# is asked (claude auth status) when Claude Code's credentials file changes
+# (in its config dir, as Claude Code keeps it: $CLAUDE_CONFIG_DIR, else
+# ~/.claude), and every 5 minutes (credentials kept elsewhere, as in macOS's
+# keychain). Another account than the one at the limit is told the hub
+# (ev.Signed), which goes on as after /login (hb.login.seen). The watch ends
+# at the limit's wake, when the chat moves on (its log, main, changes) or
+# mugen ends; a /login of the chat's own (run/login/now there, or run/login
+# changed) is /login's to tell, not the watch's.
+
+# $0 the chat's log, $1 till when (Unix s), $2 mugen's pid, $3 run/login.
+# Prints seen (the credentials changed, or 5 minutes went by), else nothing
+def hb.limit.look.sh() -> String:
+  "l=$0 e=$1 b=$2 d=$3\nc=\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.credentials.json\"\nmt() { stat -c '%y %s' \"$1\" 2> /dev/null || stat -f '%m %z' \"$1\" 2> /dev/null; }\nt=$(mt \"$c\") m=$(mt \"$l\") r=$(mt \"$d\") i=0\nwhile [ \"$(date +%s)\" -lt \"$e\" ]; do\n  sleep 2; i=$((i+1))\n  kill -0 \"$b\" 2> /dev/null || exit 0\n  [ \"$(mt \"$l\")\" = \"$m\" ] || exit 0\n  u=$(mt \"$c\") q=$(mt \"$d\")\n  if [ -e \"$d/now\" ] || [ \"$q\" != \"$r\" ]; then t=$u r=$q i=0; continue; fi\n  if [ \"$u\" != \"$t\" ] || [ $i -ge 150 ]; then sleep 1; echo seen; exit 0; fi\ndone\n"
+
+def hb.limit.text(o: S.mu.Out) -> String:
+  match o:
+    case S.mu.Out{st, out, err}:
+      out
+
+# `claude auth status --json`, run as /login runs Claude Code (no API key)
+def hb.limit.status(+prog: String) -> IO(S.mu.Out):
+  S.mu.run("env", ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN", prog, "auth", "status", "--json"], "", 65536, 60000)
+
+# who it says is signed in ("" no one)
+def hb.limit.acct(+status: String) -> String:
+  Bool.pick(String, Nat.is_eq(Cc.cc.signed(status), 2n), Cc.cc.acct(Maybe.default(&2, J.Json, J.js.read(status), J.JNull{})), "")
+
+# what comes of a step: the watch said seen (1: ask who), or ended (3); who
+# was asked: another account than `was` (2: tell), else watch again (0)
+def hb.limit.saw(+out: String) -> Nat:
+  Bool.pick(Nat, String.starts_with(out, "seen"), 1n, 3n)
+
+def hb.limit.other(+status: String, +was: String) -> Nat:
+  +now = hb.limit.acct(status)
+  Bool.pick(Nat, Bool.and(Bool.not(String.is_empty(now)), Bool.not(String.eq(now, was))), 2n, 0n)
+
+# (a computation of its own) step k: 4 asks who is at the limit (was); 0
+# watches; 1 asks who now; 2 tells the hub (out, the status); 3 ends. n, a
+# step's fuel (a watch ends in 5 minutes at most: 100000 outlast any limit)
+def hb.limit.look(n: Nat, k: Nat, +out: String, +inbox: Chan(E.ev.Ev), +at: U32, +prog: String, +dir: String, +pid: U32, +end: Nat, +was: String) -> IO(Unit):
+  match n k:
+    case 1n+f 0n:
+      IO.bind(S.mu.Out, Unit, S.mu.run("bash", ["-c", hb.limit.look.sh(), dir ++ "/main", Nat.show(end), U32.show(pid), dir ++ "/run/login"], "", 64, 2000000000),
+        o => hb.limit.look(f, hb.limit.saw(hb.limit.text(o)), "", inbox, at, prog, dir, pid, end, was))
+    case 1n+f 1n:
+      IO.bind(S.mu.Out, Unit, hb.limit.status(prog), +st => hb.limit.look(f, hb.limit.other(hb.limit.text(st), was), hb.limit.text(st), inbox, at, prog, dir, pid, end, was))
+    case _ 2n:
+      E.ev.send(inbox, E.ev.Signed{at, out})
+    case 1n+f 4n:
+      IO.bind(S.mu.Out, Unit, hb.limit.status(prog), st => hb.limit.look(f, 0n, "", inbox, at, prog, dir, pid, end, hb.limit.acct(hb.limit.text(st))))
+    case _ _:
+      IO.pure(Unit, Unit{})
+
+# the watch started, where the chat runs on Claude Code
+def hb.limit.watch(on: Bool, +s: hb.S, +end: Nat) -> IO(Unit):
+  match on:
+    case True{}:
+      IO.bind(U32, Unit, S.mu.pid(), pid => IO.spawn(Unit, hb.limit.look(100000n, 4n, "", hb.inbox(s), M.me.count(hb.mem(s)), Cc.cc.cfg.prog(A.ap.cfg.cc(hb.cfg.api(hb.cfg(s)))), hb.dir(s), pid, end, "")))
+    case False{}:
+      IO.pure(Unit, Unit{})
+
 def hb.limited(+s: hb.S, +now: Nat, +tz: U32, +at: Nat) -> IO(hb.S):
   +known = Nat.is_gt(at, now)
   +wake = Bool.pick(Nat, known, Nat.add(at, 60000n), Nat.add(now, 1800000n))
@@ -1042,6 +1106,7 @@ def hb.limited(+s: hb.S, +now: Nat, +tz: U32, +at: Nat) -> IO(hb.S):
     +s2 : hb.S <- hb.note(s, "Usage limit: mugen goes on by itself at " ++ hb.limit.when(wake, now, tz)
       ++ Bool.pick(String, known, ", a minute after it resets", " (it tries again every 30 minutes)") ++ ". A message of yours goes on sooner.")
     Unit <- IO.spawn(Unit, hb.limit.wait(hb.inbox(s2), M.me.count(hb.mem(s2)), U32.from_nat(Nat.div(Nat.sub(wake, now), 1000n))))
+    Unit <- hb.limit.watch(Cc.cc.on(A.ap.cfg.cc(hb.cfg.api(hb.cfg(s2)))), s2, Nat.div(wake, 1000n))
     return s2
 
 # the turn's call failed: at a usage limit, mugen goes on by itself later;
@@ -2364,13 +2429,16 @@ def hb.login.resume(+s: hb.S, +acct: String) -> IO(hb.S):
 # where the chat runs on Claude Code; the limits the last call said
 # (run/limits.json) were the old account's, so they go (the next call says
 # the new one's), and a turn stopped at a limit goes on
+def hb.login.to(+s: hb.S, +acct: String, +told: String) -> IO(hb.S):
+  do IO<hb.S>:
+    +s2 : hb.S <- hb.tell.user(hb.with.cfg(s, hb.cfg.with.acct(hb.cfg(s), acct)), told)
+    r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(hb.dir(s2) ++ "/run/limits.json")
+    hb.login.resume(s2, acct)
+
 def hb.login.as(on: Bool, +s: hb.S, +acct: String) -> IO(hb.S):
   match on:
     case True{}:
-      do IO<hb.S>:
-        +s2 : hb.S <- hb.tell.user(hb.with.cfg(s, hb.cfg.with.acct(hb.cfg(s), acct)), "signed in: " ++ acct ++ ". The chat's next call goes with it")
-        r : Result<&1, &1, U32 & String, Unit> <- S.mu.unlink(hb.dir(s2) ++ "/run/limits.json")
-        hb.login.resume(s2, acct)
+      hb.login.to(s, acct, "signed in: " ++ acct ++ ". The chat's next call goes with it")
     case False{}:
       hb.tell.user(s, "Claude Code is signed in: " ++ acct ++ ". This chat goes on with its API key (--api)")
 
@@ -2383,6 +2451,14 @@ def hb.login.end(+s: hb.S, +out: String, +status: String) -> IO(hb.S):
   Bool.pick(IO(hb.S), String.eq(v, "0"), hb.login.in(s, status),
     Bool.pick(IO(hb.S), String.eq(v, "late"), hb.tell.user(s, "the sign-in waited half an hour for you and was ended; nothing changed. /login starts another"),
       hb.tell.user(s, "the sign-in failed" ++ hb.login.said(out) ++ Bool.pick(String, String.ends_with(T.tx.trim(out), "."), " ", ". ") ++ "Nothing changed; /login tries again")))
+
+# signed in outside the chat while the turn waits at a limit (hb.limit.look):
+# as /login's sign-in, if the chat has had nothing since (a later limit has
+# a watch of its own)
+def hb.login.seen(+s: hb.S, +at: U32, +status: String) -> IO(hb.S):
+  +acct = hb.limit.acct(status)
+  +still = Bool.and(Bool.and(U32.is_eq(M.me.count(hb.mem(s)), at), hb.on.cc(s)), Bool.not(String.is_empty(acct)))
+  Bool.pick(IO(hb.S), still, hb.login.to(s, acct, "signed in outside the chat (mugen login): " ++ acct ++ ". The chat's next call goes with it"), IO.pure(hb.S, s))
 
 # what a sign-in's thread said (Ev.bend ev.Login)
 def hb.login.got(+k: U32, +s: hb.S, +out: String, +status: String) -> IO(hb.S):
@@ -2574,6 +2650,8 @@ def hb.on(+s: hb.S, m: Maybe<&1, E.ev.Ev>) -> IO(hb.S):
       hb.older.on(hb.scr(s), s, before)
     case Some{E.ev.Resume{+at}}:
       hb.limit.over(s, at)
+    case Some{E.ev.Signed{+at, +status}}:
+      hb.login.seen(s, at, status)
     case Some{E.ev.Late{}}:
       hb.late.over(s)
     case Some{E.ev.Took{+who, n}}:
