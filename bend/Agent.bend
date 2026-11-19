@@ -730,13 +730,43 @@ def ag.cc.retry(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
 def ag.cc.local(+env: ag.Env, +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
   IO.bind(Unit, ag.Cs, ag.show(env, "mind", "Claude Code answered a message itself, as its own command: " ++ T.tx.join(ag.cc.texts(C.cc.blocks(j)), " ")), u => IO.pure(ag.Cs, s))
 
-# 0 an output, 1 a user event, 2 a result, 3 a retry, 4 the plan's limits,
-# 6 Claude Code's own answer to a command, 5 else
-def ag.cc.kind(+j: J.Json) -> Nat:
-  +ty = C.cc.ty(j)
+# Another model than the one asked (Code.bend cc.other: Claude Code's notice
+# that it switched, or an output of another's): the call ends with no reply,
+# its stop saying which ("No reply: stopped: another model: ..."); what
+# comes after (outputs, a result) is not taken, nor any tool call run
+# (ag.cc.call). Claude Code's group is killed at once, so the other model
+# answers as little as it can.
+def ag.cc.other(+env: ag.Env, +texts: Chan(String), +s: ag.Cs, +id: String, +j: J.Json) -> IO(ag.Cs):
+  +m = C.cc.other(id, j)
+  do IO<ag.Cs>:
+    Unit <- ag.show(env, "mind", "Claude Code went to " ++ m ++ ", not " ++ id ++ ": mugen takes no other model, so the call ends with no reply.")
+    Unit <- ag.cc.halt(env, texts)
+    return ag.cc.with.res(s, C.cc.Res{True{}, True{}, 0, C.cc.other.stop(id, m), ""}, False{}, "")
+
+# whether another model was refused: what comes after is not taken
+def ag.cc.off(r: Maybe<&2, C.cc.Res>) -> Bool:
+  match r:
+    case Some{+x}:
+      C.cc.res.other(x)
+    case None{}:
+      False{}
+
+# (an output, a result, a command's answer, another model: none taken after
+# another model)
+def ag.cc.kind.off(off: Bool, +k: Nat) -> Nat:
+  Bool.pick(Nat, Bool.and(off, Bool.or(Bool.or(Nat.is_eq(k, 0n), Nat.is_eq(k, 2n)), Bool.or(Nat.is_eq(k, 6n), Nat.is_eq(k, 7n)))), 5n, k)
+
+def ag.cc.kind.of(+ty: String, +j: J.Json) -> Nat:
   Bool.pick(Nat, String.eq(ty, "assistant"), Bool.pick(Nat, Maybe.is_some(&2, J.Json, J.js.field(j, "local_command_source")), 6n, 0n), Bool.pick(Nat, String.eq(ty, "user"), 1n, Bool.pick(Nat, String.eq(ty, "result"), 2n,
     Bool.pick(Nat, Bool.and(String.eq(ty, "system"), String.eq(C.cc.s(j, "subtype"), "api_retry")), 3n,
       Bool.pick(Nat, String.eq(ty, "rate_limit_event"), 4n, 5n)))))
+
+# 0 an output, 1 a user event, 2 a result, 3 a retry, 4 the plan's limits,
+# 6 Claude Code's own answer to a command, 7 another model's (than id), 5
+# else
+def ag.cc.kind(+id: String, +j: J.Json) -> Nat:
+  +ty = C.cc.ty(j)
+  Bool.pick(Nat, Bool.not(String.is_empty(C.cc.other(id, j))), 7n, ag.cc.kind.of(ty, j))
 
 # an event that isn't a result: Claude Code is at work, no wait on it
 def ag.cc.busy.if(b: Bool, s: ag.Cs) -> ag.Cs:
@@ -746,7 +776,7 @@ def ag.cc.busy.if(b: Bool, s: ag.Cs) -> ag.Cs:
     case False{} ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}:
       ag.Cs{i, f, se, h, l, m, p, r, o, st, le, w}
 
-def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.Json) -> IO(ag.Cs):
+def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +id: String, +j: J.Json) -> IO(ag.Cs):
   match k:
     case 0n:
       ag.cc.assistant(env, s, j)
@@ -760,13 +790,16 @@ def ag.cc.event.go(k: Nat, +env: ag.Env, +texts: Chan(String), +s: ag.Cs, +j: J.
       IO.bind(Unit, ag.Cs, C.cc.limits.keep(A.ap.cfg.cc(ag.cfg(env)), J.js.field(j, "rate_limit_info")), u => IO.pure(ag.Cs, s))
     case 6n:
       ag.cc.local(env, s, j)
+    case 7n:
+      ag.cc.other(env, texts, s, id, j)
     case _:
       IO.pure(ag.Cs, s)
 
-def ag.cc.event(+env: ag.Env, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
+# (id: the model asked)
+def ag.cc.event(+env: ag.Env, +id: String, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
   +j = Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]})
-  +k = ag.cc.kind(j)
-  IO.bind(ag.Cs, ag.Cs, ag.cc.event.go(k, env, texts, s, j), s2 => IO.pure(ag.Cs, ag.cc.busy.if(Bool.not(Nat.is_eq(k, 2n)), s2)))
+  +k = ag.cc.kind.off(ag.cc.off(ag.cs.res(s)), ag.cc.kind(id, j))
+  IO.bind(ag.Cs, ag.Cs, ag.cc.event.go(k, env, texts, s, id, j), s2 => IO.pure(ag.Cs, ag.cc.busy.if(Bool.not(Nat.is_eq(k, 2n)), s2)))
 
 # MCP ---------------------------------------------------------------------------------
 
@@ -804,12 +837,12 @@ def ag.ask.tools(a: A.ap.Ask) -> List<&2, J.Json>:
 
 # a tool call run as the API path runs one (only a tool the call offers),
 # logged as it is served
-def ag.cc.call(+env: ag.Env, +ask: A.ap.Ask, +m: J.Json) -> IO(String):
+def ag.cc.call(+env: ag.Env, +ask: A.ap.Ask, off: Bool, +m: J.Json) -> IO(String):
   +name = Q.mc.bare(Q.mc.name(m))
   +input = Q.mc.input(m)
   do IO<String>:
     st : Bool <- A.ap.stopped(ag.ctl(env))
-    +o : E.ev.Out <- ag.cc.out.of(ag.listed(ag.ask.tools(ask), name), st, env, name, input)
+    +o : E.ev.Out <- ag.cc.out.of(ag.listed(ag.ask.tools(ask), name), Bool.or(st, off), env, name, input)
     Unit <- ag.result(env, Some{ag.json.show(name, input)}, ag.err(o))
     return Q.mc.answer(Q.mc.id(m), ag.cc.out(o))
 
@@ -838,7 +871,7 @@ def ag.cc.mcp.on(call: Bool, k: Nat, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(
   match call:
     case True{}:
       do IO<ag.Cs>:
-        +a : String <- ag.cc.call(env, ask, m)
+        +a : String <- ag.cc.call(env, ask, ag.cc.off(ag.cs.res(s)), m)
         +s2 : ag.Cs <- ag.cc.flush(texts, s)
         Unit <- ag.cc.answer(env, a)
         return s2
@@ -924,7 +957,7 @@ def ag.cc.tick(go: Bool, +env: ag.Env, +texts: Chan(String), +s: ag.Cs) -> IO(ag
 def ag.cc.line.go(k: Nat, +env: ag.Env, +ask: A.ap.Ask, +texts: Chan(String), +s: ag.Cs, +line: String) -> IO(ag.Cs):
   match k:
     case 0n:
-      ag.cc.event(env, texts, s, line)
+      ag.cc.event(env, A.ap.pick.id(A.ap.ask.pick(ask)), texts, s, line)
     case _:
       ag.cc.mcp(env, ask, texts, s, line)
 

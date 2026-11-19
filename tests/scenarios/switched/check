@@ -1,0 +1,4 @@
+#!/bin/sh
+# no other model's words kept
+set -e
+! grep -q "an earlier model answers" "$1"/main/*.jsonl

@@ -210,7 +210,11 @@ Commands:
   `/goal off` drop it too). After each turn a check
   answers met, not met (mugen is told to keep working) or waiting on you (a
   note; nothing more till your next message).
-- `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`.
+- `/model opus-5.5|sonnet-5.5|haiku-5.5`, `/effort low..max`. Only the
+  model picked answers: never an earlier one in its place (Claude Code's
+  switch on a refusal or an outage is turned off). A refused turn ends
+  with "No reply: stopped: refusal"; a busy or unavailable model is
+  waited and asked again.
 - `/plan`: mugen reads and proposes, changing nothing. `/auto` lets it act.
   `Shift-Tab` switches between them.
 - `/spell on|off`: the spellcheck (on as mugen starts); `/spell` alone

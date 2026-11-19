@@ -1,0 +1,37 @@
+[
+  {
+    "refused": "claude-opus-5",
+    "switch": true,
+    "body": {
+      "id": "m",
+      "type": "message",
+      "role": "assistant",
+      "model": "m",
+      "content": [],
+      "stop_reason": "refusal",
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    }
+  },
+  {
+    "body": {
+      "id": "m2",
+      "type": "message",
+      "role": "assistant",
+      "model": "m",
+      "content": [
+        {
+          "type": "text",
+          "text": "an earlier model answers"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      }
+    }
+  }
+]

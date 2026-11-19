@@ -2,6 +2,25 @@
 
 A version changes when surface behavior does (AGENTS.md, Versions).
 
+## 0.23.0 (2026-11-19)
+
+- Only the model picked answers, never an earlier one in its place. Claude
+  Code switched a session to an earlier model when the model's safeguards
+  refused (Opus 5.5 to Opus 5 on 10-31 and 11-16, Opus 5 to Opus 4.8 on
+  10-31), and can on an overload or an outage; its calls now run with
+  `CLAUDE_CODE_NO_MODEL_FALLBACK=1` and
+  `CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1`, so a refused turn ends ("No
+  reply: stopped: refusal"; Claude Code's one retry on the same model
+  still runs) and a busy model is waited, as before. The API wire sends
+  no `fallbacks` field and no `server-side-fallback` beta. If a switch
+  comes anyway (Claude Code's `model_refusal_fallback` notice, or an
+  output of another model than the one asked; `<synthetic>`, Claude
+  Code's own, isn't one), the call ends at once with no reply, "No reply:
+  stopped: another model: M, not ID (mugen takes no other)": nothing
+  after it is taken, no tool call of it run; a summary or a goal check
+  fails the same way. Scenarios nofallback and switched (fakeclaude.ts
+  plays Claude Code's switch, and its refusal when the switch is off).
+
 ## 0.22.0 (2026-11-16)
 
 - A turn stopped at a usage limit goes on at once after a sign-in outside

@@ -150,9 +150,17 @@ def cc.opt(b: Bool, xs: List<&2, String>) -> List<&2, String>:
 
 # Claude Code's settings for our calls (run through env): no API key (the
 # plan's login), none of the user's context in the prompt, hour-long marks,
-# every tool sent whole (no tool search)
+# every tool sent whole (no tool search), and no other model than the one
+# asked: Claude Code switches a session to an earlier model when the
+# model's safeguards refuse (Opus 5.5 to Opus 5, Opus 5 to Opus 4.8; seen
+# 10-31 and 11-16) or it is overloaded or unavailable;
+# CLAUDE_CODE_NO_MODEL_FALLBACK forbids every such switch (2.1.325), and
+# CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK the refusal's. A refusal then ends
+# the call (its retry on the same model, "continuing once with that noted",
+# still runs); an outage is waited, as any busy service is.
 def cc.env() -> List<&2, String>:
   ["-u", "ANTHROPIC_API_KEY", "-u", "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_NO_MODEL_FALLBACK=1", "CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK=1",
     "CLAUDE_CODE_DISABLE_CLAUDE_MDS=1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY=1", "CLAUDE_CODE_DISABLE_ATTACHMENTS=1",
     "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS=1", "CLAUDE_CODE_TOTAL_TOKENS_REMINDER=off", "CLAUDE_CODE_PROMPT_CACHE_TTL=1h",
     "CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL=1h", "ENABLE_TOOL_SEARCH=false", "DISABLE_AUTOUPDATER=1",
@@ -276,6 +284,34 @@ def cc.ty(+j: J.Json) -> String:
 def cc.message(+j: J.Json) -> J.Json:
   Maybe.default(&2, J.Json, J.js.field(j, "message"), J.JObj{[]})
 
+# Another model ----------------------------------------------------------------
+#
+# mugen takes answers only from the model it asked (cc.env forbids Claude
+# Code's switches; this is what holds if one comes anyway): Claude Code's
+# notice that it switched (model_refusal_fallback), or an output of another
+# model's, ends the call with no reply. Claude Code's own outputs
+# (<synthetic>: a limit, an API error) are not a model's. Only a full id
+# (claude-...) is compared: an alias (opus) or a variant ([1m]) answers
+# under another name.
+
+def cc.checked(+id: String) -> Bool:
+  Bool.and(String.starts_with(id, "claude-"), Bool.not(String.contains(id, "[")))
+
+def cc.other.out(+id: String, +m: String) -> String:
+  Bool.pick(String, Bool.or(Bool.or(String.is_empty(m), String.eq(m, "<synthetic>")), Bool.or(String.eq(m, id), Bool.not(cc.checked(id)))), "", m)
+
+# the model an event says answers instead of id ("" none)
+def cc.other(+id: String, +j: J.Json) -> String:
+  +ty = cc.ty(j)
+  +fb = cc.s(j, "fallback_model")
+  +sw = Bool.and(String.eq(ty, "system"), String.eq(cc.s(j, "subtype"), "model_refusal_fallback"))
+  Bool.pick(String, sw, Bool.pick(String, String.is_empty(fb), "another model", fb),
+    Bool.pick(String, String.eq(ty, "assistant"), cc.other.out(id, cc.s(cc.message(j), "model")), ""))
+
+# the stop it makes (a call's end with no reply)
+def cc.other.stop(+id: String, +m: String) -> String:
+  "another model: " ++ m ++ ", not " ++ id ++ " (mugen takes no other)"
+
 # an event's message's content blocks
 def cc.blocks(+j: J.Json) -> List<&2, J.Json>:
   J.js.arr(cc.message(j), "content")
@@ -333,27 +369,42 @@ def cc.res.ok(r: cc.Res) -> Bool:
       ok
 
 # A run read whole (a call of one turn): its output blocks, in order (each
-# assistant event holds one or more), and its result
+# assistant event holds one or more), and its result. Another model than id
+# (cc.other) ends it there: its stop the result, no block after it taken.
 type cc.Once is Data:
   cc.Once{out: List<&2, J.Json>, res: cc.Res}
 
-def cc.once.line(+line: String, o: cc.Once) -> cc.Once:
+def cc.res.stop(r: cc.Res) -> String:
+  match r:
+    case cc.Res{g, ok, st, sp, w}:
+      sp
+
+# a stop for another model's answer (cc.other.stop)
+def cc.res.other(+r: cc.Res) -> Bool:
+  String.starts_with(cc.res.stop(r), "another model: ")
+
+def cc.once.on(+id: String, +j: J.Json, +out: List<&2, J.Json>, +res: cc.Res) -> cc.Once:
+  +ty = cc.ty(j)
+  +m = cc.other(id, j)
+  Bool.pick(cc.Once, Bool.not(String.is_empty(m)), cc.Once{out, cc.Res{True{}, True{}, 0, cc.other.stop(id, m), ""}},
+    Bool.pick(cc.Once, String.eq(ty, "assistant"), cc.Once{List.append(&2, J.Json, out, cc.blocks(j)), res},
+      Bool.pick(cc.Once, String.eq(ty, "result"), cc.Once{out, cc.res.of(j)}, cc.Once{out, res})))
+
+# (a stop already read, by another model: the lines after it are not read)
+def cc.once.line(+id: String, +line: String, o: cc.Once) -> cc.Once:
   match o:
     case cc.Once{+out, +res}:
-      +j = Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]})
-      +ty = cc.ty(j)
-      Bool.pick(cc.Once, String.eq(ty, "assistant"), cc.Once{List.append(&2, J.Json, out, cc.blocks(j)), res},
-        Bool.pick(cc.Once, String.eq(ty, "result"), cc.Once{out, cc.res.of(j)}, cc.Once{out, res}))
+      Bool.pick(cc.Once, cc.res.other(res), cc.Once{out, res}, cc.once.on(id, Maybe.default(&2, J.Json, J.js.read(line), J.JObj{[]}), out, res))
 
-def cc.once.go(ls: List<&2, String>, +o: cc.Once) -> cc.Once:
+def cc.once.go(+id: String, ls: List<&2, String>, +o: cc.Once) -> cc.Once:
   match ls:
     case []:
       o
     case l <> t:
-      cc.once.go(t, cc.once.line(l, o))
+      cc.once.go(id, t, cc.once.line(id, l, o))
 
-def cc.once.read(+out: String) -> cc.Once:
-  cc.once.go(String.lines(out), cc.Once{[], cc.none()})
+def cc.once.read(+id: String, +out: String) -> cc.Once:
+  cc.once.go(id, String.lines(out), cc.Once{[], cc.none()})
 
 # The plan's limits as the latest call said them (its rate_limit_event's
 # info), kept in run/limits.json with when they were said, for the status

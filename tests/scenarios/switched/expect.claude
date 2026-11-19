@@ -1,0 +1,3 @@
+user: do the thing
+mind: Claude Code went to claude-opus-5, not claude-opus-5-5: mugen takes no other model, so the call ends with no reply.
+note: No reply: stopped: another model: claude-opus-5, not claude-opus-5-5 (mugen takes no other). Send a message to try again.

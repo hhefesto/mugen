@@ -79,10 +79,8 @@ def ap.id(+label: String) -> String:
     Bool.pick(String, String.eq(label, "sonnet-5.5"), "claude-sonnet-5-5",
       Bool.pick(String, String.eq(label, "haiku-5.5"), "claude-haiku-5-5", label)))
 
-# Opus and Sonnet take the server-side refusal fallback; Haiku has none (a
-# fallbacks field 400s)
-def ap.falls(+id: String) -> Bool:
-  Bool.or(String.starts_with(id, "claude-opus"), String.starts_with(id, "claude-sonnet"))
+# (no server-side refusal fallback, the fallbacks field: mugen takes answers
+# from the model it asked only, never an earlier one; Code.bend cc.env)
 
 def ap.fast(+p: ap.Pick) -> Bool:
   match p:
@@ -199,7 +197,7 @@ def ap.opt(b: Bool, kv: J.JKv) -> List<&2, J.JKv>:
 
 # the request's body (Anthropic.body), not streamed: adaptive thinking,
 # summarized; the system prompt marked, and the top level as the last block
-# is; the refusal fallback where the model takes it
+# is; no fallback to another model
 def ap.body(+cfg: ap.Cfg, a: ap.Ask, its: List<&2, ap.Item>) -> String:
   match a:
     case ap.Ask{+p, system, +blocks, defs, +searches, patient}:
@@ -215,14 +213,12 @@ def ap.body(+cfg: ap.Cfg, a: ap.Ask, its: List<&2, ap.Item>) -> String:
             ap.opt(ap.last.mark(blocks, False{}), J.JKv{"cache_control", ap.mark()}),
             ap.opt(Bool.not(List.is_empty(&2, J.Json, tools)), J.JKv{"tools", J.JArr{tools}}),
             ap.opt(String.eq(speed, "fast"), J.JKv{"speed", J.JStr{"fast"}}),
-            ap.opt(ap.falls(id), J.JKv{"fallbacks", J.JStr{"default"}}),
             [J.JKv{"messages", J.JArr{ap.msgs(its, True{}, [])}}]])})
 
 # The request -------------------------------------------------------------------
 
-def ap.betas(+id: String, +fast: Bool) -> List<&2, String>:
-  List.append(&2, String, Bool.pick(List<&2, String>, ap.falls(id), ["server-side-fallback-2026-07-01"], []),
-    Bool.pick(List<&2, String>, fast, ["fast-mode-2026-02-01"], []))
+def ap.betas(+fast: Bool) -> List<&2, String>:
+  Bool.pick(List<&2, String>, fast, ["fast-mode-2026-02-01"], [])
 
 def ap.beta.args(bs: List<&2, String>) -> List<String>:
   match bs:
@@ -305,7 +301,7 @@ def ap.argv(wrap: Bool, +ctl: String, +curl: String, args: List<String>) -> List
 # one request, its body on curl's stdin (64 MiB at most back, 16 minutes)
 def ap.send(+cfg: ap.Cfg, +id: String, +fast: Bool, +ctl: String, body: String) -> IO(ap.Res):
   +curl = ap.cfg.curl(cfg)
-  IO.bind(S.mu.Out, ap.Res, S.mu.run(Bool.pick(String, String.is_empty(ctl), curl, "sh"), ap.argv(Bool.not(String.is_empty(ctl)), ctl, curl, ap.args(ap.cfg.url(cfg), ap.betas(id, fast))), body, 67108864, 960000), o => IO.pure(ap.Res, ap.res(o)))
+  IO.bind(S.mu.Out, ap.Res, S.mu.run(Bool.pick(String, String.is_empty(ctl), curl, "sh"), ap.argv(Bool.not(String.is_empty(ctl)), ctl, curl, ap.args(ap.cfg.url(cfg), ap.betas(fast))), body, 67108864, 960000), o => IO.pure(ap.Res, ap.res(o)))
 
 # a stop was asked (ctl.stop is there); never for a call that can't be stopped
 def ap.stopped.of(r: Result<&1, &1, U32 & String, Nat>) -> Bool:
@@ -518,10 +514,10 @@ def ap.cc.res(+exit: U32, +err: String, o: C.cc.Once) -> ap.Step:
         Bool.pick(ap.Step, ok, ap.step.of(J.JObj{[J.JKv{"content", J.JArr{out}}, J.JKv{"stop_reason", J.JStr{Bool.pick(String, String.is_empty(stop), "end_turn", stop)}}]}),
           ap.fail(ap.cc.why(status, why), Bool.pick(U32, ap.passing(status, ""), 3, 4), 0)))
 
-def ap.cc.read(o: S.mu.Out) -> ap.Step:
+def ap.cc.read(+id: String, o: S.mu.Out) -> ap.Step:
   match o:
     case S.mu.Out{+status, out, +err}:
-      ap.cc.res(status, err, C.cc.once.read(out))
+      ap.cc.res(status, err, C.cc.once.read(id, out))
 
 def ap.step.stop(s: ap.Step) -> U32:
   match s:
@@ -577,7 +573,7 @@ def ap.ask.blocks(a: ap.Ask) -> List<&2, V.vw.B>:
 def ap.try.on(on: Bool, +cfg: ap.Cfg, +a: ap.Ask, +id: String, +fast: Bool, +ctl: String, +body: String) -> IO(ap.Step):
   match on:
     case True{}:
-      IO.bind(S.mu.Out, ap.Step, C.cc.once(ap.cfg.cc(cfg), id, ap.pick.effort(ap.ask.pick(a)), ap.ask.system(a), ap.ask.blocks(a), ctl), o => IO.pure(ap.Step, ap.cc.read(o)))
+      IO.bind(S.mu.Out, ap.Step, C.cc.once(ap.cfg.cc(cfg), id, ap.pick.effort(ap.ask.pick(a)), ap.ask.system(a), ap.ask.blocks(a), ctl), o => IO.pure(ap.Step, ap.cc.read(id, o)))
     case False{}:
       IO.bind(ap.Res, ap.Step, ap.send(cfg, id, fast, ctl, body), r => IO.pure(ap.Step, ap.read(r)))
 

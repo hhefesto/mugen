@@ -23,7 +23,9 @@
 // lost: never taken, never answered (a Claude Code that takes no message,
 // for mugen's wait on one). With MUGEN_FAKE_COMPACT_LIMIT (a file), while
 // the file is there a compactor's call hits a usage limit, rejected till
-// the time (Unix seconds) it holds (summaries held at a limit).
+// the time (Unix seconds) it holds (summaries held at a limit). A step
+// with "refused" (a model) is a refusal Claude Code would fall back from to
+// that model, unless mugen's environment forbids it (turn: a.refused).
 import * as fs from "node:fs";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -68,7 +70,7 @@ const flag = (name: string) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const system = fs.readFileSync(flag("--system-prompt-file")!, "utf8");
-const model = flag("--model");
+let model = flag("--model");
 const effort = flag("--effort");
 const conf = flag("--mcp-config");
 const env = process.env;
@@ -244,6 +246,26 @@ const turn = async () => {
       out({ type: "rate_limit_event", rate_limit_info: { status: "rejected", resetsAt: at, rateLimitType: "five_hour", unifiedWindows: { five_hour: { utilization: 1, resetsAt: at, status: "rejected" } } } });
       out({ type: "assistant", message: { id: "msg_limit", type: "message", role: "assistant", model: "<synthetic>", content: [{ type: "text", text: a.limit.text }], stop_reason: "stop_sequence", usage } });
       out({ type: "result", subtype: "success", is_error: true, result: a.limit.text, stop_reason: null, usage });
+      return;
+    }
+    // a refusal Claude Code falls back from (a.refused: the model it goes
+    // to): as 2.1.325 does, it says so (model_refusal_fallback), switches
+    // the session to that model and asks again, unless
+    // CLAUDE_CODE_NO_MODEL_FALLBACK or CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK
+    // forbids it (a.switch: a Claude Code that switches anyway); forbidden,
+    // the refusal ends the turn (model_refusal_no_fallback, its words
+    // Claude Code's own output)
+    if (a.refused) {
+      const forbidden = env.CLAUDE_CODE_NO_MODEL_FALLBACK === "1" || env.CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK === "1";
+      if (!forbidden || a.switch) {
+        out({ type: "system", subtype: "model_refusal_fallback", original_model: model, fallback_model: a.refused });
+        model = a.refused;
+        continue;
+      }
+      const said = "API Error: " + model + "'s safeguards flagged this message.";
+      out({ type: "system", subtype: "model_refusal_no_fallback", original_model: model });
+      out({ type: "assistant", message: { id: "msg_refused", type: "message", role: "assistant", model: "<synthetic>", content: [{ type: "text", text: said }], stop_reason: "refusal", usage } });
+      out({ type: "result", subtype: "success", is_error: false, result: said, stop_reason: "refusal", num_turns: 1, usage, user_message_uuids: took });
       return;
     }
     const code = (a.exit ?? 0) !== 0 ? 0 : a.code ?? 200;

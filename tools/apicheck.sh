@@ -59,15 +59,16 @@ BUILD="{\"mode\": \"build\", \"model\": \"haiku-5.5\", \"effort\": \"high\", \"s
 LONG=$(printf 'x%.0s' $(seq 600))
 
 # the request: the system prompt and the marked block cached, adaptive
-# thinking summarized, the effort, Opus's refusal fallback and its beta
+# thinking summarized, the effort; no fallback to another model (no
+# fallbacks field, no beta of it), Opus's as any model's
 scenario body "$STEP" '[{}]' '
   .got.stop == 0 and .got.entries == [["mind", "fake thought", ""], ["unii", "S: <chat> a line </chat> Turn: hi", ""]]
   and (.sent | length) == 1
   and .sent[0].body.system == [{type: "text", text: "sys", cache_control: {type: "ephemeral"}}]
   and .sent[0].body.thinking == {type: "adaptive", display: "summarized"}
   and .sent[0].body.output_config == {effort: "medium"}
-  and .sent[0].body.fallbacks == "default"
-  and (.sent[0].argv | index("anthropic-beta: server-side-fallback-2026-07-01")) != null
+  and (.sent[0].body | has("fallbacks") | not)
+  and (.sent[0].argv | map(select(startswith("anthropic-beta"))) | length) == 0
   and (.sent[0].body | has("cache_control") | not)
   and .sent[0].body.messages == [{role: "user", content: [{type: "text", text: "<chat>\n", cache_control: {type: "ephemeral"}}, {type: "text", text: "a line\n</chat>\n"}, {type: "text", text: "Turn: hi"}]}]
   and (.sent[0].argv | map(select(test("sk-ant"))) | length) == 0'
